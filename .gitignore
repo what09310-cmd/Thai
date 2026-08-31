@@ -1,0 +1,30 @@
+# Environnement Python
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secrets (SECRET_KEY, SITE_PASSWORD, DATABASE_URL) — voir .env.example
+.env
+
+# Base de données locale et ses sauvegardes
+renthub.db
+renthub.db.bak-*
+*.sqlite
+*.sqlite3
+
+# Journaux et sorties de scan
+*.log
+scan_output.log
+uvicorn_restart.log
+
+# Exports générés par run_scraper.py --export
+renthub_listings.csv
+renthub_listings.json
+
+# Base de fingerprints adaptatifs Scrapling (locale, regeneree au besoin)
+.scrapling/
+
+# Caches locaux transitoires (session/verrou/analyse) — pas de valeur en historique
+.claude/scheduled_tasks.lock
+.impeccable/hook.cache.json

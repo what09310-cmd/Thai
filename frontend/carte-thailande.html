@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiMonth — Carte Thaïlande</title>
+<meta property="og:title" content="ThaiMonth — Carte Thaïlande">
+<meta property="og:description" content="Toutes les annonces actives géolocalisées en Thaïlande">
+<meta property="og:image" content="/static/logo.png">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:#0a0a0a;color:#e5e5e5}
+  header{
+    height:64px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;
+    padding:12px 18px;display:flex;align-items:center;gap:12px
+  }
+  header .logo-img{height:40px;width:auto;display:block}
+  header .subhead{font-size:12px;color:#a3a3a3}
+
+  main{ height:calc(100vh - 64px) }
+
+  #map{ position:relative;height:100%;background:#0a0a0a }
+  #leaflet-map{ width:100%; height:100% }
+  .leaflet-tile-pane{ filter:brightness(.6) invert(1) contrast(88%) hue-rotate(180deg) saturate(.3) brightness(.7); }
+  .leaflet-control-zoom a{ background:#0f0f0f !important;color:#e5e5e5 !important;border-color:#1a1a1a !important }
+  .leaflet-control-zoom a:hover{ background:#1a1a1a !important }
+  .leaflet-control-attribution{ background:rgba(15,15,15,.85) !important;color:#a3a3a3 !important }
+  .leaflet-control-attribution a{ color:#facc15 !important }
+
+  .pin-icon{
+    width:12px;height:12px;border-radius:50%;
+    background:#facc15;border:2px solid #0a0a0a;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+
+  .leaflet-popup-content{ font-family:'Inter',sans-serif;font-size:13px;margin:8px 10px }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:#0f0f0f;color:#e5e5e5;box-shadow:0 4px 16px rgba(0,0,0,.5) }
+  .popup-price{ font-weight:700;margin-bottom:6px;color:#e5e5e5 }
+  .popup-info{ font-size:12px;color:#a3a3a3;margin-bottom:4px }
+  .popup-amenities{ display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px }
+  .popup-chip{
+    background:#1a1a1a;border:1px solid #262626;border-radius:4px;
+    padding:2px 6px;font-size:11px;color:#e5e5e5;white-space:nowrap
+  }
+  .popup-btn{
+    display:inline-block;background:#facc15;color:#0a0a0a;text-decoration:none;
+    padding:6px 10px;border-radius:4px;font-size:12px;font-weight:800
+  }
+
+  .controls{
+    position:absolute;top:14px;left:14px;z-index:1000;
+    background:#0f0f0f;border:1px solid #1a1a1a;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.5);
+    padding:14px;width:260px;display:flex;flex-direction:column;gap:14px
+  }
+
+  .filter-section{ display:flex;flex-direction:column;gap:8px }
+  .filter-label{
+    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.1em;
+    text-transform:uppercase;color:#a3a3a3
+  }
+  .chip-group{ display:flex;flex-wrap:wrap;gap:6px }
+  .chip{
+    padding:7px 11px;border-radius:6px;border:1px solid #1a1a1a;
+    background:#0a0a0a;color:#a3a3a3;font-family:'Inter',sans-serif;
+    font-size:12px;font-weight:500;cursor:pointer;transition:all .15s
+  }
+  .chip:hover{ border-color:#525252;color:#e5e5e5 }
+  .chip.active{ background:#facc15;border-color:#facc15;color:#0a0a0a;font-weight:700 }
+
+  .budget-values{
+    display:flex;justify-content:space-between;font-size:12px;
+    font-family:'JetBrains Mono',monospace;color:#e5e5e5
+  }
+  .range-slider{ position:relative;height:28px;margin-top:2px }
+  .range-slider .range-track{
+    position:absolute;top:50%;left:0;right:0;height:4px;
+    transform:translateY(-50%);background:#1a1a1a;border-radius:2px
+  }
+  .range-slider .range-fill{
+    position:absolute;top:50%;height:4px;
+    transform:translateY(-50%);background:#facc15;border-radius:2px
+  }
+  .range-slider input[type="range"]{
+    position:absolute;top:0;left:0;width:100%;height:28px;margin:0;
+    background:transparent;-webkit-appearance:none;appearance:none;pointer-events:none
+  }
+  .range-slider input[type="range"]::-webkit-slider-runnable-track{
+    -webkit-appearance:none;background:transparent
+  }
+  .range-slider input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;pointer-events:auto;
+    width:16px;height:16px;border-radius:50%;
+    background:#facc15;border:2px solid #0a0a0a;cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);margin-top:6px
+  }
+  .range-slider input[type="range"]::-moz-range-track{ background:transparent;border:none }
+  .range-slider input[type="range"]::-moz-range-thumb{
+    pointer-events:auto;width:16px;height:16px;border-radius:50%;
+    background:#facc15;border:2px solid #0a0a0a;cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,.5)
+  }
+
+  .empty{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:#a3a3a3;font-size:13px;text-align:center;padding:20px
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="http://localhost:8000/payant.html"><img src="/static/logo.png" alt="ThaiMonth" class="logo-img"></a>
+  <span class="subhead">Thaïlande — Toutes les annonces actives géolocalisées</span>
+</header>
+
+<main>
+  <section id="map">
+    <div id="leaflet-map"></div>
+    <div class="controls">
+      <div class="filter-section">
+        <div class="filter-label">Budget (€ / mois)</div>
+        <div class="budget-values">
+          <span id="budget-min-label">10 €</span>
+          <span id="budget-max-label">500 €+</span>
+        </div>
+        <div class="range-slider" id="f-budget">
+          <div class="range-track"></div>
+          <div class="range-fill" id="budget-fill"></div>
+          <input type="range" id="budget-min" min="10" max="500" step="10" value="10">
+          <input type="range" id="budget-max" min="10" max="500" step="10" value="500">
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Durée du séjour</div>
+        <div class="chip-group" id="f-duration">
+          <button type="button" class="chip" data-value="1 mois">1 mois</button>
+          <button type="button" class="chip" data-value="3 mois">3 mois</button>
+          <button type="button" class="chip" data-value="6 mois">6 mois</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Équipements</div>
+        <div class="chip-group" id="f-amenities">
+          <button type="button" class="chip" id="chip-new">🆕 New</button>
+          <button type="button" class="chip" data-value="Pool">🏊 Pool</button>
+          <button type="button" class="chip" data-value="Fitness">🏋️ Fitness</button>
+          <button type="button" class="chip" data-value="Desk">🖥️ Desk</button>
+          <button type="button" class="chip" data-value="In-room WIFI">📶 WIFI</button>
+          <button type="button" class="chip" data-value="Television">📺 TV</button>
+          <button type="button" class="chip" data-value="Beauty Salon in Building">💇 Beautiful</button>
+          <button type="button" class="chip" data-value="Parking">🅿️ Parking</button>
+          <button type="button" class="chip" data-value="Smoking">🚬 Smoking</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+
+let ads = [];
+let leafletMap = null;
+let clusterGroup = null;
+let selectedBudget = null;
+let selectedDuration = "";
+let onlyNew = false;
+const selectedAmenities = new Set();
+const markersById = {};
+
+const DURATION_FIELD = {
+  "1 mois": "contract_monthly",
+  "3 mois": "contract_3_month",
+  "6 mois": "contract_6_month",
+};
+const EUR_TO_THB = 38.28;
+
+function text(v){ return v == null ? "" : String(v); }
+
+function priceValue(ad){
+  const n = ad.contract_monthly_min ?? ad.price_monthly_min;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function priceLabel(ad){
+  const n = priceValue(ad);
+  return n ? n.toLocaleString("fr-FR") + " ฿" : "";
+}
+
+function escapeHtml(s){
+  return text(s).replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+const AMENITY_ICONS = {
+  "Air Conditioner": "❄️ Air Conditioner",
+  "Furnished": "🛋️ Furnished",
+  "Water Heater": "🚿 Water Heater",
+  "Fan": "🌀 Fan",
+  "Television": "📺 Television",
+  "Refrigerator": "🧊 Refrigerator",
+  "Sofa": "🪑 Sofa",
+  "Desk": "🖥️ Desk",
+  "Kitchen Stove": "🍳 Kitchen Stove",
+  "Phone": "☎️ Phone",
+  "In-room WIFI": "📶 WIFI",
+  "Cable TV": "📺 TV",
+  "Pets": "🐾 Pets",
+  "Smoking": "🚬 Smoking",
+  "Parking": "🅿️ Parking",
+  "Bicycle Parking": "🚲 Bicycle Parking",
+  "Lift": "🛗 Lift",
+  "Pool": "🏊 Pool",
+  "Fitness": "🏋️ Fitness",
+  "Security keycard": "🔑 Security keycard",
+  "Security finger print": "👆 Security finger print",
+  "CCTV": "📹 CCTV",
+  "Security": "🛡️ Security",
+  "Restaurant/Food Shop": "🍽️ Restaurant/Food Shop",
+  "Convenient Store": "🏪 Store",
+  "Laundry": "🧺 Laundry",
+  "Beauty Salon in Building": "💇 Beauty Salon in Building",
+  "EV Charger": "🔌 EV Charger",
+};
+
+function amenityChips(ad){
+  const amenities = ad.amenities || [];
+  // "Air Conditioner" est déjà affiché séparément (Oui/Non) dans le popup.
+  return Object.keys(AMENITY_ICONS).filter(k => k !== "Air Conditioner" && amenities.includes(k));
+}
+
+function pinIcon(){
+  return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [12, 12] });
+}
+
+function buildMap(){
+  leafletMap = L.map("leaflet-map");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  }).addTo(leafletMap);
+
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 50 });
+  leafletMap.addLayer(clusterGroup);
+
+  ads.forEach(ad => {
+    const price = priceLabel(ad);
+    const hasAc = (ad.amenities || []).includes("Air Conditioner");
+    const chips = amenityChips(ad);
+    const marker = L.marker([ad.latitude, ad.longitude], { icon: pinIcon() })
+      .bindPopup(
+        `<div class="popup-price">${price ? escapeHtml(price) + " / mois" : "Prix non disponible"}</div>` +
+        `<div class="popup-info">Deposit: ${ad.deposit ? escapeHtml(ad.deposit) : "—"}</div>` +
+        `<div class="popup-info">Air Conditioner : ${hasAc ? "Oui" : "Non"}</div>` +
+        (chips.length ? `<div class="popup-amenities">${chips.map(c => `<span class="popup-chip">${escapeHtml(AMENITY_ICONS[c])}</span>`).join("")}</div>` : "") +
+        `<a href="/payant.html?listing=${ad.id}" class="popup-btn">Voir l'annonce complète</a>`
+      );
+    markersById[ad.id] = marker;
+  });
+
+  const bounds = L.latLngBounds(ads.map(a => [a.latitude, a.longitude]));
+  leafletMap.fitBounds(bounds, { padding: [30, 30] });
+}
+
+function hasRaw(raw){
+  return !!raw && String(raw).trim() !== "-" && String(raw).trim() !== "";
+}
+
+function parseRaw(raw){
+  if (!hasRaw(raw)) return null;
+  const m = String(raw).match(/[\d,\s]+/);
+  if (!m) return null;
+  const n = parseInt(m[0].replace(/[\s,]/g, ""), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Même logique que priceOf() dans payant.html : le prix du contrat
+// correspondant à la durée choisie, sinon le prix général de l'annonce.
+function priceOf(ad, durationField){
+  if (durationField) {
+    const min = ad[`${durationField}_min`];
+    if (min) return min;
+    const n = parseRaw(ad[`${durationField}_raw`]);
+    if (n !== null) return n;
+  }
+  if (ad.price_monthly_min) return ad.price_monthly_min;
+  return parseRaw(ad.contract_monthly_raw);
+}
+
+const BUDGET_MIN = 10;
+const BUDGET_MAX = 500;
+
+function setupBudgetSlider(){
+  const minInput = document.getElementById("budget-min");
+  const maxInput = document.getElementById("budget-max");
+  const minLabel = document.getElementById("budget-min-label");
+  const maxLabel = document.getElementById("budget-max-label");
+  const fill = document.getElementById("budget-fill");
+
+  function render(){
+    let min = Number(minInput.value);
+    let max = Number(maxInput.value);
+    if (min > max) {
+      [min, max] = [max, min];
+      minInput.value = min;
+      maxInput.value = max;
+    }
+
+    const pctMin = ((min - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100;
+    const pctMax = ((max - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100;
+    fill.style.left = pctMin + "%";
+    fill.style.width = (pctMax - pctMin) + "%";
+
+    minLabel.textContent = min + " €";
+    maxLabel.textContent = max >= BUDGET_MAX ? BUDGET_MAX + " €+" : max + " €";
+
+    selectedBudget = (min === BUDGET_MIN && max === BUDGET_MAX)
+      ? null
+      : { min, max: max >= BUDGET_MAX ? Infinity : max };
+    applyFilters();
+  }
+
+  minInput.addEventListener("input", render);
+  maxInput.addEventListener("input", render);
+  render();
+}
+
+function setupFormFilters(){
+  setupBudgetSlider();
+
+  document.querySelectorAll("#f-duration .chip[data-value]").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const wasActive = chip.classList.contains("active");
+      document.querySelectorAll("#f-duration .chip").forEach(c => c.classList.remove("active"));
+      if (!wasActive) chip.classList.add("active");
+      selectedDuration = wasActive ? "" : chip.dataset.value;
+      applyFilters();
+    });
+  });
+
+  document.getElementById("chip-new").addEventListener("click", () => {
+    onlyNew = !onlyNew;
+    document.getElementById("chip-new").classList.toggle("active", onlyNew);
+    applyFilters();
+  });
+
+  document.querySelectorAll("#f-amenities .chip[data-value]").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const value = chip.dataset.value;
+      if (selectedAmenities.has(value)) {
+        selectedAmenities.delete(value);
+        chip.classList.remove("active");
+      } else {
+        selectedAmenities.add(value);
+        chip.classList.add("active");
+      }
+      applyFilters();
+    });
+  });
+}
+
+function applyFilters(){
+  const durationField = DURATION_FIELD[selectedDuration] || null;
+
+  const filtered = ads.filter(a => {
+    if (durationField && !hasRaw(a[`${durationField}_raw`])) return false;
+    if (onlyNew) {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      if (new Date(a.source_updated_at || 0).getTime() < cutoff) return false;
+    }
+    if (selectedBudget) {
+      const minThb = selectedBudget.min * EUR_TO_THB;
+      const maxThb = selectedBudget.max * EUR_TO_THB;
+      const p = priceOf(a, durationField);
+      if (p == null || p < minThb || p > maxThb) return false;
+    }
+    if (selectedAmenities.size) {
+      const amenities = a.amenities || [];
+      for (const am of selectedAmenities) {
+        if (!amenities.includes(am)) return false;
+      }
+    }
+    return true;
+  });
+  clusterGroup.clearLayers();
+  clusterGroup.addLayers(filtered.map(a => markersById[a.id]).filter(Boolean));
+}
+
+async function loadAds(){
+  const limit = 500;
+  let offset = 0;
+  const data = [];
+
+  try {
+    while (true) {
+      const r = await fetch(`${API}/listings?status=active&limit=${limit}&offset=${offset}`);
+      if (!r.ok) throw new Error(r.status);
+      const batch = await r.json();
+      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
+      data.push(...batch);
+      if (batch.length < limit) break;
+      offset += limit;
+    }
+  } catch (e) {
+    document.getElementById("leaflet-map").innerHTML =
+      `<div class="empty">Impossible de charger les annonces depuis l'API.<br><br>Vérifie que FastAPI fonctionne sur le port 8000.</div>`;
+    return;
+  }
+
+  ads = data.filter(a => Number.isFinite(a.latitude) && Number.isFinite(a.longitude));
+
+  if (!ads.length) {
+    document.getElementById("leaflet-map").innerHTML = `<div class="empty">Aucune annonce géolocalisée.</div>`;
+    return;
+  }
+
+  buildMap();
+  setupFormFilters();
+  applyFilters();
+}
+
+loadAds();
+</script>
+</body>
+</html>

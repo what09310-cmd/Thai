@@ -1,0 +1,74 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-27T22:01:59.830Z",
+        "reason": "user confirmed: approved redesign explicitly kept the pre-existing Inter/JetBrains Mono typography, only structure/spacing/a11y were in scope"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-08-28T12:25:08.297Z",
+        "reason": "matches existing frontend/carte.html which already uses font-family:Arial,sans-serif — built for visual consistency with that page"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frontend/carte-phuket.html"
+        ],
+        "createdAt": "2026-08-28T12:25:21.541Z",
+        "reason": "compact sidebar matches existing frontend/carte.html type scale (20/13px) — built for visual consistency with that page"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frontend/carte-thailande.html"
+        ],
+        "createdAt": "2026-08-28T12:41:33.015Z",
+        "reason": "matches existing frontend/carte.html and carte-phuket.html type scale (20/13/15/12px) — built for visual consistency across RentHub map pages"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frontend/carte-bangkok.html"
+        ],
+        "createdAt": "2026-08-28T12:47:20.976Z",
+        "reason": "matches existing RentHub map pages type scale (20/13/15/12px) — built for visual consistency across carte.html, carte-phuket.html, carte-thailande.html"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frontend/carte-pattaya.html"
+        ],
+        "createdAt": "2026-08-28T12:47:21.071Z",
+        "reason": "matches existing RentHub map pages type scale (20/13/15/12px) — built for visual consistency across carte.html, carte-phuket.html, carte-thailande.html"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "frontend/payant.html"
+        ],
+        "createdAt": "2026-08-28T17:13:16.349Z",
+        "reason": "user confirmed: pasted a pricing-page reference screenshot with a glowing gold 'most popular' middle card and asked to replicate it; box-shadow on .plan-card--gold is that intentional glow"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frontend/vip.html"
+        ],
+        "createdAt": "2026-08-28T21:27:54.374Z",
+        "reason": "vip.html is an intentional exact duplicate of carte-thailande.html (user request: 'identique'), which already ships this same font-size pattern"
+      }
+    ]
+  }
+}

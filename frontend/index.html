@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiMonth Tracker</title>
+<meta property="og:title" content="ThaiMonth Tracker">
+<meta property="og:description" content="Suivi des annonces de location en Thaïlande">
+<meta property="og:image" content="/static/logo.png">
+<meta property="og:type" content="website">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0a0a;
+    --surface:  #0f0f0f;
+    --card:     #0f0f0f;
+    --border:   #1a1a1a;
+    --accent:   #facc15;
+    --accent-ink: #0a0a0a;
+    --blue:     #3b82f6;
+    --green:    #4ade80;
+    --red:      #f87171;
+    --purple:   #a78bfa;
+    --text:     #e5e5e5;
+    --muted:    #a3a3a3;
+    --dim:      #525252;
+    --focus:    #facc15;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 20;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+  }
+  .logo img {
+    height: 60px;
+    width: auto;
+    display: block;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .hstat {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .hstat b { color: var(--text); }
+
+  /* ── Barre de villes ── */
+  .city-bar {
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: var(--surface);
+  }
+  .city-bar::-webkit-scrollbar { display: none; }
+
+
+  .location-filters { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .location-filter { display:flex; align-items:center; gap:8px; }
+  .city-select {
+    min-width:240px; background:var(--card); border:1px solid var(--border);
+    border-radius:6px; color:var(--text); font-family:var(--sans);
+    font-size:13px; padding:9px 12px; outline:none; cursor:pointer;
+  }
+  .city-select:focus { border-color:var(--accent); }
+  .city-select:disabled { opacity:.5; cursor:not-allowed; }
+
+  .city-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .05em;
+    color: var(--dim);
+    white-space: nowrap;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .btn-new24h {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); font-family: var(--sans);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0; transition: all .15s;
+  }
+  .btn-new24h:hover { border-color: #a855f7; color: var(--text); }
+  .btn-new24h.active { background: #a855f7; border-color: #a855f7; color: #fff; font-weight: 700; }
+  .btn-new24h .new24h-count { font-family: var(--mono); font-size: 10px; opacity: .75; }
+
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: calc(100vh - 101px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 24px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    position: sticky;
+    top: 101px;
+    height: calc(100vh - 101px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .filter-section { display: flex; flex-direction: column; gap: 9px; }
+
+  .filter-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .filter-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .filter-input:focus { border-color: var(--accent); }
+
+  .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .slider-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .slider-wrap input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider-info {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .toggle-row span { font-size: 12px; color: var(--text); }
+
+  .toggle { position: relative; width: 34px; height: 18px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 18px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toggle-track::before {
+    content: "";
+    position: absolute;
+    width: 12px; height: 12px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--green); }
+  .toggle input:checked + .toggle-track::before { transform: translateX(16px); }
+  .toggle input:focus-visible + .toggle-track { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .toggle-blue input:checked + .toggle-track { background: var(--blue); }
+  .toggle-purple input:checked + .toggle-track { background: var(--purple); }
+
+  .btn-reset {
+    width: 100%;
+    padding: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: all .15s;
+    margin-top: 4px;
+  }
+  .btn-reset:hover { border-color: var(--text); color: var(--text); }
+
+  .btn-premium {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent-ink);
+    font-size: 12px;
+    font-weight: 800;
+    font-family: var(--sans);
+    text-decoration: none;
+    text-align: center;
+    display: block;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn-premium:hover { opacity: .85; }
+
+  /* ── Main ── */
+  .main {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .result-info {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .result-info b { color: var(--accent); font-size: 14px; }
+
+  .sort-select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── Grille ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    display: flex;
+    flex-direction: column;
+  }
+  .card:hover, .card:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  }
+
+  .card-img {
+    height: 150px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .card-img img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .card-img .no-img {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; color: var(--muted);
+  }
+
+  .modal-gallery {
+    display: flex;
+    flex-shrink: 0;
+    height: 220px;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin: 0 -18px 4px;
+    padding: 0 18px;
+  }
+  .modal-gallery-item {
+    position: relative;
+    flex-shrink: 0;
+    height: 220px;
+    max-width: 85%;
+    scroll-snap-align: start;
+  }
+  .modal-gallery-item img {
+    height: 220px;
+    width: auto;
+    max-width: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: zoom-in;
+  }
+  .badge {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: .05em;
+  }
+  .badge-monthly { top: 8px; left: 8px; background: var(--green); color: #000; }
+  .badge-verified { top: 8px; right: 8px; background: var(--blue); color: #fff; }
+  .badge-term-3 { background: var(--blue); color: #fff; }
+  .badge-term-6 { background: var(--purple); color: #000; }
+
+  .card-badge-slot { padding: 8px 14px 0; height: 25px; box-sizing: border-box; display: flex; align-items: center; gap: 4px; }
+
+  .card-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-loc {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .loc-district {
+    background: rgba(59,130,246,.15);
+    color: var(--blue);
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .loc-province {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .card-contracts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-top: auto;
+  }
+  .cc {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+    min-width: 0;
+  }
+  .cc-label {
+    font-size: 9px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    margin-bottom: 0;
+  }
+  .cc-val {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.3;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+  .cc-val.na { color: var(--muted); font-weight: 400; font-size: 11px; }
+
+  .card-date {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+
+  /* ── States ── */
+  .state-box {
+    display: flex; align-items: center; justify-content: center;
+    height: 220px; color: var(--muted);
+    font-family: var(--mono); font-size: 13px; gap: 10px;
+    flex-direction: column;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Pagination ── */
+  .pager {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 8px 0;
+  }
+  .pager button {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .pager button:hover:not(:disabled) { border-color: var(--accent); }
+  .pager button.on { border-color: var(--accent); color: var(--accent); }
+  .pager button:disabled { opacity: .3; cursor: default; }
+
+  /* ── Modal ── */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.75);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .overlay.open { display: flex; }
+
+  .lightbox-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    cursor: zoom-out;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-content {
+    position: relative;
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+  .lightbox-content img#lightbox-img {
+    display: block;
+    max-width: 95vw;
+    max-height: 95vh;
+    width: auto; height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: default;
+  }
+  .lightbox-close {
+    position: fixed;
+    top: 20px; right: 20px;
+    background: rgba(0,0,0,.5);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    width: 32px; height: 32px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .lightbox-close:hover { color: var(--accent); }
+  .lightbox-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,.5);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    width: 44px; height: 44px;
+    cursor: pointer;
+    font-size: 26px;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .lightbox-nav:hover { color: var(--accent); }
+  .lightbox-nav[disabled] { display: none; }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 100%; max-width: 600px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  .modal-top {
+    display: flex; justify-content: flex-end; align-items: flex-start; gap: 12px;
+  }
+  .modal-close {
+    background: none; border: 1px solid var(--border);
+    border-radius: 6px; color: var(--muted);
+    width: 28px; height: 28px; cursor: pointer;
+    font-size: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .tag.green { border-color: var(--green); color: var(--green); }
+
+  .modal-contracts {
+    display: grid; grid-template-columns: 1fr; gap: 8px;
+  }
+  .mc {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .mc-label {
+    font-size: 9px; font-family: var(--mono);
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 0;
+  }
+  .mc-val {
+    font-size: 13px; font-weight: 700;
+    font-family: var(--mono); color: var(--accent);
+  }
+  .mc-val.na { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+  .modal-amenities { display: flex; flex-wrap: wrap; gap: 5px; }
+  .amenity {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 8px;
+    font-size: 11px; color: var(--muted); font-family: var(--mono);
+  }
+
+  .section-head {
+    font-size: 10px; font-family: var(--mono);
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+
+  .modal-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: var(--accent-ink);
+    font-weight: 800; font-size: 13px;
+    padding: 10px 18px; border-radius: 4px;
+    text-decoration: none; align-self: flex-start;
+    transition: opacity .15s;
+  }
+  .modal-link:hover { opacity: .85; }
+.card-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.amenity-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text);
+  white-space: nowrap;
+}
+  @media (max-width: 768px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .grid { grid-template-columns: 1fr; }
+    .hstat { display: none; }
+  }
+
+  /* ── Filtre région (FAB) ── */
+  .region-fab-wrap { position: fixed; left: 24px; bottom: 24px; z-index: 50; }
+  .region-fab {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s, background .15s;
+  }
+  .region-fab:hover { transform: scale(1.06); }
+  .region-fab.active { background: var(--blue); color: #fff; }
+  .region-menu {
+    position: absolute;
+    bottom: 64px; left: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 190px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  .region-menu.open { display: flex; }
+  .region-item {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .region-item:hover { background: var(--bg); }
+  .region-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+  /* ── Carte Phuket (FAB) ── */
+  .map-fab {
+    position: fixed; right: 24px; bottom: 24px; z-index: 50;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    text-decoration: none;
+    transition: transform .15s;
+  }
+  .map-fab:hover { transform: scale(1.06); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><img src="/static/logo.png" alt="ThaiMonth"></div>
+  <div class="header-right">
+    <div class="hstat">Logement <b id="h-total">—</b></div>
+    <div class="hstat">1 mois dispo <b id="h-monthly">—</b></div>
+    <div class="hstat">3 mois dispo <b id="h-3month">—</b></div>
+    <div class="hstat">6 mois dispo <b id="h-6month">—</b></div>
+    <div class="hstat">🆕 New 24h <b id="h-new">—</b></div>
+  </div>
+</header>
+
+<!-- FILTRES VILLE + QUARTIER -->
+<div class="city-bar location-filters">
+  <div class="location-filter" id="featured-cities">
+    <label class="city-label" for="featured-city-select">⭐ Grandes villes :</label>
+    <select class="city-select" id="featured-city-select" onchange="toggleFeaturedCity(this.value)">
+      <option value="">Toutes les grandes villes</option>
+      <option value="Bangkok">Bangkok</option>
+      <option value="Pattaya">Pattaya</option>
+      <option value="Chiang Mai">Chiang Mai</option>
+      <option value="Phuket">Phuket</option>
+      <option value="Hua Hin">Hua Hin</option>
+      <option value="Ko Samui">Ko Samui</option>
+      <option value="Ko Phangan">Ko Phangan</option>
+      <option value="Udon Thani">Udon Thani</option>
+      <option value="Krabi">Krabi</option>
+    </select>
+  </div>
+  <div class="location-filter">
+    <label class="city-label" for="city-select">🏙️ Ville :</label>
+    <select class="city-select" id="city-select" onchange="selectCity(this.value)">
+      <option value="">Toutes les villes</option>
+    </select>
+  </div>
+  <div class="location-filter">
+    <label class="city-label" for="district-select">📍 Quartier :</label>
+    <select class="city-select" id="district-select" onchange="selectDistrict(this.value)" disabled>
+      <option value="">Sélectionnez d'abord une ville</option>
+    </select>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="filter-section">
+      <button class="btn-new24h" id="btn-new24h" onclick="toggleNew24h()">
+        🆕 New <span class="new24h-count" id="new24h-count"></span>
+      </button>
+    </div>
+
+    <div class="filter-section">
+      <label class="filter-label" for="f-slider">Prix mensuel max (THB)</label>
+      <div class="slider-wrap">
+        <input type="range" id="f-slider" min="0" max="1000" step="1" value="1000">
+        <div class="slider-info">
+          <span>0</span>
+          <span id="slider-val">Tous les prix</span>
+        </div>
+      </div>
+      <div class="price-grid" style="margin-top:8px">
+        <label class="visually-hidden" for="f-min">Prix minimum en bahts</label>
+        <input class="filter-input" type="number" id="f-min" placeholder="Min ฿" step="500">
+        <label class="visually-hidden" for="f-max">Prix maximum en bahts</label>
+        <input class="filter-input" type="number" id="f-max" placeholder="Max ฿" step="500">
+      </div>
+    </div>
+
+    <div class="filter-section" id="contract-filter-section">
+      <div class="filter-label">Contrat</div>
+      <div class="toggle-row">
+        <span>1 mois</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-monthly" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 1 mois">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>3 mois</span>
+        <label class="toggle toggle-blue">
+          <input type="checkbox" id="f-3month" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 3 mois">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>6 mois</span>
+        <label class="toggle toggle-purple">
+          <input type="checkbox" id="f-6month" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 6 mois">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-label">Équipements</div>
+      <div class="toggle-row">
+        <span>Desk</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-am-desk" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Desk">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>In-room WIFI</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-am-wifi" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec WIFI">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Smoking</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-am-smoking" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Smoking">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Pool</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-am-pool" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Pool">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Fitness</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-am-fitness" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Fitness">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Convenient Store</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-am-store" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Convenient Store">
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn-reset" onclick="resetFilters()">↺ Réinitialiser les filtres</button>
+
+    <a class="btn-premium" href="payant.html">💳 Version Payante</a>
+
+    <a class="btn-premium" href="vip.html">👑 VIP</a>
+
+    <a class="btn-premium" href="premium.html">⭐ Premium</a>
+
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="toolbar">
+      <div class="result-info" role="status" aria-live="polite"><b id="res-count">—</b> annonces</div>
+      <label class="visually-hidden" for="f-sort">Trier les annonces</label>
+      <select class="sort-select" id="f-sort" onchange="applyFilters()">
+        <option value="updated">Récentes d'abord</option>
+        <option value="price_asc">Prix ↑</option>
+        <option value="price_desc">Prix ↓</option>
+        <option value="name">Nom A→Z</option>
+      </select>
+    </div>
+
+    <div id="grid-wrap">
+      <div class="state-box"><div class="spinner"></div>Chargement…</div>
+    </div>
+
+    <div class="pager" id="pager"></div>
+  </main>
+</div>
+
+<!-- FILTRE RÉGION -->
+<div class="region-fab-wrap" id="region-fab-wrap">
+  <div class="region-menu" id="region-menu" role="menu">
+    <button class="region-item" data-region="Centre" onclick="selectRegion('Centre')" role="menuitem">Centre</button>
+    <button class="region-item" data-region="Nord" onclick="selectRegion('Nord')" role="menuitem">Nord</button>
+    <button class="region-item" data-region="Nord-Est" onclick="selectRegion('Nord-Est')" role="menuitem">Nord-Est (Isaan)</button>
+    <button class="region-item" data-region="Est" onclick="selectRegion('Est')" role="menuitem">Est</button>
+    <button class="region-item" data-region="Sud" onclick="selectRegion('Sud')" role="menuitem">Sud</button>
+  </div>
+  <button class="region-fab" id="region-fab" onclick="toggleRegionMenu()" aria-haspopup="true" aria-expanded="false" aria-label="Filtrer par région">🗺️</button>
+</div>
+
+<!-- CARTE PHUKET -->
+<a class="map-fab" href="carte-thailande.html" aria-label="Voir la carte de Thaïlande">🏝️</a>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-body" role="dialog" aria-modal="true" aria-label="Détail de l'annonce" tabindex="-1"></div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox-overlay" id="lightbox-overlay" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Fermer">✕</button>
+  <button class="lightbox-nav lightbox-prev" id="lightbox-prev" onclick="navigateLightbox(-1)" aria-label="Photo précédente">‹</button>
+  <button class="lightbox-nav lightbox-next" id="lightbox-next" onclick="navigateLightbox(1)" aria-label="Photo suivante">›</button>
+  <div class="lightbox-content">
+    <img id="lightbox-img" src="" alt="" draggable="false" oncontextmenu="return false">
+  </div>
+</div>
+
+<script>
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+const PER_PAGE = 30;
+
+const LINE_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#06C755"/><path fill="#fff" d="M12 5.5c-4.14 0-7.5 2.73-7.5 6.1 0 3.02 2.66 5.55 6.26 6.03.24.05.58.16.66.37.08.19.05.49.03.68l-.11.65c-.03.19-.15.75.65.41.8-.34 4.33-2.55 5.9-4.36 1.09-1.19 1.61-2.41 1.61-3.78 0-3.37-3.36-6.1-7.5-6.1Z"/></svg>`;
+const WHATSAPP_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#25D366"/><path fill="#fff" d="M12 5.3a6.7 6.7 0 0 0-5.72 10.18l-.78 2.85 2.92-.77A6.7 6.7 0 1 0 12 5.3Zm0 12.2a5.47 5.47 0 0 1-2.79-.76l-.2-.12-2.07.54.55-2.02-.13-.21a5.5 5.5 0 1 1 4.64 2.57Zm3.02-4.12c-.16-.08-.97-.48-1.12-.53-.15-.06-.26-.08-.37.08-.11.16-.42.53-.52.64-.1.11-.19.12-.36.04-.16-.08-.68-.25-1.3-.8-.48-.43-.8-.96-.9-1.12-.09-.16-.01-.25.07-.33.08-.07.16-.19.24-.28.08-.1.11-.16.16-.27.05-.11.03-.2-.01-.28-.05-.08-.37-.9-.51-1.23-.13-.32-.27-.28-.37-.28h-.31c-.11 0-.28.04-.42.2-.15.16-.55.54-.55 1.32s.57 1.53.65 1.64c.08.11 1.12 1.71 2.72 2.4.38.16.68.26.91.33.38.12.73.1 1-.06.31-.18.97-.4 1.1-.78.14-.39.14-.72.1-.79-.04-.07-.15-.11-.31-.19Z"/></svg>`;
+
+// Icônes pour les 28 catégories d'équipements — voir src/normalizers/amenities.py.
+const AMENITY_ICONS = {
+  "Air Conditioner": "❄️ Air Conditioner",
+  "Furnished": "🛋️ Furnished",
+  "Water Heater": "🚿 Water Heater",
+  "Fan": "🌀 Fan",
+  "Television": "📺 Television",
+  "Refrigerator": "🧊 Refrigerator",
+  "Sofa": "🪑 Sofa",
+  "Desk": "🖥️ Desk",
+  "Kitchen Stove": "🍳 Kitchen Stove",
+  "Phone": "☎️ Phone",
+  "In-room WIFI": "📶 WIFI",
+  "Cable TV": "📺 TV",
+  "Pets": "🐾 Pets",
+  "Smoking": "🚬 Smoking",
+  "Parking": "🅿️ Parking",
+  "Bicycle Parking": "🚲 Bicycle Parking",
+  "Lift": "🛗 Lift",
+  "Pool": "🏊 Pool",
+  "Fitness": "🏋️ Fitness",
+  "Security keycard": "🔑 Security keycard",
+  "Security finger print": "👆 Security finger print",
+  "CCTV": "📹 CCTV",
+  "Security": "🛡️ Security",
+  "Restaurant/Food Shop": "🍽️ Restaurant/Food Shop",
+  "Convenient Store": "🏪 Store",
+  "Laundry": "🧺 Laundry",
+  "Beauty Salon in Building": "💇 Beauty Salon in Building",
+  "EV Charger": "🔌 EV Charger",
+};
+
+let allData = [];
+let filtered = [];
+let page = 1;
+let activeCity = "";
+let activeDistrict = "";
+let onlyNew24h = false;
+let featuredCity = "";
+let activeRegion = "";
+let districtCoords = {};
+let addressCoords = {};
+
+// ── Init ────────────────────────────────────────────────────────────
+
+async function init() {
+  await Promise.all([loadStats(), loadListings(), loadDistrictCoords(), loadAddressCoords()]);
+}
+
+// Points GPS de repli par quartier (subdistrict/district/province),
+// pré-calculés hors-ligne via Nominatim — voir scripts/geocode_districts.py.
+// Sert de dernier recours quand ni l'annonce ni son adresse complète n'ont
+// de coordonnées, pour que le lien/carte Google Maps pointe toujours sur
+// un vrai marqueur plutôt qu'une recherche texte approximative.
+async function loadDistrictCoords() {
+  const candidates = ["district_coords.json", `${API}/static/district_coords.json`];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) { districtCoords = await r.json(); return; }
+    } catch (e) {}
+  }
+}
+
+// Points GPS par adresse complète (rue/route + quartier, quand RentHub la
+// publie) — voir scripts/geocode_addresses.py. Plus précis que le centre
+// de quartier: tombe près du bâtiment réel pour les annonces qui ont un
+// nom de rue, sinon équivalent au fallback quartier.
+async function loadAddressCoords() {
+  const candidates = ["address_coords.json", `${API}/static/address_coords.json`];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) { addressCoords = await r.json(); return; }
+    } catch (e) {}
+  }
+}
+
+async function loadStats() {
+  try {
+    const s = await fetch(`${API}/stats`).then(r => r.json());
+    document.getElementById("h-total").textContent = s.total_active.toLocaleString();
+    document.getElementById("h-monthly").textContent = s.monthly_contract_count.toLocaleString();
+    document.getElementById("h-3month").textContent = s.three_month_contract_count.toLocaleString();
+    document.getElementById("h-6month").textContent = s.six_month_contract_count.toLocaleString();
+
+    // Comptages par ville dans les boutons
+    const map = {};
+    (s.by_province || []).forEach(r => { map[r.province] = r.count; });
+
+    document.querySelectorAll(".city-btn[data-province]").forEach(btn => {
+      const prov = btn.dataset.province;
+      if (!prov) return;
+      const count = map[prov];
+      const key = prov.replace(/\s+/g, "");
+      const el = document.getElementById("count-" + key);
+      if (el && count) el.textContent = `(${count})`;
+    });
+  } catch(e) {}
+}
+
+async function loadListings() {
+  showLoading();
+  try {
+    const limit = 500;
+    let offset = 0;
+    allData = [];
+
+    // Charge toutes les pages de l'API afin de ne perdre aucune ville/annonce.
+    while (true) {
+      const r = await fetch(`${API}/listings?limit=${limit}&offset=${offset}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const batch = await r.json();
+      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
+
+      allData.push(...batch);
+
+      // Une page plus courte que "limit" signifie qu'il n'y a plus de résultats.
+      if (batch.length < limit) break;
+
+      offset += limit;
+    }
+
+    applyUrlParams();
+    buildLocationMenus();
+    _updateNew24hCount();
+    _updateFeaturedCounts();
+    applyFilters();
+  } catch(e) {
+    console.error(e);
+    document.getElementById("grid-wrap").innerHTML =
+      `<div class="state-box">❌ API inaccessible<br><small style="margin-top:6px;color:var(--muted)">Lancez uvicorn sur ${API}</small></div>`;
+  }
+}
+
+// Pré-remplit les filtres depuis l'URL (ex: redirection depuis le
+// formulaire de payant.html vers les annonces correspondantes).
+function applyUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const city = params.get("city");
+  const min = params.get("min");
+  const max = params.get("max");
+  const monthly = params.get("monthly");
+
+  if (city) activeCity = city;
+  if (min) document.getElementById("f-min").value = min;
+  if (max) document.getElementById("f-max").value = max;
+  if (monthly === "1") document.getElementById("f-monthly").checked = true;
+}
+
+function norm(v) {
+  return String(v ?? "").trim();
+}
+
+// Regroupe les provinces à faible volume (<5 annonces) dans la province
+// voisine la plus proche de la même région, pour alléger le menu Ville.
+const PROVINCE_MERGE_MAP = {
+  // Sud
+  "Songkhla": "Surat Thani",
+  "Nakhon Sri Thammarat": "Surat Thani",
+  "Yala": "Surat Thani",
+  "Krabi": "Phuket",
+  "Ranong": "Phuket",
+  "Prachaubkirikhan": "Ratchburi",
+  // Ouest / Centre
+  "Petchburi": "Ratchburi",
+  "Samut Songkram": "Samut Sakhon",
+  "Suphanburi": "Nakhon Pathom",
+  "Lopburi": "Phra Nakhon Sri Ayutthaya",
+  "Saraburi": "Phra Nakhon Sri Ayutthaya",
+  "Nakhon Nayok": "Pathumthani",
+  // Est
+  "Prachinburi": "Chachoengsao",
+  "Chonburi": "Pattaya",
+  // Nord
+  "Phitsanulok": "Lamphang",
+  "Phrae": "Lamphang",
+  "Lamphun": "Chiang Mai",
+  // Isaan (nord-est)
+  "Udon Thani": "Khon Kaen",
+  "Nong Bua Lam Phu": "Khon Kaen",
+  "Maha Sarakham": "Khon Kaen",
+  "Sakon Nakhon": "Khon Kaen",
+  "Roi Et": "Khon Kaen",
+  "Surin": "Nakhon Ratchasima",
+  "Chaiyaphum": "Nakhon Ratchasima",
+  "Buri Ram": "Nakhon Ratchasima",
+  "Ubon Ratchathani": "Nakhon Ratchasima",
+  "Yasothon": "Nakhon Ratchasima",
+  "Amnat Charoen": "Nakhon Ratchasima",
+};
+
+// Districts promus au rang de "ville" dans le menu, avec un nom plus
+// parlant (ex: le district administratif "Bang Lamung" correspond à la
+// zone touristique connue sous le nom de Pattaya).
+const DISTRICT_AS_CITY = {
+  "Bang Lamung": "Pattaya",
+  "Ko Samui": "Ko Samui",
+  "Hua Hin": "Hua Hin",
+  "Ko Phangan": "Ko Phangan",
+};
+
+function rawProvinceOf(l) {
+  return norm(l.city || l.province || "");
+}
+
+function cityOf(l) {
+  const district = norm(l.district || "");
+  for (const [from, to] of Object.entries(DISTRICT_AS_CITY)) {
+    if (key(district).includes(key(from))) return to;
+  }
+  // Utilise la vraie ville si elle existe ; sinon retombe sur la province.
+  const raw = rawProvinceOf(l);
+  return PROVINCE_MERGE_MAP[raw] || raw;
+}
+
+// Regroupe les villes/provinces canoniques (retournées par cityOf) en 5
+// grandes régions de Thaïlande, pour le filtre régional (bouton flottant).
+const REGION_MAP = {
+  // Centre (Bangkok + périphérie + Ouest)
+  "Bangkok": "Centre",
+  "Pathumthani": "Centre",
+  "Samut Prakarn": "Centre",
+  "Nonthaburi": "Centre",
+  "Nakhon Pathom": "Centre",
+  "Samut Sakhon": "Centre",
+  "Phra Nakhon Sri Ayutthaya": "Centre",
+  "Ratchburi": "Centre",
+  "Hua Hin": "Centre",
+  // Nord
+  "Chiang Mai": "Nord",
+  "Lamphang": "Nord",
+  "Chiang Rai": "Nord",
+  // Nord-Est (Isaan)
+  "Khon Kaen": "Nord-Est",
+  "Nakhon Ratchasima": "Nord-Est",
+  // Est
+  "Pattaya": "Est",
+  "Rayong": "Est",
+  "Chachoengsao": "Est",
+  "Chanthaburi": "Est",
+  // Sud
+  "Phuket": "Sud",
+  "Surat Thani": "Sud",
+  "Ko Samui": "Sud",
+  "Ko Phangan": "Sud",
+};
+const REGION_BY_KEY = {};
+Object.entries(REGION_MAP).forEach(([city, region]) => { REGION_BY_KEY[key(city)] = region; });
+
+function regionOf(l) {
+  return REGION_BY_KEY[key(cityOf(l))] || "";
+}
+
+function districtOf(l) {
+  return norm(l.district || l.subdistrict || l.neighborhood || l.quartier || "");
+}
+
+function key(v) {
+  return norm(v).toLowerCase();
+}
+
+function buildLocationMenus() {
+  const citySelect = document.getElementById("city-select");
+  const districtSelect = document.getElementById("district-select");
+  if (!citySelect || !districtSelect) return;
+
+  const cities = new Map();
+  const districts = new Map();
+
+  allData.forEach(l => {
+    if (l.status !== "active") return;
+    const city = cityOf(l);
+    if (!city) return;
+    const ck = key(city);
+
+    if (!cities.has(ck)) {
+      cities.set(ck, {name: city, count: 0});
+      districts.set(ck, new Map());
+    }
+    cities.get(ck).count++;
+
+    const district = districtOf(l);
+    if (district) {
+      const dm = districts.get(ck);
+      const dk = key(district);
+      if (!dm.has(dk)) dm.set(dk, {name: district, count: 0});
+      dm.get(dk).count++;
+    }
+  });
+
+  const totalActive = [...cities.values()].reduce((sum, c) => sum + c.count, 0);
+
+  citySelect.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = `Toutes les villes (${totalActive.toLocaleString("fr-FR")})`;
+  citySelect.appendChild(all);
+
+  [...cities.values()]
+    .sort((a,b) => b.count - a.count)
+    .forEach(c => {
+      const o = document.createElement("option");
+      o.value = c.name;
+      o.textContent = `${c.name} (${c.count.toLocaleString("fr-FR")})`;
+      citySelect.appendChild(o);
+    });
+
+  citySelect.value = activeCity;
+
+  districtSelect.innerHTML = "";
+  const allD = document.createElement("option");
+  allD.value = "";
+  allD.textContent = activeCity ? "Tous les quartiers" : "Sélectionnez d'abord une ville";
+  districtSelect.appendChild(allD);
+
+  const dm = districts.get(key(activeCity)) || new Map();
+  [...dm.values()]
+    .sort((a,b) => a.name.localeCompare(b.name, "fr", {sensitivity:"base"}))
+    .forEach(d => {
+      const o = document.createElement("option");
+      o.value = d.name;
+      o.textContent = `${d.name} (${d.count.toLocaleString("fr-FR")})`;
+      districtSelect.appendChild(o);
+    });
+
+  districtSelect.disabled = !activeCity || dm.size === 0;
+  districtSelect.value = activeDistrict;
+}
+
+function _updateNew24hCount() {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const count = allData.filter(l => {
+    if (l.status === "removed") return false;
+    return new Date(l.source_updated_at || 0).getTime() >= cutoff;
+  }).length;
+  const el = document.getElementById("new24h-count");
+  if (el) el.textContent = count ? `(${count.toLocaleString("fr-FR")})` : "";
+  const hNew = document.getElementById("h-new");
+  if (hNew) hNew.textContent = count.toLocaleString("fr-FR");
+}
+
+function toggleNew24h() {
+  onlyNew24h = !onlyNew24h;
+  document.getElementById("btn-new24h").classList.toggle("active", onlyNew24h);
+  page = 1;
+  applyFilters();
+}
+
+// Grandes villes mises en avant : correspond sur la province (ex: Bangkok,
+// Phuket) ou le district (ex: Pattaya, qui est un district de Chonburi).
+function _updateFeaturedCounts() {
+  const counts = {};
+  const options = document.querySelectorAll("#featured-city-select option[value]:not([value=''])");
+  allData.forEach(l => {
+    if (l.status === "removed") return;
+    options.forEach(opt => {
+      const name = opt.value;
+      if (key(cityOf(l)).includes(key(name)) ||
+          key(rawProvinceOf(l)).includes(key(name)) ||
+          key(districtOf(l)).includes(key(name))) {
+        counts[name] = (counts[name] || 0) + 1;
+      }
+    });
+  });
+  options.forEach(opt => {
+    const count = counts[opt.value];
+    opt.textContent = count ? `${opt.value} (${count.toLocaleString("fr-FR")})` : opt.value;
+  });
+}
+
+function toggleFeaturedCity(name) {
+  featuredCity = name;
+  document.getElementById("featured-city-select").value = featuredCity;
+  activeCity = "";
+  activeDistrict = "";
+  page = 1;
+  buildLocationMenus();
+  applyFilters();
+}
+
+function toggleRegionMenu() {
+  const menu = document.getElementById("region-menu");
+  const open = menu.classList.toggle("open");
+  document.getElementById("region-fab").setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function selectRegion(region) {
+  activeRegion = (activeRegion === region) ? "" : region;
+  document.querySelectorAll(".region-item").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.region === activeRegion);
+  });
+  document.getElementById("region-fab").classList.toggle("active", !!activeRegion);
+  document.getElementById("region-menu").classList.remove("open");
+  document.getElementById("region-fab").setAttribute("aria-expanded", "false");
+  page = 1;
+  applyFilters();
+}
+
+document.addEventListener("click", (e) => {
+  const wrap = document.getElementById("region-fab-wrap");
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById("region-menu").classList.remove("open");
+    document.getElementById("region-fab").setAttribute("aria-expanded", "false");
+  }
+});
+
+function selectCity(value) {
+  activeCity = norm(value);
+  activeDistrict = "";
+  featuredCity = "";
+  document.getElementById("featured-city-select").value = "";
+  page = 1;
+  buildLocationMenus();
+  applyFilters();
+}
+
+function selectDistrict(value) {
+  activeDistrict = norm(value);
+  page = 1;
+  applyFilters();
+}
+
+function applyFilters() {
+  const rawMin = document.getElementById("f-min").value;
+  const rawMax = document.getElementById("f-max").value;
+  // "0" est une valeur valide (≠ vide) : ne pas la faire retomber sur le
+  // défaut via "|| ..." sinon "≤ 0 ฿" désactive silencieusement le filtre.
+  const parsedMin = parseInt(rawMin);
+  const parsedMax = parseInt(rawMax);
+  const priceMin = rawMin === "" || isNaN(parsedMin) ? 0 : parsedMin;
+  const priceMax = rawMax === "" || isNaN(parsedMax) ? Infinity : parsedMax;
+  const monthlyOnly = document.getElementById("f-monthly").checked;
+  const threeMonthOnly = document.getElementById("f-3month").checked;
+  const sixMonthOnly = document.getElementById("f-6month").checked;
+  const sort = document.getElementById("f-sort").value;
+
+  const amenityFilters = [
+    ["f-am-desk", "Desk"],
+    ["f-am-wifi", "In-room WIFI"],
+    ["f-am-smoking", "Smoking"],
+    ["f-am-pool", "Pool"],
+    ["f-am-fitness", "Fitness"],
+    ["f-am-store", "Convenient Store"],
+  ].filter(([id]) => document.getElementById(id).checked)
+   .map(([, name]) => name);
+
+  filtered = allData.filter(l => {
+    if (l.status !== "active") return false;
+
+    if (onlyNew24h) {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      if (new Date(l.source_updated_at || 0).getTime() < cutoff) return false;
+    }
+
+    if (activeCity && !key(cityOf(l)).includes(key(activeCity))) return false;
+    if (activeDistrict && key(districtOf(l)) !== key(activeDistrict)) return false;
+
+    if (featuredCity &&
+        !key(cityOf(l)).includes(key(featuredCity)) &&
+        !key(rawProvinceOf(l)).includes(key(featuredCity)) &&
+        !key(districtOf(l)).includes(key(featuredCity))) return false;
+
+    if (activeRegion && regionOf(l) !== activeRegion) return false;
+
+    if (monthlyOnly && l.has_monthly_contract !== "true") return false;
+    if (threeMonthOnly && contractNum(l.contract_3_month_raw) === null) return false;
+    if (sixMonthOnly && contractNum(l.contract_6_month_raw) === null) return false;
+
+    if (amenityFilters.length) {
+      const amenities = l.amenities || [];
+      if (!amenityFilters.every(a => amenities.includes(a))) return false;
+    }
+
+    if (monthlyOnly) {
+      // Contrat 1 mois : on compare au prix réel de ce contrat (même valeur
+      // que le tri "Prix"), pas à une plage qui chevaucherait juste la
+      // fourchette demandée.
+      const price = monthlyPrice(l);
+      if (priceMin > 0 && price < priceMin) return false;
+      if (priceMax < Infinity && price > priceMax) return false;
+    } else {
+      // On compare aux vrais prix des contrats disponibles (1/3/6 mois),
+      // pas au champ "price_monthly_min/max" (prix d'en-tête de l'annonce
+      // source) qui peut être vide même quand des contrats existent —
+      // ça faisait passer le filtre max en no-op pour ces annonces.
+      const contractPrices = [l.contract_monthly_raw, l.contract_3_month_raw, l.contract_6_month_raw]
+        .map(contractNum)
+        .filter(n => n !== null);
+      const pMin = contractPrices.length ? Math.min(...contractPrices) : (l.price_monthly_min || 0);
+      const pMax = contractPrices.length ? Math.max(...contractPrices) : (l.price_monthly_max || 0);
+      if (priceMin > 0 && pMax > 0 && pMax < priceMin) return false;
+      if (priceMax < Infinity && pMin > 0 && pMin > priceMax) return false;
+    }
+
+    return true;
+  });
+
+  filtered.sort((a,b) => {
+    if (sort === "price_asc")
+      return monthlyPrice(a) - monthlyPrice(b);
+    if (sort === "price_desc")
+      return monthlyPrice(b) - monthlyPrice(a);
+    if (sort === "name")
+      return (a.name || "").localeCompare(b.name || "");
+    return new Date(b.source_updated_at || 0) -
+           new Date(a.source_updated_at || 0);
+  });
+
+  document.getElementById("res-count").textContent =
+    filtered.length.toLocaleString();
+
+  renderPage();
+  renderPager();
+}
+
+function resetFilters() {
+  document.getElementById("f-min").value = "";
+  document.getElementById("f-max").value = "";
+  document.getElementById("f-slider").value = 1000;
+  document.getElementById("slider-val").textContent = "Tous les prix";
+  updateContractSectionVisibility();
+  document.getElementById("f-monthly").checked = false;
+  document.getElementById("f-3month").checked = false;
+  document.getElementById("f-6month").checked = false;
+  document.getElementById("f-am-desk").checked = false;
+  document.getElementById("f-am-wifi").checked = false;
+  document.getElementById("f-am-smoking").checked = false;
+  document.getElementById("f-am-pool").checked = false;
+  document.getElementById("f-am-fitness").checked = false;
+  document.getElementById("f-am-store").checked = false;
+
+  activeCity = "";
+  activeDistrict = "";
+  onlyNew24h = false;
+  featuredCity = "";
+  activeRegion = "";
+  document.getElementById("btn-new24h").classList.remove("active");
+  document.getElementById("featured-city-select").value = "";
+  document.querySelectorAll(".region-item").forEach(btn => btn.classList.remove("active"));
+  document.getElementById("region-fab").classList.remove("active");
+  page = 1;
+
+  buildLocationMenus();
+  applyFilters();
+}
+
+// Slider (échelle exponentielle : plus de précision sur les loyers bas)
+const SLIDER_RES = 1000;
+const SLIDER_MAX_PRICE = 60000;
+const SLIDER_STEP = 500;
+
+// Exposant choisi pour que le milieu du curseur (50%) corresponde à 10 000 ฿
+const SLIDER_EXP = Math.log(SLIDER_MAX_PRICE / 10000) / Math.log(2);
+
+function sliderPosToPrice(pos) {
+  const raw = SLIDER_MAX_PRICE * Math.pow(pos / SLIDER_RES, SLIDER_EXP);
+  return Math.round(raw / SLIDER_STEP) * SLIDER_STEP;
+}
+
+// En dessous de 100 ฿, aucun contrat réel n'existe à ce prix : on masque
+// le filtre "Contrat" plutôt que de laisser des cases à cocher inutiles.
+function updateContractSectionVisibility() {
+  const rawMax = document.getElementById("f-max").value;
+  const max = parseInt(rawMax);
+  const hide = rawMax !== "" && !isNaN(max) && max < 100;
+  document.getElementById("contract-filter-section").style.display = hide ? "none" : "";
+  if (hide) {
+    document.getElementById("f-monthly").checked = false;
+    document.getElementById("f-3month").checked = false;
+    document.getElementById("f-6month").checked = false;
+  }
+}
+
+document.getElementById("f-slider").addEventListener("input", function() {
+  const pos = parseInt(this.value);
+  const price = sliderPosToPrice(pos);
+  document.getElementById("slider-val").textContent = pos >= SLIDER_RES ? "Tous les prix" : `≤ ${price.toLocaleString("fr-FR")} ฿`;
+  document.getElementById("f-max").value = pos < SLIDER_RES ? price : "";
+  updateContractSectionVisibility();
+  applyFilters();
+});
+
+// Debounce texte
+let _t;
+["f-min","f-max"].forEach(id => {
+  document.getElementById(id).addEventListener("input", () => {
+    if (id === "f-max") updateContractSectionVisibility();
+    clearTimeout(_t); _t = setTimeout(applyFilters, 280);
+  });
+});
+
+// ── Rendu ────────────────────────────────────────────────────────────
+
+function renderPage() {
+  const start = (page - 1) * PER_PAGE;
+  const slice = filtered.slice(start, start + PER_PAGE);
+  const wrap = document.getElementById("grid-wrap");
+
+  if (!slice.length) {
+    wrap.innerHTML = `<div class="state-box">Aucune annonce<br><small style="margin-top:6px;color:var(--muted)">Élargissez les filtres</small></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="grid">${slice.map(cardHTML).join("")}</div>`;
+}
+
+function cardHTML(l) {
+  const district = l.district || l.subdistrict || "";
+  const c1 = contractVal(l.contract_monthly_raw);
+  const c3 = contractVal(l.contract_3_month_raw);
+  const c6 = contractVal(l.contract_6_month_raw);
+  const updated = l.source_updated_at ? new Date(l.source_updated_at).toLocaleDateString("fr-FR") : "";
+
+  // Quand un toggle "X mois uniquement" est actif, on n'affiche que le
+  // prix de la catégorie sélectionnée (pas les autres durées disponibles).
+  const monthlyOnly = document.getElementById("f-monthly").checked;
+  const threeMonthOnly = document.getElementById("f-3month").checked;
+  const sixMonthOnly = document.getElementById("f-6month").checked;
+  const anyContractOnly = monthlyOnly || threeMonthOnly || sixMonthOnly;
+  const show1 = !anyContractOnly || monthlyOnly;
+  const show3 = !anyContractOnly || threeMonthOnly;
+  const show6 = !anyContractOnly || sixMonthOnly;
+
+  // Catégories dérivées côté serveur depuis la description (fiable, par
+  // annonce) — voir src/normalizers/amenities.py. On ne re-devine rien
+  // côté client.
+  const amenities = l.amenities || [];
+  const categoryIcons = {
+    "Desk": AMENITY_ICONS["Desk"],
+    "In-room WIFI": AMENITY_ICONS["In-room WIFI"],
+    "Smoking": AMENITY_ICONS["Smoking"],
+    "Pool": AMENITY_ICONS["Pool"],
+    "Fitness": AMENITY_ICONS["Fitness"],
+    "Convenient Store": AMENITY_ICONS["Convenient Store"],
+  };
+  const categories = Object.keys(categoryIcons)
+    .filter(k => amenities.includes(k))
+    .map(k => categoryIcons[k]);
+
+  return `<div class="card" tabindex="0" role="button" aria-label="Voir le détail : ${esc(l.name || "annonce")}" onclick="openModal(${l.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal(${l.id});}">
+    <div class="card-img">${l.images && l.images.length
+      ? `<img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.innerHTML='<div class=&quot;no-img&quot;>🏠</div>'">`
+      : `<div class="no-img">🏠</div>`}</div>
+    <div class="card-badge-slot">${show1 && l.has_monthly_contract === "true" && c1 !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}${show3 && c3 !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}${show6 && c6 !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}</div>
+
+    <div class="card-body">
+
+      <div class="card-loc">
+        ${district ? `<span class="loc-district">${esc(district)}</span>` : ""}
+        ${l.province ? `<span class="loc-province">${esc(l.province)}</span>` : ""}
+      </div>
+
+      ${categories.length ? `
+        <div class="card-categories">
+          ${categories.map(c => `<span class="amenity-badge">${esc(c)}</span>`).join("")}
+        </div>
+      ` : ""}
+
+      ${(() => {
+        const boxes = [
+          show1 && c1 !== "—" ? `<div class="cc"><div class="cc-label">1 mois</div><div class="cc-val">${c1}</div></div>` : "",
+          show3 && c3 !== "—" ? `<div class="cc"><div class="cc-label">3 mois</div><div class="cc-val">${c3}</div></div>` : "",
+          show6 && c6 !== "—" ? `<div class="cc"><div class="cc-label">6 mois</div><div class="cc-val">${c6}</div></div>` : "",
+        ].filter(Boolean);
+        return boxes.length
+          ? `<div class="card-contracts">${boxes.join("")}</div>`
+          : "";
+      })()}
+
+      ${updated ? `<div class="card-date">Mis à jour: ${updated}</div>` : ""}
+
+    </div>
+  </div>`;
+}
+
+function monthlyPrice(l) {
+  // Le tri utilise uniquement le prix du contrat 1 mois. On délègue à
+  // contractNum() pour la même logique de nettoyage (fourchettes, prix
+  // aberrants < MIN_VALID_PRICE) que l'affichage des cartes.
+  const n = contractNum(l.contract_monthly_raw);
+  return n === null ? Infinity : n;
+}
+
+// Retourne le nombre brut (pour le calcul), ou null si absent/invalide.
+// Certains prix sont une fourchette ("85 - 5,200 THB/month") où le bas est
+// une aberration de scraping : en dessous de MIN_VALID_PRICE, on garde le
+// haut de la fourchette ; si lui aussi est invalide, on abandonne le contrat.
+const MIN_VALID_PRICE = 1000;
+function contractNum(raw) {
+  if (!raw || raw.trim() === "-" || raw.trim() === "") return null;
+  const nums = (raw.match(/[\d,]+/g) || [])
+    .map(s => parseInt(s.replace(/,/g, ""), 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  if (!nums.length) return null;
+
+  const low = nums[0];
+  const high = nums[nums.length - 1];
+  if (low >= MIN_VALID_PRICE) return low;
+  if (high >= MIN_VALID_PRICE) return high;
+  return null;
+}
+
+function contractVal(raw) {
+  const n = contractNum(raw);
+  if (n === null) return "—";
+
+  const eur = n / 38.28;
+
+  const thb = n.toLocaleString("fr-FR");
+  const euros = eur.toLocaleString("fr-FR", {
+    maximumFractionDigits: 0
+  });
+
+  return `${thb} ฿<br>${euros} €`;
+}
+
+function esc(s) {
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// ── Pagination ────────────────────────────────────────────────────────
+
+function renderPager() {
+  const total = Math.ceil(filtered.length / PER_PAGE);
+  const el = document.getElementById("pager");
+  if (total <= 1) { el.innerHTML = ""; return; }
+
+  const pages = [];
+  for (let i = Math.max(1, page-2); i <= Math.min(total, page+2); i++) pages.push(i);
+  if (pages[0] > 1) pages.unshift(1);
+  if (pages[pages.length-1] < total) pages.push(total);
+
+  let html = `<button aria-label="Page précédente" ${page===1?"disabled":""} onclick="goPage(${page-1})">‹</button>`;
+  let prev = null;
+  pages.forEach(p => {
+    if (prev !== null && p - prev > 1) html += `<button disabled aria-hidden="true">…</button>`;
+    html += `<button class="${p===page?"on":""}" aria-label="Page ${p}" aria-current="${p===page?"page":"false"}" onclick="goPage(${p})">${p}</button>`;
+    prev = p;
+  });
+  html += `<button aria-label="Page suivante" ${page===total?"disabled":""} onclick="goPage(${page+1})">›</button>`;
+  el.innerHTML = html;
+}
+
+function goPage(p) {
+  page = p;
+  renderPage();
+  renderPager();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ── Modal ────────────────────────────────────────────────────────────
+
+let lastFocusedEl = null;
+let currentGalleryImages = [];
+let currentLightboxIndex = 0;
+
+async function openModal(id) {
+  lastFocusedEl = document.activeElement;
+  document.getElementById("overlay").classList.add("open");
+  const body = document.getElementById("modal-body");
+  body.innerHTML = `<div class="state-box"><div class="spinner"></div></div>`;
+  body.focus();
+  try {
+    const l = await fetch(`${API}/listings/${id}`).then(r => r.json());
+    body.innerHTML = modalHTML(l);
+    currentGalleryImages = l.images || [];
+  } catch(e) {
+    body.innerHTML = `<div class="state-box">Erreur de chargement</div>`;
+  }
+}
+
+function openLightbox(i) {
+  currentLightboxIndex = i;
+  document.getElementById("lightbox-img").src = currentGalleryImages[i] || "";
+  document.getElementById("lightbox-overlay").classList.add("open");
+  const showNav = currentGalleryImages.length > 1;
+  document.getElementById("lightbox-prev").disabled = !showNav;
+  document.getElementById("lightbox-next").disabled = !showNav;
+}
+function closeLightbox(e) {
+  if (e && e.target !== document.getElementById("lightbox-overlay")) return;
+  document.getElementById("lightbox-overlay").classList.remove("open");
+  document.getElementById("lightbox-img").src = "";
+}
+function navigateLightbox(delta) {
+  if (!currentGalleryImages.length) return;
+  currentLightboxIndex = (currentLightboxIndex + delta + currentGalleryImages.length) % currentGalleryImages.length;
+  document.getElementById("lightbox-img").src = currentGalleryImages[currentLightboxIndex];
+}
+
+let lightboxTouchStartX = null;
+document.getElementById("lightbox-overlay").addEventListener("touchstart", e => {
+  lightboxTouchStartX = e.changedTouches[0].clientX;
+}, { passive: true });
+document.getElementById("lightbox-overlay").addEventListener("touchend", e => {
+  if (lightboxTouchStartX === null) return;
+  const delta = e.changedTouches[0].clientX - lightboxTouchStartX;
+  lightboxTouchStartX = null;
+  if (Math.abs(delta) < 40) return;
+  navigateLightbox(delta > 0 ? -1 : 1);
+}, { passive: true });
+
+function trapModalFocus(e) {
+  if (e.key !== "Tab") return;
+  const overlay = document.getElementById("overlay");
+  if (!overlay.classList.contains("open")) return;
+  const focusable = document.getElementById("modal-body")
+    .querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault(); last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault(); first.focus();
+  }
+}
+document.addEventListener("keydown", trapModalFocus);
+
+// Point GPS de l'adresse complète (rue/route + quartier) de l'annonce,
+// si présent dans le cache chargé par loadAddressCoords(). Plus précis que
+// districtPoint() quand RentHub publie un nom de rue.
+function addressPoint(l) {
+  if (!l.address) return null;
+  return addressCoords[norm(l.address).toLowerCase()] || null;
+}
+
+// Point GPS pré-calculé du quartier (subdistrict/district/province) de
+// l'annonce, si présent dans le cache chargé par loadDistrictCoords().
+function districtPoint(l) {
+  const k = [l.subdistrict, l.district, l.province].map(v => norm(v).toLowerCase()).join("|");
+  return districtCoords[k] || null;
+}
+
+// Le point GPS le plus précis disponible pour l'annonce, du plus précis
+// au moins précis: ses propres coordonnées scrapées, son adresse complète
+// géocodée, puis le centre de son quartier. `precise: true` signifie
+// "assez précis pour zoomer près du bâtiment" (coordonnées propres ou
+// adresse avec rue/route), par opposition à un simple centre de quartier.
+function mapPoint(l) {
+  if (l.latitude != null && l.longitude != null) {
+    return { lat: l.latitude, lon: l.longitude, precise: true };
+  }
+  const ap = addressPoint(l);
+  if (ap) return { ...ap, precise: /\d/.test(l.address || "") };
+  const dp = districtPoint(l);
+  if (dp) return { ...dp, precise: false };
+  return null;
+}
+
+function mapQuery(l) {
+  const pt = mapPoint(l);
+  if (pt) return `${pt.lat},${pt.lon}`;
+  const q = l.address || [l.subdistrict, l.district, l.province].filter(Boolean).join(", ");
+  return q ? `${q}, Thailand` : null;
+}
+
+function googleMapsUrl(l) {
+  const q = mapQuery(l);
+  if (!q) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+// Embed public sans clé API (endpoint historique `output=embed`) — pas
+// aussi précis/officiel que l'API Maps Embed payante, mais suffisant
+// pour situer un point sur une carte interactive intégrée à la modal.
+function googleMapsEmbedUrl(l) {
+  const q = mapQuery(l);
+  if (!q) return null;
+  const pt = mapPoint(l);
+  const zoom = pt && pt.precise ? 17 : (pt ? 15 : 13);
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=${zoom}&output=embed`;
+}
+
+function modalHTML(l) {
+  const locs = [l.subdistrict, l.district, l.province].filter(Boolean);
+  const amenities = l.amenities || [];
+  const mapsUrl = googleMapsUrl(l);
+  const embedUrl = googleMapsEmbedUrl(l);
+  const pt = mapPoint(l);
+  const precisionLabel = !pt ? ""
+    : pt.precise ? "📌 Position précise"
+    : "🔵 Position approximative (centre du quartier — RentHub ne publie pas l'adresse exacte)";
+
+  return `
+    <div class="modal-top">
+      <button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
+    </div>
+    ${l.images && l.images.length ? `
+    <div class="modal-gallery">
+      ${l.images.map((u, i) => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onclick="openLightbox(${i})" onerror="this.parentElement.style.display='none'"></div>`).join("")}
+    </div>` : ""}
+    <div class="modal-tags">
+      ${locs.map(loc => `<span class="tag">${esc(loc)}</span>`).join("")}
+      ${l.has_monthly_contract === "true" && contractVal(l.contract_monthly_raw) !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}
+      ${contractVal(l.contract_3_month_raw) !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}
+      ${contractVal(l.contract_6_month_raw) !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}
+    </div>
+    ${mapsUrl ? `
+    <div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+        <a class="modal-link" style="padding:6px 12px;font-size:11px" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Google Maps ↗</a>
+      </div>
+      ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
+      ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
+    </div>` : ""}
+    <div>
+      <div class="section-head">Contrats disponibles</div>
+      <div class="modal-contracts">
+        ${(() => {
+          const contracts = [["1 mois", l.contract_monthly_raw], ["3 mois", l.contract_3_month_raw], ["6 mois", l.contract_6_month_raw]]
+            .filter(([, raw]) => raw && raw !== "-");
+          if (!contracts.length) return `<div class="mc"><div class="mc-val na">Aucun contrat disponible</div></div>`;
+          return contracts.map(([label, raw]) => `
+        <div class="mc">
+          <div class="mc-label">${label}</div>
+          <div class="mc-val">${esc(raw)}</div>
+        </div>`).join("");
+        })()}
+      </div>
+    </div>
+    ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `
+    <div>
+      <div class="section-head">Description</div>
+      <div class="modal-contracts">
+        <div class="mc"><div class="mc-label">Deposit</div><div class="mc-val${l.deposit ? "" : " na"}">${l.deposit ? esc(l.deposit) : "Non communiqué"}</div></div>
+        ${l.electric_price && l.electric_price !== "Please contact" ? `<div class="mc"><div class="mc-label">Electric price</div><div class="mc-val">${esc(l.electric_price)}</div></div>` : ""}
+        <div class="mc"><div class="mc-label">Air Conditioner</div><div class="mc-val${amenities.includes("Air Conditioner") ? "" : " na"}">${amenities.includes("Air Conditioner") ? "YES" : "NO"}</div></div>
+      </div>
+    </div>` : ""}
+    ${amenities.length ? `
+    <div>
+      <div class="section-head">Équipements</div>
+      <div class="modal-amenities">${amenities.map(a=>`<span class="amenity">${esc(AMENITY_ICONS[a] || a)}</span>`).join("")}</div>
+    </div>` : ""}
+    ${l.phone||l.line_id||l.whatsapp ? `
+    <div>
+      <div class="section-head">Contact</div>
+      <div class="modal-contracts">
+        ${l.phone?`<div class="mc"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></div>`:""}
+        ${l.line_id?`<div class="mc"><div class="mc-label">LINE</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${LINE_ICON_SVG} ${esc(l.line_id)}</div></div>`:""}
+        ${l.whatsapp?`<div class="mc"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(l.whatsapp)}</div></div>`:""}
+      </div>
+    </div>` : ""}
+    <a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>
+  `;
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById("overlay")) return;
+  document.getElementById("overlay").classList.remove("open");
+  if (lastFocusedEl) { lastFocusedEl.focus(); lastFocusedEl = null; }
+}
+document.addEventListener("keydown", e => {
+  const lightboxOpen = document.getElementById("lightbox-overlay").classList.contains("open");
+  if (lightboxOpen && e.key === "ArrowLeft") { navigateLightbox(-1); return; }
+  if (lightboxOpen && e.key === "ArrowRight") { navigateLightbox(1); return; }
+  if (e.key !== "Escape") return;
+  if (lightboxOpen) { closeLightbox(); return; }
+  closeModal();
+});
+
+function showLoading() {
+  document.getElementById("grid-wrap").innerHTML = `<div class="state-box"><div class="spinner"></div>Chargement…</div>`;
+}
+
+init();
+</script>
+</body>
+</html>

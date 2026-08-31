@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: renthub
+      POSTGRES_PASSWORD: renthub
+      POSTGRES_DB: renthub
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U renthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  scraper:
+    build: .
+    command: python scripts/run_scraper.py
+    environment:
+      DATABASE_URL: postgresql://renthub:renthub@postgres:5432/renthub
+      REQUEST_DELAY: "2"
+      MAX_CONCURRENT_REQUESTS: "2"
+      REMOVED_AFTER_MISSING_SCANS: "3"
+      TZ: Asia/Bangkok
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./exports:/app/exports
+    profiles:
+      - scraper
+
+  api:
+    build: .
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql://renthub:renthub@postgres:5432/renthub
+      TZ: Asia/Bangkok
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command: python scripts/scheduler.py
+    environment:
+      DATABASE_URL: postgresql://renthub:renthub@postgres:5432/renthub
+      REQUEST_DELAY: "2"
+      SCAN_INTERVAL_MINUTES: "30"
+      TZ: Asia/Bangkok
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - scheduler
+
+volumes:
+  postgres_data:

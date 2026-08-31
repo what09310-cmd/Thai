@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiMonth Tracker — Version Payante</title>
+<meta property="og:title" content="ThaiMonth Tracker — Version Payante">
+<meta property="og:description" content="Suivi des annonces de location en Thaïlande">
+<meta property="og:image" content="/static/logo.png">
+<meta property="og:type" content="website">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0a0a;
+    --surface:  #0a0a0a;
+    --card:     #0f0f0f;
+    --card-alt: #0a0a0a;
+    --border:   #1a1a1a;
+    --accent:   #facc15;
+    --accent-ink: #0a0a0a;
+    --teal:     #2dd4bf;
+    --teal-ink: #052e2b;
+    --green:    #4ade80;
+    --red:      #f87171;
+    --text:     #e5e5e5;
+    --muted:    #a3a3a3;
+    --dim:      #525252;
+    --focus:    #facc15;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Inter', system-ui, sans-serif;
+  }
+
+  html, body {
+    min-height: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ── Header ── */
+  header {
+    height: 64px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 20;
+  }
+
+  .logo { display: flex; align-items: center; }
+  .logo a { display: block; }
+  .logo img { height: 40px; width: auto; display: block; }
+
+  .back-link {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: color .15s, border-color .15s;
+  }
+  .back-link:hover { color: var(--text); border-color: var(--dim); }
+
+  /* ── Contenu ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: calc(100vh - 64px);
+    padding: 18px 20px 40px;
+    gap: 20px;
+  }
+
+  .kicker {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .22em;
+    margin-right: -.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .page-title {
+    font-family: var(--sans);
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+    text-align: center;
+    max-width: 480px;
+  }
+
+  .page-sub {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.4;
+    text-align: center;
+    max-width: 400px;
+  }
+
+  /* ── Annonce sélectionnée ── */
+  .listing-teaser {
+    width: 100%;
+    max-width: 500px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 15px 23px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .listing-teaser-price {
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: -.5px;
+  }
+  .listing-teaser-loc {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .listing-teaser-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    padding: 9px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .listing-teaser-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .listing-teaser-chip {
+    font-size: 11.5px;
+    color: var(--muted);
+    background: var(--card-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 11px;
+  }
+  .listing-teaser-hint {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.45;
+  }
+
+  .card-badge {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: var(--card-alt);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .card-badge--gold { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 0 16px rgba(250, 204, 21, .35); }
+  .card-badge--teal { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); }
+
+  .plan-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .plan-tagline {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .price-amount {
+    font-family: var(--sans);
+    font-size: 38px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    color: var(--accent);
+  }
+  .price-period { font-size: 12px; color: var(--muted); }
+  .price-note {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .plan-card--gold .price-note { color: var(--accent); }
+  .plan-card--teal .price-note { color: var(--teal); }
+
+  .feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .feature-item strong { font-weight: 700; }
+  .feature-check {
+    color: var(--muted);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .plan-card--gold .feature-check { color: var(--accent); }
+  .plan-card--teal .feature-check { color: var(--teal); }
+
+  /* ── Grille des offres ── */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+    align-items: stretch;
+    gap: 18px;
+    width: 100%;
+    max-width: 1100px;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  @media (max-width: 780px) {
+    .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
+  }
+
+  .plan-card {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 26px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .plan-card--free { border-color: var(--border); }
+  .plan-card--teal { border-color: var(--teal); }
+  .plan-card--gold {
+    border-color: var(--accent);
+    box-shadow: 0 0 60px rgba(250, 204, 21, .12);
+  }
+
+  .plan-badge-row { display: flex; align-items: center; gap: 8px; }
+  .plan-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .plan-card--free .plan-icon { background: var(--card-alt); border: 1px solid var(--border); color: var(--text); }
+  .plan-card--teal .plan-icon { background: var(--teal); color: var(--teal-ink); }
+  .plan-card--gold .plan-icon { background: var(--accent); color: var(--accent-ink); }
+  .plan-card--free .plan-name { color: var(--text); }
+  .plan-card--teal .plan-name { color: var(--teal); }
+  .plan-card--gold .plan-name { color: var(--accent); }
+  .plan-card--free .price-amount { color: var(--text); }
+  .plan-card--teal .price-amount { color: var(--teal); }
+  .plan-card--gold .price-amount { color: var(--accent); }
+
+  .plan-select-btn {
+    width: 100%;
+    padding: 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: opacity .15s;
+    margin-top: auto;
+  }
+  .plan-card--free .plan-select-btn { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .plan-card--teal .plan-select-btn { background: transparent; border: 1px solid var(--teal); color: var(--teal); }
+  .plan-card--gold .plan-select-btn { background: var(--accent); border: 1px solid var(--accent); color: var(--accent-ink); }
+  .plan-select-btn:hover { opacity: .8; }
+
+  .trust-bar {
+    width: 100%;
+    max-width: 900px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+  }
+  .trust-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .trust-item .trust-icon { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><a href="http://localhost:8000/premium.html"><img src="/static/logo.png" alt="ThaiMonth"></a></div>
+  <a class="back-link" href="http://localhost:8000/carte-thailande.html">← Retour à l'accueil</a>
+</header>
+
+<main class="main">
+  <h1 class="page-title">Optimise ta recherche<br>de logement.</h1>
+
+  <div class="listing-teaser" id="listing-teaser" style="display:none">
+    <div class="listing-teaser-price" id="lt-price"></div>
+    <div class="listing-teaser-loc" id="lt-loc"></div>
+    <div class="listing-teaser-row">
+      <span id="lt-deposit"></span>
+      <span id="lt-ac"></span>
+    </div>
+    <div class="listing-teaser-chips" id="lt-chips"></div>
+    <div class="listing-teaser-hint">Contact et disponibilité en temps réel avec l'offre Recherche ou Premium ci-dessous.</div>
+  </div>
+
+  <div class="kicker" style="margin: 8px 0">// Nos offres</div>
+
+  <div class="pricing-grid">
+    <div class="plan-card plan-card--free">
+      <div class="card-badge card-badge--free">Sans engagement</div>
+      <div class="plan-badge-row">
+        <span class="plan-icon">🔎</span>
+        <span class="plan-name">Découverte</span>
+      </div>
+      <div class="price-row">
+        <span class="price-amount">0 €</span>
+      </div>
+      <div class="price-note">gratuit · sans engagement</div>
+      <div class="feature-list">
+        <div class="feature-item"><span class="feature-check">✓</span><span>1 logement sélectionné</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Présentation détaillée</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Mise en relation avec le partenaire</span></div>
+      </div>
+      <button type="button" class="plan-select-btn" data-select-plan="Découverte (0 €)">Essayer gratuitement</button>
+    </div>
+
+    <div class="plan-card plan-card--gold">
+      <div class="card-badge card-badge--gold">Le plus populaire</div>
+      <div class="plan-badge-row">
+        <span class="plan-icon">★</span>
+        <span class="plan-name">Recherche</span>
+      </div>
+      <div class="price-row">
+        <span class="price-amount">19 €</span>
+      </div>
+      <div class="price-note">paiement unique · accès immédiat</div>
+      <div class="feature-list">
+        <div class="feature-item"><span class="feature-check">✓</span><span>5 logements sélectionnés</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Présentation détaillée</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Comparatif</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Mise en relation avec le partenaire</span></div>
+      </div>
+      <button type="button" class="plan-select-btn" data-select-plan="Recherche (19 €)">▶ Commencer</button>
+    </div>
+
+    <div class="plan-card plan-card--teal">
+      <div class="card-badge card-badge--teal">illimité</div>
+      <div class="plan-badge-row">
+        <span class="plan-icon">♛</span>
+        <span class="plan-name">Premium</span>
+      </div>
+      <div class="price-row">
+        <span class="price-amount">39 €</span>
+      </div>
+      <div class="price-note">accès illimité · accès immédiat</div>
+      <div class="feature-list">
+        <div class="feature-item"><span class="feature-check">✓</span><span>Suivi personnalisé</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Nombre de logements illimité</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Comparatif</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Suivi pendant 14 jours</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Mise en relation avec les partenaires</span></div>
+        <div class="feature-item"><span class="feature-check">✓</span><span>Accompagnement par messages</span></div>
+      </div>
+      <button type="button" class="plan-select-btn" data-select-plan="Premium (39 €)">Passer au Premium</button>
+    </div>
+  </div>
+
+  <div class="trust-bar">
+    <div class="trust-item"><span class="trust-icon">⚡</span>Simple, rapide et sans engagement</div>
+    <div class="trust-item"><span class="trust-icon">🔒</span>100% sécurisé et confidentiel</div>
+    <div class="trust-item"><span class="trust-icon">👤</span>Des experts à votre service</div>
+  </div>
+</main>
+
+<script>
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+
+const LISTING_AMENITY_ICONS = {
+  "Air Conditioner": "❄️ Air Conditioner",
+  "Furnished": "🛋️ Furnished",
+  "Water Heater": "🚿 Water Heater",
+  "Fan": "🌀 Fan",
+  "Television": "📺 Television",
+  "Refrigerator": "🧊 Refrigerator",
+  "Sofa": "🪑 Sofa",
+  "Desk": "🖥️ Desk",
+  "Kitchen Stove": "🍳 Kitchen Stove",
+  "Phone": "☎️ Phone",
+  "In-room WIFI": "📶 WIFI",
+  "Cable TV": "📺 TV",
+  "Pets": "🐾 Pets",
+  "Smoking": "🚬 Smoking",
+  "Parking": "🅿️ Parking",
+  "Bicycle Parking": "🚲 Bicycle Parking",
+  "Lift": "🛗 Lift",
+  "Pool": "🏊 Pool",
+  "Fitness": "🏋️ Fitness",
+  "Security keycard": "🔑 Security keycard",
+  "Security finger print": "👆 Security finger print",
+  "CCTV": "📹 CCTV",
+  "Security": "🛡️ Security",
+  "Restaurant/Food Shop": "🍽️ Restaurant/Food Shop",
+  "Convenient Store": "🏪 Store",
+  "Laundry": "🧺 Laundry",
+  "Beauty Salon in Building": "💇 Beauty Salon in Building",
+  "EV Charger": "🔌 EV Charger",
+};
+
+async function loadListingTeaser() {
+  const id = new URLSearchParams(window.location.search).get("listing");
+  if (!id) return;
+
+  try {
+    const r = await fetch(`${API}/listings/${encodeURIComponent(id)}`);
+    if (!r.ok) return;
+    const l = await r.json();
+
+    const price = l.contract_monthly_min ?? l.price_monthly_min;
+    document.getElementById("lt-price").textContent = price
+      ? `${Number(price).toLocaleString("fr-FR")} ฿ / mois`
+      : "Prix non communiqué";
+
+    const loc = [l.district, l.province].filter(Boolean).join(", ");
+    document.getElementById("lt-loc").textContent = loc;
+
+    const amenities = l.amenities || [];
+    const hasAc = amenities.includes("Air Conditioner");
+    document.getElementById("lt-deposit").textContent = `Deposit: ${l.deposit || "—"}`;
+    document.getElementById("lt-ac").textContent = `Air Conditioner : ${hasAc ? "Oui" : "Non"}`;
+
+    const chips = amenities.filter(a => a !== "Air Conditioner");
+    document.getElementById("lt-chips").innerHTML = chips
+      .map(a => `<span class="listing-teaser-chip">${LISTING_AMENITY_ICONS[a] || esc(a)}</span>`)
+      .join("");
+
+    document.getElementById("listing-teaser").style.display = "flex";
+  } catch (e) {
+    // Annonce non disponible : on n'affiche simplement pas le bloc.
+  }
+}
+loadListingTeaser();
+
+function esc(s) {
+  return (s || "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+</script>
+</body>
+</html>

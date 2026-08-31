@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiMonth — Carte Bangkok</title>
+<meta property="og:title" content="ThaiMonth — Carte Bangkok">
+<meta property="og:description" content="Toutes les annonces actives géolocalisées à Bangkok">
+<meta property="og:image" content="/static/logo.png">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:#0a0a0a;color:#e5e5e5}
+  header{
+    height:64px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;
+    padding:12px 18px;display:flex;align-items:center;gap:12px
+  }
+  header h1{font-size:14px;margin:0;font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:-.3px}
+  header .subhead{font-size:12px;color:#a3a3a3}
+  header nav{ margin-left:auto;display:flex;gap:8px }
+  header a{
+    text-decoration:none;background:#facc15;color:#0a0a0a;
+    padding:8px 14px;border-radius:4px;font-size:12px;font-weight:800
+  }
+
+  main{ height:calc(100vh - 64px) }
+
+  #map{ position:relative;height:100%;background:#0a0a0a }
+  #leaflet-map{ width:100%; height:100% }
+  .leaflet-tile-pane{ filter:brightness(.6) invert(1) contrast(88%) hue-rotate(180deg) saturate(.3) brightness(.7); }
+  .leaflet-control-zoom a{ background:#0f0f0f !important;color:#e5e5e5 !important;border-color:#1a1a1a !important }
+  .leaflet-control-zoom a:hover{ background:#1a1a1a !important }
+  .leaflet-control-attribution{ background:rgba(15,15,15,.85) !important;color:#a3a3a3 !important }
+  .leaflet-control-attribution a{ color:#facc15 !important }
+
+  .pin-icon{
+    width:12px;height:12px;border-radius:50%;
+    background:#facc15;border:2px solid #0a0a0a;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+
+  .leaflet-popup-content{ font-family:'Inter',sans-serif;font-size:13px;margin:8px 10px }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:#0f0f0f;color:#e5e5e5;box-shadow:0 4px 16px rgba(0,0,0,.5) }
+  .popup-price{ font-weight:700;margin-bottom:6px;color:#e5e5e5 }
+  .popup-btn{
+    display:inline-block;background:#facc15;color:#0a0a0a;text-decoration:none;
+    padding:6px 10px;border-radius:4px;font-size:12px;font-weight:800
+  }
+
+  .controls{
+    position:absolute;top:14px;left:14px;z-index:1000;
+    background:#0f0f0f;border:1px solid #1a1a1a;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.5);
+    padding:12px;width:230px;display:flex;flex-direction:column;gap:12px
+  }
+
+  .filter-btn{
+    padding:9px 13px;border:1px solid #1a1a1a;border-radius:6px;
+    background:#0a0a0a;color:#a3a3a3;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif
+  }
+  .filter-btn.active{ background:#facc15;border-color:#facc15;color:#0a0a0a;font-weight:700 }
+
+  .price-filter-label{ font-size:11px;text-align:center;margin-bottom:6px;color:#a3a3a3;font-family:'JetBrains Mono',monospace;letter-spacing:.05em }
+  .range-slider{ position:relative;height:20px }
+  .range-track{
+    position:absolute;top:8px;left:0;right:0;height:4px;
+    background:#1a1a1a;border-radius:2px
+  }
+  .range-track-fill{
+    position:absolute;top:8px;height:4px;background:#facc15;border-radius:2px
+  }
+  .range-slider input[type=range]{
+    position:absolute;top:2px;left:0;width:100%;margin:0;
+    -webkit-appearance:none;appearance:none;background:transparent;pointer-events:none
+  }
+  .range-slider input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;pointer-events:auto;
+    width:16px;height:16px;border-radius:50%;
+    background:#facc15;border:2px solid #0a0a0a;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer
+  }
+  .range-slider input[type=range]::-moz-range-thumb{
+    pointer-events:auto;width:16px;height:16px;border-radius:50%;
+    background:#facc15;border:2px solid #0a0a0a;cursor:pointer
+  }
+  .range-slider input[type=range]::-moz-range-track{ background:transparent;border:none }
+
+  .empty{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:#a3a3a3;font-size:13px;text-align:center;padding:20px
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ThaiMonth — Bangkok</h1>
+  <span class="subhead">Toutes les annonces actives de Bangkok géolocalisées</span>
+  <nav>
+    <a href="/carte-thailande.html">Carte Thaïlande ↗</a>
+    <a href="/carte-phuket.html">Carte Phuket ↗</a>
+    <a href="/carte-pattaya.html">Carte Pattaya ↗</a>
+  </nav>
+</header>
+
+<main>
+  <section id="map">
+    <div id="leaflet-map"></div>
+    <div class="controls">
+      <button id="monthlyToggle" class="filter-btn">🗓️ Contrat 1 mois uniquement</button>
+      <div class="price-filter">
+        <div class="price-filter-label"><span id="priceMinLabel">0 ฿</span> – <span id="priceMaxLabel">0 ฿</span></div>
+        <div class="range-slider">
+          <div class="range-track"></div>
+          <div class="range-track-fill" id="rangeFill"></div>
+          <input type="range" id="priceMin" min="0" max="0" step="500" value="0">
+          <input type="range" id="priceMax" min="0" max="0" step="500" value="0">
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+
+let ads = [];
+let leafletMap = null;
+let clusterGroup = null;
+let monthlyOnly = false;
+let priceBoundsMax = 0;
+let priceMin = 0;
+let priceMax = 0;
+const markersById = {};
+
+function text(v){ return v == null ? "" : String(v); }
+
+function priceValue(ad){
+  const n = ad.contract_monthly_min ?? ad.price_monthly_min;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function priceLabel(ad){
+  const n = priceValue(ad);
+  return n ? n.toLocaleString("fr-FR") + " ฿" : "";
+}
+
+function escapeHtml(s){
+  return text(s).replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+function pinIcon(){
+  return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [12, 12] });
+}
+
+function buildMap(){
+  leafletMap = L.map("leaflet-map");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  }).addTo(leafletMap);
+
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 40 });
+  leafletMap.addLayer(clusterGroup);
+
+  ads.forEach(ad => {
+    const price = priceLabel(ad);
+    const marker = L.marker([ad.latitude, ad.longitude], { icon: pinIcon() })
+      .bindPopup(
+        `<div class="popup-price">${price ? escapeHtml(price) + " / mois" : "Prix non disponible"}</div>` +
+        `<a href="/payant.html?listing=${ad.id}" class="popup-btn">Voir l'annonce complète</a>`
+      );
+    markersById[ad.id] = marker;
+  });
+
+  const bounds = L.latLngBounds(ads.map(a => [a.latitude, a.longitude]));
+  leafletMap.fitBounds(bounds, { padding: [30, 30] });
+}
+
+function setupPriceFilter(){
+  const prices = ads.map(priceValue).filter(Boolean);
+  priceBoundsMax = prices.length ? Math.ceil(Math.max(...prices) / 1000) * 1000 : 0;
+  priceMin = 0;
+  priceMax = priceBoundsMax;
+
+  const minInput = document.getElementById("priceMin");
+  const maxInput = document.getElementById("priceMax");
+  [minInput, maxInput].forEach(el => { el.max = priceBoundsMax; el.value = el === minInput ? 0 : priceBoundsMax; });
+
+  updatePriceUI();
+
+  minInput.addEventListener("input", () => {
+    priceMin = Math.min(Number(minInput.value), priceMax);
+    minInput.value = priceMin;
+    updatePriceUI();
+    applyFilters();
+  });
+  maxInput.addEventListener("input", () => {
+    priceMax = Math.max(Number(maxInput.value), priceMin);
+    maxInput.value = priceMax;
+    updatePriceUI();
+    applyFilters();
+  });
+}
+
+function updatePriceUI(){
+  document.getElementById("priceMinLabel").textContent = priceMin.toLocaleString("fr-FR") + " ฿";
+  document.getElementById("priceMaxLabel").textContent = priceMax.toLocaleString("fr-FR") + " ฿";
+  const fill = document.getElementById("rangeFill");
+  if (priceBoundsMax > 0) {
+    fill.style.left = (priceMin / priceBoundsMax * 100) + "%";
+    fill.style.right = (100 - priceMax / priceBoundsMax * 100) + "%";
+  }
+}
+
+function applyFilters(){
+  const priceActive = priceMin > 0 || priceMax < priceBoundsMax;
+  const filtered = ads.filter(a => {
+    if (monthlyOnly && a.has_monthly_contract !== "true") return false;
+    if (priceActive) {
+      const p = priceValue(a);
+      if (p == null || p < priceMin || p > priceMax) return false;
+    }
+    return true;
+  });
+  clusterGroup.clearLayers();
+  clusterGroup.addLayers(filtered.map(a => markersById[a.id]).filter(Boolean));
+}
+
+async function loadAds(){
+  const limit = 500;
+  let offset = 0;
+  const data = [];
+
+  try {
+    while (true) {
+      const r = await fetch(`${API}/listings?province=Bangkok&status=active&limit=${limit}&offset=${offset}`);
+      if (!r.ok) throw new Error(r.status);
+      const batch = await r.json();
+      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
+      data.push(...batch);
+      if (batch.length < limit) break;
+      offset += limit;
+    }
+  } catch (e) {
+    document.getElementById("leaflet-map").innerHTML =
+      `<div class="empty">Impossible de charger les annonces depuis l'API.<br><br>Vérifie que FastAPI fonctionne sur le port 8000.</div>`;
+    return;
+  }
+
+  ads = data.filter(a => Number.isFinite(a.latitude) && Number.isFinite(a.longitude));
+
+  if (!ads.length) {
+    document.getElementById("leaflet-map").innerHTML = `<div class="empty">Aucune annonce géolocalisée pour Bangkok.</div>`;
+    return;
+  }
+
+  buildMap();
+  setupPriceFilter();
+  applyFilters();
+
+  document.getElementById("monthlyToggle").addEventListener("click", (e) => {
+    monthlyOnly = !monthlyOnly;
+    e.target.classList.toggle("active", monthlyOnly);
+    applyFilters();
+  });
+}
+
+loadAds();
+</script>
+</body>
+</html>
