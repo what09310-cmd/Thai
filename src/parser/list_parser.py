@@ -107,7 +107,13 @@ def listing_from_json_item(item: dict) -> Optional[ListingRaw]:
     contract_3_month_raw, contract_3_month_min, contract_3_month_max = term("threeMonth")
     contract_6_month_raw, contract_6_month_min, contract_6_month_max = term("sixMonth")
 
-    if "oneMonth" in short_term:
+    # Présence du bloc `oneMonth`: seule preuve que cette page décrit vraiment
+    # l'offre court terme de l'annonce. Absent (pages /short-term-rental/<slug>),
+    # l'absence de contrat ne veut rien dire et ne doit rien écraser en base.
+    # Présent avec shortContract=false, en revanche, l'information "pas de
+    # contrat 1 mois" est réelle et fait autorité.
+    structured = "oneMonth" in short_term
+    if structured:
         monthly_status = "true" if contract_monthly_raw else "false"
     else:
         monthly_status = "unknown"
@@ -151,6 +157,7 @@ def listing_from_json_item(item: dict) -> Optional[ListingRaw]:
         contract_6_month_min=contract_6_month_min,
         contract_6_month_max=contract_6_month_max,
         has_monthly_contract=monthly_status,
+        from_structured_list=structured,
         source_updated_at=_parse_next_data_datetime(
             item.get("updatedAt") or item.get("modifiedAt")
         ),
@@ -398,14 +405,33 @@ def _parse_card(card: Selector) -> Optional[ListingRaw]:
             contract_6_month_min=contract_6_month_min,
             contract_6_month_max=contract_6_month_max,
             has_monthly_contract=monthly_status,
+            # Le label "Contract monthly" est le pendant HTML du bloc
+            # `shortTerm.oneMonth` du JSON: sans lui, la carte vient d'une
+            # page par lieu et son absence de contrat n'apprend rien.
+            from_structured_list=contract_monthly_raw is not None,
             source_updated_at=source_updated_at,
             thumbnail_url=thumbnail_url,
-            is_verified="verified" in full_text.lower(),
+            is_verified=_is_verified(full_text),
             has_promotion="PROMOTION" in full_text,
         )
     except Exception as e:
         log.warning(f"Erreur parsing carte: {e}")
         return None
+
+
+# RentHub affiche "This is not verified listing" sur les annonces dont
+# l'adresse n'a PAS été vérifiée: chercher "verified" dans le texte de la
+# carte y matche et rendait `is_verified` systématiquement vrai. On exige
+# donc un marqueur positif, et on écarte d'abord toute forme négative.
+_NOT_VERIFIED_RE = re.compile(r"\b(?:not|non|un)[\s-]*verified\b", re.I)
+_VERIFIED_RE = re.compile(r"\bverified\b", re.I)
+
+
+def _is_verified(full_text: str) -> bool:
+    """Équivalent HTML de `addressDocument.reviewStatus == "VERIFIED"`."""
+    if _NOT_VERIFIED_RE.search(full_text):
+        return False
+    return bool(_VERIFIED_RE.search(full_text))
 
 
 def _extract_contract_value(lines: list[str], label: str) -> Optional[str]:

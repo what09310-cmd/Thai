@@ -15,13 +15,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.api.auth import check_credentials
+import src.api.auth as auth_module
+from src.api.auth import SESSION_COOKIE_NAME, check_credentials, create_session_token
 from src.api.main import app, get_db
 from src.config import settings
 from src.database.models import Base, Listing
 from src.models.schemas import ListingFull
+from src.normalizers.amenities import derive_amenities
 from src.parser.detail_parser import (
     _clean_line_id,
+    _extract_contacts,
     _extract_contract_row_values,
     _has_listing_payload,
 )
@@ -164,6 +167,59 @@ def test_line_id_rejects_phone_numbers():
     assert _clean_line_id("Line:@zimple_asset") == "@zimple_asset"
 
 
+def _next_data_html(whatsapp: str | None, wa_me_link: bool) -> str:
+    listing = {
+        "props": {
+            "pageProps": {
+                "listing": {
+                    "contactInformation": [
+                        {
+                            "phone": [{"phoneNumber": "0812345678", "isMobilePhone": True}],
+                            "lineId": "@landlord",
+                            "whatsApp": whatsapp,
+                        }
+                    ]
+                }
+            }
+        }
+    }
+    link = f'<a href="https://wa.me/{whatsapp}">WhatsApp</a>' if wa_me_link else ""
+    return (
+        f'<html><body>{link}'
+        f'<script id="__NEXT_DATA__">{__import__("json").dumps(listing)}</script>'
+        "</body></html>"
+    )
+
+
+def test_whatsapp_field_ignored_without_a_rendered_wa_me_link():
+    """`contactInformation[0].whatsApp` du JSON est souvent renseigné par
+    RentHub sans qu'aucun bouton WhatsApp ne soit affiché sur la page (sur
+    un échantillon d'annonces actives, ~60% des `whatsApp` non vides
+    n'avaient aucun lien wa.me réel) — dans ce cas ce n'est pas un vrai
+    contact WhatsApp et il ne faut pas l'afficher comme tel."""
+    soup_without_link = Selector(_next_data_html("66812345678", wa_me_link=False))
+    phone, line_id, whatsapp, email = _extract_contacts(soup_without_link)
+    assert whatsapp is None
+    assert phone == "0812345678"
+    assert line_id == "@landlord"
+
+    soup_with_link = Selector(_next_data_html("66812345678", wa_me_link=True))
+    _, _, whatsapp_with_link, _ = _extract_contacts(soup_with_link)
+    assert whatsapp_with_link == "66812345678"
+
+
+def test_derive_amenities_reads_thai_only_descriptions():
+    """`derive_amenities` retombe sur la description texte libre quand la
+    grille d'icônes est absente (`_extract_amenities_from_icons` renvoie
+    None) — mais ses motifs n'étaient qu'en anglais. Une annonce rédigée
+    entièrement en thaï (ex: source_id 70911, "ห้อง มีแอร์ ,ทีวี...") se
+    retrouvait donc sans aucun équipement détecté, dont "Air Conditioner"
+    affiché à tort comme absent dans la description reconstruite."""
+    assert "Air Conditioner" in derive_amenities("ห้อง มีแอร์ ,ทีวี, ตู้เย็น")
+    assert "Air Conditioner" in derive_amenities("เครื่องปรับอากาศพร้อม")
+    assert "Air Conditioner" not in derive_amenities("ห้องนี้ไม่มีแอร์ มีพัดลม")
+
+
 # ── Authentification ────────────────────────────────────────────────
 
 def test_login_rejects_non_ascii_password():
@@ -182,7 +238,35 @@ def test_static_html_requires_session(client):
     # Les assets restent publics (le frontend en a besoin sur les pages
     # publiques), tout comme les pages explicitement publiques.
     assert client.get("/static/logo.png").status_code == 200
-    assert client.get("/static/premium.html").status_code == 200
+    assert client.get("/static/payant.html").status_code == 200
+
+    # premium.html a été repassé derrière le login: /static ne doit pas le
+    # laisser passer non plus.
+    gated = client.get("/static/premium.html", follow_redirects=False)
+    assert gated.status_code in (302, 307)
+    assert gated.headers["location"] == "/login"
+
+
+def test_login_is_rate_limited_after_repeated_failures(client):
+    """Le couple identifiant/mot de passe est unique et partagé: sans
+    throttling il est brute-forçable à la vitesse du réseau."""
+    auth_module._failed_attempts.clear()
+
+    for _ in range(auth_module._LOGIN_ATTEMPT_MAX):
+        resp = client.post("/login", data={"username": "admin", "password": "wrong"})
+        assert resp.status_code == 200
+
+    blocked = client.post("/login", data={"username": "admin", "password": "wrong"})
+    assert blocked.status_code == 429
+
+    # Même avec les bons identifiants, le verrou reste actif.
+    still_blocked = client.post(
+        "/login",
+        data={"username": settings.site_username, "password": settings.site_password},
+    )
+    assert still_blocked.status_code == 429
+
+    auth_module._failed_attempts.clear()
 
 
 # ── API ─────────────────────────────────────────────────────────────
@@ -216,6 +300,45 @@ def test_listing_response_carries_thumbnail(client, session):
 
     assert len(payload) == 1
     assert payload[0]["images"] == ["https://cdn/a.jpg"]
+
+
+def test_anonymous_listings_hide_direct_contact_fields(client, session):
+    """`/listings` est public (payant.html et la vitrine /test en ont
+    besoin sans connexion): les coordonnées de contact directes ne
+    doivent donc pas fuiter vers un visiteur non authentifié, contrairement
+    à `deposit`/`electric_price` qui sont déjà publiques via `description`
+    (voir build_contact_description)."""
+    upsert_listing(
+        session,
+        _listing_full(
+            source_id="71261",
+            phone="0817322385",
+            line_id="secretpurse",
+            whatsapp="+66817322385",
+            email="owner@example.com",
+            deposit="7500 Baht",
+            has_structured_data=True,
+        ),
+        NOW,
+    )
+    session.commit()
+
+    anon = client.get("/listings").json()[0]
+    assert anon["phone"] is None
+    assert anon["line_id"] is None
+    assert anon["whatsapp"] is None
+    assert anon["email"] is None
+    assert anon["deposit"] == "7500 Baht"
+
+    single = client.get(f"/listings/{anon['id']}").json()
+    assert single["phone"] is None
+
+    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
+    authed = client.get("/listings").json()[0]
+    assert authed["phone"] == "0817322385"
+    assert authed["line_id"] == "secretpurse"
+    assert authed["whatsapp"] == "+66817322385"
+    assert authed["email"] == "owner@example.com"
 
 
 # ── Détection de changements ────────────────────────────────────────
@@ -384,3 +507,299 @@ def test_full_scan_still_marks_removed(session, monkeypatch):
     assert removed == 1
     missing = session.query(Listing).filter_by(slug="listing-9").one()
     assert missing.status == "removed"
+
+
+# ── Effacement des contrats par une page sans offre court terme ──────
+#
+# Les pages /en/short-term-rental/<slug> (--include-locations) portent
+# `price.monthly` mais pas `shortTerm.*.shortContract`. Sans garde, elles
+# écrasaient par None les contrats déjà connus: 766 couples
+# (annonce, champ) oscillaient valeur -> None -> valeur dans l'historique
+# de renthub.db, et 136 annonces avaient perdu leur contrat 6 mois.
+
+def _with_contracts(**overrides) -> ListingFull:
+    data = {
+        "from_structured_list": True,
+        "has_monthly_contract": "true",
+        "contract_monthly_raw": "7,500 THB/month",
+        "contract_monthly_min": 7500,
+        "contract_monthly_max": 7500,
+        "contract_6_month_raw": "4,500 THB/month",
+        "contract_6_month_min": 4500,
+        "contract_6_month_max": 4500,
+    }
+    data.update(overrides)
+    return _listing_full(**data)
+
+
+def test_location_page_does_not_erase_known_contracts(session):
+    upsert_listing(session, _with_contracts(), NOW)
+    session.commit()
+
+    # Même annonce revue via une page par lieu: aucun contrat, juste un prix.
+    change_type, db_listing = upsert_listing(
+        session,
+        _listing_full(
+            from_structured_list=False,
+            has_monthly_contract="unknown",
+            price_monthly_raw="6,500 THB/month",
+            price_monthly_min=6500,
+        ),
+        NOW + timedelta(hours=1),
+    )
+    session.commit()
+
+    assert db_listing.contract_monthly_min == 7500
+    assert db_listing.contract_6_month_raw == "4,500 THB/month"
+    assert db_listing.has_monthly_contract == "true"
+    # Le prix mensuel, lui, est bien porté par la page par lieu.
+    assert db_listing.price_monthly_min == 6500
+    assert change_type == "PRICE_CHANGED"
+
+    wiped = [
+        h for h in db_listing.history
+        if h.change_type == "PRICE_CHANGED" and h.new_value == "None"
+    ]
+    assert wiped == []
+
+
+def test_structured_page_can_still_remove_a_contract(session):
+    """"Plus de contrat 1 mois" reste une information réelle à enregistrer."""
+    upsert_listing(session, _with_contracts(), NOW)
+    session.commit()
+
+    _, db_listing = upsert_listing(
+        session,
+        _listing_full(from_structured_list=True, has_monthly_contract="false"),
+        NOW + timedelta(hours=1),
+    )
+    session.commit()
+
+    assert db_listing.contract_monthly_min is None
+    assert db_listing.has_monthly_contract == "false"
+
+
+# ── UPDATED fantôme au cycle de péremption des pages détail ──────────
+#
+# `description` et `amenities` ne sont renseignés que quand la page détail
+# a été lue dans ce run. Hasher l'objet scrapé faisait basculer le hash à
+# chaque passage de la péremption (detail_refresh_days): 840 annonces de
+# renthub.db avaient plus d'une entrée UPDATED.
+
+def test_skipping_the_detail_page_does_not_emit_a_phantom_update(session):
+    with_detail = _with_contracts(
+        source_id="9560",
+        amenities=["Air Conditioner", "Parking"],
+        deposit="2 months",
+        has_structured_data=True,
+    )
+    upsert_listing(session, with_detail, NOW)
+    session.commit()
+
+    # Scan suivant: page détail sautée (détail scrapé il y a moins de
+    # detail_refresh_days), donc ni amenities ni contacts dans le ListingFull.
+    change_type, db_listing = upsert_listing(
+        session, _with_contracts(), NOW + timedelta(days=1)
+    )
+    session.commit()
+
+    assert change_type == "UNCHANGED"
+    assert [h for h in db_listing.history if h.change_type == "UPDATED"] == []
+    assert db_listing.deposit == "2 months"
+
+
+def test_a_real_content_change_is_still_detected(session):
+    upsert_listing(session, _with_contracts(), NOW)
+    session.commit()
+
+    change_type, db_listing = upsert_listing(
+        session, _with_contracts(name="Nouveau nom"), NOW + timedelta(days=1)
+    )
+    session.commit()
+
+    assert change_type == "UPDATED"
+    assert db_listing.name == "Nouveau nom"
+
+
+# ── is_verified dans le repli HTML ───────────────────────────────────
+
+def test_not_verified_banner_does_not_mark_a_listing_verified():
+    """RentHub écrit "This is not verified listing" sur les annonces non vérifiées."""
+    from src.parser.list_parser import _is_verified
+
+    assert _is_verified("This is not verified listing") is False
+    assert _is_verified("Non-verified listing") is False
+    assert _is_verified("Verified listing") is True
+    assert _is_verified("Studio 30 sqm") is False
+
+
+# ── Bornes des paramètres de requête sur les routes publiques ────────
+#
+# /listings* est public (PUBLIC_PATH_PREFIXES). `limit` n'avait pas de borne
+# basse: SQLite traite LIMIT -1 comme "pas de limite", donc ?limit=-1
+# rendait le catalogue entier en une requête non authentifiée.
+
+@pytest.mark.parametrize(
+    "query",
+    ["limit=-1", "limit=0", "offset=-1", "limit=501"],
+)
+def test_listings_rejects_out_of_range_pagination(client, query):
+    assert client.get(f"/listings?{query}").status_code == 422
+
+
+@pytest.mark.parametrize(
+    "path", ["/listings/new", "/listings/updated", "/listings/price-changed"],
+)
+def test_since_hours_windows_are_bounded(client, path):
+    assert client.get(f"{path}?since_hours=99999999").status_code == 422
+    assert client.get(f"{path}?since_hours=0").status_code == 422
+    assert client.get(f"{path}?since_hours=24").status_code == 200
+
+
+def test_oversized_session_cookie_is_rejected_without_error(client):
+    """int() lève au-delà de 4300 chiffres: la charge doit être bornée avant."""
+    client.cookies.set(SESSION_COOKIE_NAME, "9" * 5000 + ".deadbeef")
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/login"
+
+
+def test_changing_the_password_invalidates_existing_sessions(monkeypatch):
+    from src.api.auth import verify_session_token
+
+    token = create_session_token()
+    assert verify_session_token(token) is True
+
+    monkeypatch.setattr(settings, "site_password", "un-autre-mot-de-passe")
+    assert verify_session_token(token) is False
+
+
+def test_security_headers_are_set(client):
+    headers = client.get("/health").headers
+
+    assert headers["X-Content-Type-Options"] == "nosniff"
+    assert headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in headers["Content-Security-Policy"]
+
+
+def test_stats_counts_listings_not_history_rows(session, client):
+    """Un seul changement de prix écrit une ligne par champ touché."""
+    from src.database.models import ListingHistory
+
+    session.add(
+        Listing(
+            slug="s", name="S", url="https://www.renthub.in.th/en/s", status="active",
+        )
+    )
+    session.flush()
+    for field in ("contract_monthly_min", "contract_monthly_max", "contract_6_month_min"):
+        session.add(
+            ListingHistory(
+                listing_id=1,
+                changed_at=datetime.now(timezone.utc),
+                change_type="PRICE_CHANGED",
+                field_name=field,
+            )
+        )
+    session.commit()
+
+    assert client.get("/stats").json()["price_changed_today"] == 1
+
+
+# ── Un scan interrompu doit être marqué "failed" ─────────────────────
+#
+# renthub.db portait 2 lignes ScanLog bloquées en "running" depuis des
+# jours: le statut "failed" du modèle n'était jamais écrit, et /stats ne
+# retenant que les scans "completed", l'échec restait invisible.
+
+def test_interrupted_scan_is_marked_failed(session, monkeypatch):
+    from src.database.models import ScanLog
+    import scripts.run_scraper as runner
+
+    scan_log = ScanLog(started_at=NOW, status="running")
+    session.add(scan_log)
+    session.commit()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake_session():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(runner, "get_session", fake_session)
+    runner._mark_scan_failed(scan_log.id, RuntimeError("réseau coupé"))
+
+    refreshed = session.query(ScanLog).filter_by(id=scan_log.id).one()
+    assert refreshed.status == "failed"
+    assert refreshed.finished_at is not None
+    assert "réseau coupé" in refreshed.error_message
+
+
+def test_marking_a_failed_scan_never_masks_the_original_error(session, monkeypatch):
+    """La journalisation de l'échec ne doit pas lever à son tour."""
+    import scripts.run_scraper as runner
+
+    def broken_session():
+        raise RuntimeError("base injoignable")
+
+    monkeypatch.setattr(runner, "get_session", broken_session)
+    runner._mark_scan_failed(1, RuntimeError("erreur d'origine"))
+
+
+# ── Doublons de pagination dans un même scan ─────────────────────────
+#
+# La même annonce revient régulièrement sur deux pages de la pagination
+# (~19 % des cartes sur un échantillon de deux pages de production).
+# Upsertée deux fois dans le même scan avec des données différentes, chaque
+# passage annulait le précédent et écrivait sa propre ligne PRICE_CHANGED.
+
+@pytest.mark.asyncio
+async def test_pagination_duplicates_are_collected_once():
+    from scripts.run_scraper import collect_unique_listings
+    from src.models.schemas import ListingRaw
+
+    def card(slug, price):
+        return ListingRaw(
+            name=slug,
+            url=f"https://www.renthub.in.th/en/{slug}",
+            slug=slug,
+            price_monthly_min=price,
+        )
+
+    async def source():
+        yield card("a", 5000), "page/1"
+        yield card("b", 6000), "page/1"
+        # "a" réapparaît en page 2 avec un prix différent.
+        yield card("a", 9999), "page/2"
+        yield card("c", 7000), "page/2"
+
+    listings, pages, duplicates = await collect_unique_listings(source())
+
+    assert [l.slug for l in listings] == ["a", "b", "c"]
+    assert duplicates == 1
+    assert pages == 2
+    # La première occurrence gagne: le second prix ne doit pas s'imposer.
+    assert listings[0].price_monthly_min == 5000
+
+
+@pytest.mark.asyncio
+async def test_page_count_does_not_assume_a_fixed_page_size():
+    """L'ancien compteur faisait `len(annonces) % 40` et se décalait."""
+    from scripts.run_scraper import collect_unique_listings
+    from src.models.schemas import ListingRaw
+
+    async def source():
+        for page in range(1, 4):
+            for i in range(7):  # 7 annonces par page, pas 40
+                slug = f"p{page}-{i}"
+                yield ListingRaw(
+                    name=slug, url=f"https://x/{slug}", slug=slug
+                ), f"page/{page}"
+
+    listings, pages, duplicates = await collect_unique_listings(source())
+
+    assert pages == 3
+    assert len(listings) == 21
+    assert duplicates == 0

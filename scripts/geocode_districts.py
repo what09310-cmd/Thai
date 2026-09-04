@@ -28,7 +28,18 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-DB_PATH = Path(__file__).parent.parent / "renthub.db"
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.config import settings
+
+# Dérivé de DATABASE_URL plutôt qu'un nom en dur: sinon ce script continue
+# silencieusement à lire un fichier obsolète dès que DATABASE_URL pointe
+# ailleurs (ex. le Postgres de docker-compose).
+if not settings.database_url.startswith("sqlite"):
+    sys.exit(
+        f"DATABASE_URL n'est pas SQLite ({settings.database_url!r}), "
+        "ce script ne lit qu'une base SQLite locale."
+    )
+DB_PATH = Path(settings.database_url.split("///", 1)[1])
 OUT_PATH = Path(__file__).parent.parent / "frontend" / "district_coords.json"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "renthub-tracker/1.0 (geocoding cache script)"

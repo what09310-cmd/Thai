@@ -1,9 +1,27 @@
 import sqlite3
+import sys
+from pathlib import Path
+
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, urldefrag
 from collections import deque
 import time
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.config import settings
+
+
+def _sqlite_path() -> str:
+    # Dérivé de DATABASE_URL plutôt qu'un nom en dur: sinon ce script
+    # continue silencieusement à lire un fichier obsolète dès que
+    # DATABASE_URL pointe ailleurs (ex. le Postgres de docker-compose).
+    if not settings.database_url.startswith("sqlite"):
+        raise SystemExit(
+            f"DATABASE_URL n'est pas SQLite ({settings.database_url!r}), "
+            "ce script ne lit qu'une base SQLite locale."
+        )
+    return settings.database_url.split("///", 1)[1]
 
 
 BASE_URL = "https://www.renthub.in.th"
@@ -17,7 +35,7 @@ START_URLS = [
 
 def init_db():
 
-    conn = sqlite3.connect("renthub.db")
+    conn = sqlite3.connect(_sqlite_path())
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS locations (

@@ -20,11 +20,18 @@ import re
 # la catégorie "Smoking").
 AMENITY_PATTERNS: dict[str, tuple[list[str], list[str]]] = {
     "Air Conditioner": (
-        [r"air[\s-]*condition(?:er|ing)?", r"air[\s-]*con\b", r"\baircon\b", r"\bA/?C\b"],
+        [
+            r"air[\s-]*condition(?:er|ing)?", r"air[\s-]*con\b", r"\baircon\b", r"\bA/?C\b",
+            # Certaines annonces sont rédigées entièrement en thaï, sans aucun
+            # mot-clé anglais (ex: listing source_id 70911: "มีแอร์" = "a l'air
+            # conditionné", jamais détecté par les motifs anglais ci-dessus).
+            r"แอร์", r"เครื่องปรับอากาศ",
+        ],
         [
             r"no\s*air[\s-]*condition", r"no\s*aircon", r"no\s*air[\s-]*con\b", r"without\s*air[\s-]*con",
             # Format structuré généré par build_contact_description(): "Air Conditioner : NO"
             r"air[\s-]*condition(?:er|ing)?\s*:\s*no\b",
+            r"ไม่มีแอร์", r"ไม่ติดแอร์", r"ไม่มีเครื่องปรับอากาศ",
         ],
     ),
     "Furnished": (

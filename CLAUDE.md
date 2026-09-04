@@ -36,7 +36,12 @@ pytest tests/test_parser_regression.py
 pytest tests/test_parser_regression.py::test_name -v
 ```
 
-Docker Compose profiles (Postgres-backed): `docker-compose --profile scraper up`, `docker-compose --profile scheduler up`; the `api` service has no profile and starts by default with `docker-compose up`.
+Index migration (run once on an existing database — `create_all` never adds indexes to a table that already exists):
+```
+python scripts/migrate_add_indexes.py
+```
+
+Docker Compose profiles (Postgres-backed): `docker-compose --profile scraper up`, `docker-compose --profile scheduler up`; the `api` service has no profile and starts by default with `docker-compose up`. All three services read `.env` via `env_file` — the API refuses to boot while `SECRET_KEY`/`SITE_PASSWORD` still hold their `.env.example` values.
 
 ## Architecture
 
@@ -54,7 +59,12 @@ Docker Compose profiles (Postgres-backed): `docker-compose --profile scraper up`
 
 **Description normalization** (`src/normalizers/contact_description.py`): `build_contact_description` regenerates a listing's displayed description from structured fields every scan (self-healing) and from `scripts/regenerate_contact_descriptions.py` for backfills. Format is fixed: `Deposit: …`, `Electric price: …` (omitted if `"Please contact"`), `Air Conditioner : YES/NO` — no phone/LINE/other free text; those live in their own `phone`/`line_id`/`whatsapp` columns and are rendered separately by the frontend.
 
-**API** (`src/api/main.py`): FastAPI app serving both the JSON API (`/listings*`, `/provinces`, `/stats`, `/history/{id}`) and the static frontend (mounted at `/static`, plus explicit routes per page under `frontend/`). `AuthMiddleware` gates everything except `PUBLIC_PATHS`/`PUBLIC_PATH_PREFIXES` (login, health, `/listings*`, and a few public map pages) behind a signed session cookie (`src/api/auth.py`); static `.html` files reached via `/static/...` are checked against the same public-path list so that route doesn't bypass the login gate.
+**Scan invariants** — a scan that changes nothing must write no history. Three rules keep it that way, and breaking any one of them was worth hundreds of bogus rows in `listing_history`:
+- `apply_contract_fields` (`src/tracker/change_detector.py`) only lets a source overwrite the 1/3/6-month contracts with `None` when it actually describes the short-term offer (`ListingRaw.from_structured_list`, set from `shortTerm.oneMonth` in the JSON). Pages under `/en/short-term-rental/<slug>` carry `price.monthly` but no contract block, so without the guard they erased contracts that a `/browse/short-term-monthly` pass had learned.
+- `compute_content_hash` hashes the **persisted row**, after all fields are applied — never the scraped `ListingFull`. `description` and `amenities` are only populated when the detail page was read in that run, so hashing the scraped object made the hash flip every time the `detail_refresh_days` window rolled over.
+- `collect_unique_listings` (`scripts/run_scraper.py`) keeps only the first occurrence of each slug. RentHub repeats listings across pagination pages (~19% of cards over a two-page sample); upserting a slug twice in one scan made each pass undo the other.
+
+**API** (`src/api/main.py`): FastAPI app serving both the JSON API (`/listings*`, `/provinces`, `/stats`, `/history/{id}`) and the static frontend (mounted at `/static`, plus explicit routes per page under `frontend/`). `AuthMiddleware` gates everything except `PUBLIC_PATHS`/`PUBLIC_PATH_PREFIXES` (login, health, `/listings*`, and a few public map pages) behind a signed session cookie (`src/api/auth.py`); static `.html` files reached via `/static/...` are checked against the same public-path list so that route doesn't bypass the login gate. Because `/listings*` is public, every query parameter there needs an explicit range: SQLite reads `LIMIT -1` as "no limit", so a `limit` without `ge=1` is a full-catalogue dump for anyone.
 
 **Testing**: regression tests (`tests/test_parser_regression.py`, `tests/test_bugfix_regression.py`, `tests/test_contact_description.py`) parse real captured HTML fixtures (`tests/fixtures/*.html`) and compare against golden JSON snapshots (`tests/fixtures/*.golden.json`). When a fixture-based test fails after a parser change, check whether the difference is a genuine bug fix before updating the golden file — see the note on the BeautifulSoup→Scrapling migration below.
 

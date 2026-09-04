@@ -8,6 +8,8 @@ class RoomTypeSchema(BaseModel):
     name: str
     room_type: Optional[str] = None
     size_sqm: Optional[float] = None
+    monthly_min_thb: Optional[int] = None
+    monthly_max_thb: Optional[int] = None
     contract_1_month_thb: Optional[int] = None
     contract_3_month_thb: Optional[int] = None
     contract_6_month_thb: Optional[int] = None
@@ -47,6 +49,15 @@ class ListingRaw(BaseModel):
     contract_6_month_max: Optional[int] = None
 
     has_monthly_contract: Literal["true", "false", "unknown"] = "unknown"
+
+    # True quand la source de cette carte porte vraiment le bloc de contrats
+    # court terme (1/3/6 mois). Les pages "par lieu"
+    # (/en/short-term-rental/<slug>, option --include-locations) donnent bien
+    # `price.monthly` mais pas `shortTerm.*.shortContract`: sans ce drapeau,
+    # elles écrasaient par None les contrats déjà connus d'une annonce vue
+    # auparavant sur /browse/short-term-monthly. Voir
+    # change_detector._update_listing_fields.
+    from_structured_list: bool = False
 
     # Métadonnées
     source_updated_at: Optional[datetime] = None

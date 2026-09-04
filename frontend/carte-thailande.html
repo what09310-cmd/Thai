@@ -378,7 +378,7 @@ function applyFilters(){
     if (durationField && !hasRaw(a[`${durationField}_raw`])) return false;
     if (onlyNew) {
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-      if (new Date(a.source_updated_at || 0).getTime() < cutoff) return false;
+      if (new Date(a.first_seen_at || 0).getTime() < cutoff) return false;
     }
     if (selectedBudget) {
       const minThb = selectedBudget.min * EUR_TO_THB;

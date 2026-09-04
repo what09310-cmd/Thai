@@ -33,6 +33,7 @@ from src.database.models import Listing, ScanLog
 from src.models.schemas import ListingFull
 from src.scraper.list_scraper import scrape_all_listings, scrape_provinces, scrape_all_location_listings
 from src.scraper.detail_scraper import scrape_details_batch
+from src.scraper.http_client import ScraperClient
 from src.tracker.change_detector import upsert_listing, mark_removed_listings, upsert_province
 from src.tracker.exporter import export_listings
 from src.filters.contract import has_short_term_contract
@@ -67,6 +68,38 @@ def select_detail_urls(
         if scraped_at is None or _as_utc(scraped_at) < cutoff:
             urls.append(listing.url)
     return urls
+
+
+async def collect_unique_listings(source, on_new_page=None) -> tuple[list, int, int]:
+    """Collecte les annonces d'un flux (annonce, url_de_page), sans doublon.
+
+    Retourne (annonces, nombre_de_pages, doublons_ignores).
+
+    Une meme annonce revient regulierement sur deux pages de la pagination
+    (l'ordre du site bouge entre deux requetes, certaines fiches sont mises
+    en avant): ~19% des cartes collectees sur un echantillon de deux pages.
+    Traitee deux fois dans le meme scan, elle etait upsertee deux fois avec
+    des donnees differentes -- chaque passage annulait le precedent et
+    ecrivait sa propre ligne PRICE_CHANGED. On garde la premiere occurrence,
+    comme le fait deja la phase 1b pour les pages par lieu.
+    """
+    listings: list = []
+    seen: set[str] = set()
+    pages: set[str] = set()
+    duplicates = 0
+
+    async for listing_raw, page_url in source:
+        if listing_raw.slug in seen:
+            duplicates += 1
+            continue
+        seen.add(listing_raw.slug)
+        listings.append(listing_raw)
+        if page_url not in pages:
+            pages.add(page_url)
+            if on_new_page is not None:
+                on_new_page(len(pages), len(listings))
+
+    return listings, len(pages), duplicates
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -165,26 +198,113 @@ def main(
         console.print(f"[yellow]   Province: {province}[/yellow]")
 
     seen_slugs: set[str] = set()
-    listings_to_process: list[ListingRaw] = []
+    listings_to_process: list["ListingRaw"] = []
+
+    try:
+        _run_scan(
+            console=console,
+            log=log,
+            scan_log_id=scan_log_id,
+            scan_time=scan_time,
+            stats=stats,
+            seen_slugs=seen_slugs,
+            listings_to_process=listings_to_process,
+            one_month_only=one_month_only,
+            max_pages=max_pages,
+            province=province,
+            scrape_details=scrape_details,
+            include_locations=include_locations,
+        )
+    except BaseException as exc:
+        # Sans cette reprise, un scan interrompu (reseau, Ctrl-C, plantage)
+        # laissait sa ligne ScanLog en "running" pour toujours: le statut
+        # "failed" du modele n'etait jamais ecrit, /stats ne retenant que
+        # les scans "completed", l'echec restait invisible.
+        _mark_scan_failed(scan_log_id, exc)
+        raise
+
+    _print_report(console, scan_time, stats)
+
+    # — Export optionnel —
+    if export:
+        console.print(f"\n📁 Export en {export.upper()}...")
+        with get_session() as session:
+            path = export_listings(
+                session,
+                format=export,
+                output_path=output,
+                monthly_only=one_month_only,
+            )
+        console.print(f"   [green]✅ Exporté: {path}[/green]")
+
+
+def _mark_scan_failed(scan_log_id: int, exc: BaseException) -> None:
+    try:
+        with get_session() as session:
+            scan_log = session.query(ScanLog).filter_by(id=scan_log_id).first()
+            if scan_log and scan_log.status == "running":
+                scan_log.status = "failed"
+                scan_log.finished_at = datetime.now(timezone.utc)
+                scan_log.error_message = f"{type(exc).__name__}: {exc}"[:2000]
+    except Exception:
+        # Ne jamais masquer l'erreur d'origine par une erreur de journalisation.
+        logging.getLogger(__name__).exception("Impossible de marquer le scan en échec")
+
+
+def _print_report(console: Console, scan_time: datetime, stats: dict) -> None:
+    console.print("\n")
+    table = Table(title="📊 Résultats du scan", show_header=True)
+    table.add_column("Métrique", style="cyan")
+    table.add_column("Valeur", style="bold white", justify="right")
+
+    table.add_row("Scan démarré", scan_time.strftime("%Y-%m-%d %H:%M:%S UTC"))
+    table.add_row("Pages scannées", str(stats["pages_scanned"]))
+    table.add_row("Annonces trouvées", str(stats["listings_found"]))
+    table.add_row("Nouvelles [NEW]", f"[green]{stats['new']}[/green]")
+    table.add_row("Mises à jour [UPDATED]", f"[yellow]{stats['updated']}[/yellow]")
+    table.add_row("Prix changés [PRICE_CHANGED]", f"[magenta]{stats['price_changed']}[/magenta]")
+    table.add_row("Supprimées [REMOVED]", f"[red]{stats['removed']}[/red]")
+    table.add_row("Avec Contract monthly", f"[cyan]{stats['monthly']}[/cyan]")
+    table.add_row("Erreurs", f"[red]{stats['errors']}[/red]")
+
+    console.print(table)
+
+
+def _run_scan(
+    *,
+    console: Console,
+    log,
+    scan_log_id: int,
+    scan_time: datetime,
+    stats: dict,
+    seen_slugs: set,
+    listings_to_process: list,
+    one_month_only: bool,
+    max_pages: Optional[int],
+    province: Optional[str],
+    scrape_details: bool,
+    include_locations: bool,
+) -> None:
+    """Corps du scan, isolé pour que main() puisse marquer l'échec."""
 
     # — Phase 1: Scraping de la liste —
     console.print("\n[bold]Phase 1: Scraping des pages de liste...[/bold]")
 
+    # Le nombre de pages vient des URLs reellement lues, et non d'une regle
+    # de trois sur le nombre d'annonces: `len % 40` supposait 40 annonces par
+    # page et se decalait des qu'une page en rendait un autre nombre.
     async def run_list_scraper():
-        nonlocal listings_to_process
-        page_count = 0
-        async for listing_raw in scrape_all_listings(
-            max_pages=max_pages,
-            province_slug=province,
-        ):
-            listings_to_process.append(listing_raw)
-            # Compter les pages (approximatif)
-            if len(listings_to_process) % 40 == 0:
-                page_count += 1
-                console.print(f"   Page ~{page_count}: {len(listings_to_process)} annonces collectées")
-        return page_count
+        return await collect_unique_listings(
+            scrape_all_listings(max_pages=max_pages, province_slug=province),
+            on_new_page=lambda page_no, count: console.print(
+                f"   Page {page_no}: {count} annonces collectées"
+            ),
+        )
 
-    page_count = asyncio.run(run_list_scraper())
+    collected, page_count, duplicates = asyncio.run(run_list_scraper())
+    listings_to_process.extend(collected)
+    if duplicates:
+        console.print(f"   [dim]{duplicates} doublon(s) de pagination ignoré(s)[/dim]")
     stats["listings_found"] = len(listings_to_process)
     stats["pages_scanned"] = page_count
     console.print(f"   [green]✅ {len(listings_to_process)} annonces collectées[/green]")
@@ -256,15 +376,31 @@ def main(
         console.print(f"   {len(urls_to_scrape)} à scraper")
 
         BATCH_SIZE = 20
-        for i in range(0, len(urls_to_scrape), BATCH_SIZE):
-            batch = urls_to_scrape[i:i + BATCH_SIZE]
-            console.print(f"   Batch {i // BATCH_SIZE + 1}/{max(1, (len(urls_to_scrape) - 1) // BATCH_SIZE + 1)}: {len(batch)} pages")
-            results = asyncio.run(scrape_details_batch(batch))
-            detail_map.update(results)
-            errors_in_batch = sum(1 for v in results.values() if v is None)
-            if errors_in_batch:
-                stats["errors"] += errors_in_batch
-                console.print(f"   [yellow]⚠️  {errors_in_batch} erreurs dans ce batch[/yellow]")
+        total_batches = max(1, (len(urls_to_scrape) - 1) // BATCH_SIZE + 1)
+
+        async def run_detail_scraper():
+            """Un seul client HTTP pour tous les lots.
+
+            Un asyncio.run (et donc un client httpx) par lot refaisait une
+            poignee de main TCP+TLS+HTTP/2 toutes les 20 pages, et forcait
+            la reconstruction des primitives asyncio partagees.
+            """
+            async with ScraperClient() as client:
+                for i in range(0, len(urls_to_scrape), BATCH_SIZE):
+                    batch = urls_to_scrape[i:i + BATCH_SIZE]
+                    console.print(
+                        f"   Batch {i // BATCH_SIZE + 1}/{total_batches}: {len(batch)} pages"
+                    )
+                    results = await scrape_details_batch(batch, client)
+                    detail_map.update(results)
+                    errors_in_batch = sum(1 for v in results.values() if v is None)
+                    if errors_in_batch:
+                        stats["errors"] += errors_in_batch
+                        console.print(
+                            f"   [yellow]⚠️  {errors_in_batch} erreurs dans ce batch[/yellow]"
+                        )
+
+        asyncio.run(run_detail_scraper())
 
         console.print(f"   [green]✅ {len(detail_map)} pages détail récupérées[/green]")
     else:
@@ -324,36 +460,6 @@ def main(
             scan_log.monthly_count = stats["monthly"]
             scan_log.error_count = stats["errors"]
             scan_log.status = "completed"
-
-    # — Rapport final —
-    console.print("\n")
-    table = Table(title="📊 Résultats du scan", show_header=True)
-    table.add_column("Métrique", style="cyan")
-    table.add_column("Valeur", style="bold white", justify="right")
-
-    table.add_row("Scan démarré", scan_time.strftime("%Y-%m-%d %H:%M:%S UTC"))
-    table.add_row("Pages scannées", str(stats["pages_scanned"]))
-    table.add_row("Annonces trouvées", str(stats["listings_found"]))
-    table.add_row("Nouvelles [NEW]", f"[green]{stats['new']}[/green]")
-    table.add_row("Mises à jour [UPDATED]", f"[yellow]{stats['updated']}[/yellow]")
-    table.add_row("Prix changés [PRICE_CHANGED]", f"[magenta]{stats['price_changed']}[/magenta]")
-    table.add_row("Supprimées [REMOVED]", f"[red]{stats['removed']}[/red]")
-    table.add_row("Avec Contract monthly", f"[cyan]{stats['monthly']}[/cyan]")
-    table.add_row("Erreurs", f"[red]{stats['errors']}[/red]")
-
-    console.print(table)
-
-    # — Export optionnel —
-    if export:
-        console.print(f"\n📁 Export en {export.upper()}...")
-        with get_session() as session:
-            path = export_listings(
-                session,
-                format=export,
-                output_path=output,
-                monthly_only=one_month_only,
-            )
-        console.print(f"   [green]✅ Exporté: {path}[/green]")
 
 
 def _merge_listing(listing_raw, detail) -> ListingFull:

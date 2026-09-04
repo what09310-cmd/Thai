@@ -13,13 +13,15 @@
   "room_types": [
     {
       "name": "Unknown",
-      "room_type": null,
-      "size_sqm": null,
+      "room_type": "ONE_BED_ROOM",
+      "size_sqm": 30.0,
+      "monthly_min_thb": 1200,
+      "monthly_max_thb": 1500,
       "contract_1_month_thb": 1500,
       "contract_3_month_thb": 1500,
       "contract_6_month_thb": 1500,
       "daily_thb": null,
-      "status": null
+      "status": "Available"
     }
   ],
   "phone": "0944467828",

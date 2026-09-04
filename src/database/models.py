@@ -80,6 +80,12 @@ class Listing(Base):
     service_fee: Mapped[Optional[str]] = mapped_column(String(200))
     phone: Mapped[Optional[str]] = mapped_column(String(100))
     line_id: Mapped[Optional[str]] = mapped_column(String(100))
+    # None: jamais verifie par scripts/verify_line_ids.py. True/False: un
+    # compte/page LINE existe (ou non) derriere ce line_id au moment du
+    # dernier passage -- voir _clean_line_id et check_line_id. Le lien
+    # LINE affiche cote frontend s'appuie dessus pour eviter un 404 sur
+    # un identifiant deja connu comme invalide.
+    line_verified: Mapped[Optional[bool]] = mapped_column(Boolean)
     whatsapp: Mapped[Optional[str]] = mapped_column(String(100))
     email: Mapped[Optional[str]] = mapped_column(String(200))
 
@@ -123,6 +129,11 @@ class Listing(Base):
         Index("ix_listings_has_monthly", "has_monthly_contract"),
         Index("ix_listings_source_id", "source_id"),
         Index("ix_listings_price_monthly_min", "price_monthly_min"),
+        # Tri par defaut de GET /listings. Sans lui, chaque appel faisait un
+        # SCAN de la table suivi d'un USE TEMP B-TREE FOR ORDER BY.
+        Index("ix_listings_source_updated_at", "source_updated_at"),
+        # Filtre de GET /listings/new et du compteur "nouvelles" de /stats.
+        Index("ix_listings_first_seen_at", "first_seen_at"),
     )
 
 
@@ -144,6 +155,13 @@ class ListingImage(Base):
     )
 
     listing: Mapped["Listing"] = relationship("Listing", back_populates="images")
+
+    __table_args__ = (
+        # Cle etrangere sans index: les routes de liste balayaient les
+        # ~60 000 lignes de la table a chaque requete pour n'en tirer qu'une
+        # vignette par annonce (SCAN listing_images).
+        Index("ix_listing_images_listing_id", "listing_id"),
+    )
 
 
 class ListingHistory(Base):

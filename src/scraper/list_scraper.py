@@ -50,12 +50,16 @@ THAI_PROVINCES = {
 async def scrape_all_listings(
     max_pages: Optional[int] = None,
     province_slug: Optional[str] = None,
-) -> AsyncIterator[ListingRaw]:
+) -> AsyncIterator[tuple[ListingRaw, str]]:
     """
     Scrape toutes les annonces de la page /en/browse/short-term-monthly.
 
     province_slug filtre sur une province (ex: "bangkok"), via
     /en/browse/short-term-monthly/<province_slug>.
+
+    Rend des couples (annonce, url_de_la_page): l'appelant a besoin de la
+    page d'origine pour compter les pages réellement lues, que le nombre
+    d'annonces par page ne permet pas de déduire.
     """
 
     async with ScraperClient() as client:
@@ -110,7 +114,7 @@ async def scrape_all_listings(
         )
 
         for listing in listings:
-            yield listing
+            yield listing, base
 
         # ==========================================
         # PAGES SUIVANTES
@@ -152,7 +156,7 @@ async def scrape_all_listings(
             )
 
             for listing in listings:
-                yield listing
+                yield listing, url
 
 
 async def scrape_location_listings(

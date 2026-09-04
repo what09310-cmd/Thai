@@ -20,7 +20,13 @@ from src.config import settings
 log = logging.getLogger(__name__)
 
 
-# Champs utilisés pour calculer le content_hash (changements détectables)
+# Champs utilisés pour calculer le content_hash (changements détectables).
+# Le hash est calculé sur la ligne en base APRÈS application des champs, et
+# non sur le ListingFull scrapé: `description` et `amenities` ne sont
+# renseignés que quand la page détail a été lue dans ce run. Hasher l'objet
+# scrapé faisait donc basculer le hash à chaque cycle de péremption détail
+# (detail_refresh_days), produisant un UPDATED fantôme par annonce et par
+# bascule. Voir compute_content_hash.
 HASH_FIELDS = [
     "name",
     "price_monthly_min", "price_monthly_max",
@@ -38,6 +44,14 @@ MIN_SCAN_COVERAGE = 0.5
 DETAIL_FIELDS = (
     "phone", "line_id", "whatsapp", "email",
     "deposit", "advance_payment", "electric_price", "water_price", "service_fee",
+)
+
+# Champs décrivant l'offre "court terme" (contrats 1/3/6 mois), reportés
+# en base par apply_contract_fields.
+CONTRACT_FIELDS = (
+    "contract_monthly_raw", "contract_monthly_min", "contract_monthly_max",
+    "contract_3_month_raw", "contract_3_month_min", "contract_3_month_max",
+    "contract_6_month_raw", "contract_6_month_min", "contract_6_month_max",
 )
 
 # Champs de prix spécifiquement trackés
@@ -70,12 +84,44 @@ def apply_detail_fields(db_listing: Listing, detail) -> None:
             setattr(db_listing, field, value)
 
 
-def compute_content_hash(listing: ListingFull) -> str:
-    """Hash stable pour détecter les changements de contenu."""
-    data = {}
-    for field in HASH_FIELDS:
-        val = getattr(listing, field, None)
-        data[field] = val
+def apply_contract_fields(db_listing: Listing, listing: ListingFull) -> None:
+    """Reporte les contrats 1/3/6 mois, sans effacer ce qu'on sait déjà.
+
+    Seule une carte issue d'une page qui décrit vraiment l'offre court terme
+    (`from_structured_list`) fait autorité: elle écrase les contrats même
+    par None, car "plus de contrat 1 mois" est une information réelle.
+
+    Les pages "par lieu" (/en/short-term-rental/<slug>, --include-locations)
+    portent `price.monthly` mais pas `shortTerm.*.shortContract`: leurs
+    contrats sont vides par construction. Sans cette garde, un scan
+    --include-locations effaçait les contrats déjà connus d'une annonce vue
+    auparavant sur /browse/short-term-monthly, et le scan suivant les
+    restaurait — d'où des allers-retours valeur/None dans l'historique.
+    """
+    if listing.from_structured_list:
+        for field in CONTRACT_FIELDS:
+            setattr(db_listing, field, getattr(listing, field, None))
+        db_listing.has_monthly_contract = listing.has_monthly_contract
+        return
+
+    for field in CONTRACT_FIELDS:
+        value = getattr(listing, field, None)
+        if value is not None:
+            setattr(db_listing, field, value)
+    if listing.has_monthly_contract != "unknown":
+        db_listing.has_monthly_contract = listing.has_monthly_contract
+
+
+def compute_content_hash(db_listing: Listing) -> str:
+    """Hash stable pour détecter les changements de contenu.
+
+    Prend la ligne *en base*, après application des champs du scan: c'est le
+    seul état qui ne dépende pas de ce que ce run précis a scrapé. Sur le
+    ListingFull scrapé, `description` et `amenities` sont vides dès que la
+    page détail a été sautée (péremption à detail_refresh_days), et le hash
+    basculait d'un run à l'autre sans qu'aucune donnée n'ait changé.
+    """
+    data = {field: getattr(db_listing, field, None) for field in HASH_FIELDS}
     serialized = json.dumps(data, sort_keys=True, default=str)
     return hashlib.sha256(serialized.encode()).hexdigest()
 
@@ -92,26 +138,34 @@ def upsert_listing(
     change_type: "NEW" | "UPDATED" | "PRICE_CHANGED" | "UNCHANGED"
     """
     now = scan_time
-    content_hash = compute_content_hash(listing)
 
     # Chercher l'annonce existante par slug
     db_listing = session.query(Listing).filter_by(slug=listing.slug).first()
 
     if db_listing is None:
         # Nouvelle annonce
-        db_listing = _create_listing(session, listing, content_hash, now)
+        db_listing = _create_listing(session, listing, now)
         _add_history(session, db_listing, "NEW", now)
         log.info(f"[NEW] {listing.name[:50]}")
         return "NEW", db_listing
 
-    # Annonce existante: vérifier les changements
+    # Annonce existante: vérifier les changements.
+    #
+    # Les prix sont comparés avant/après application des champs, et non
+    # contre le ListingFull scrapé: apply_contract_fields peut décider de
+    # NE PAS écrire une valeur (source non autoritaire). Comparer à
+    # l'objet scrapé journalisait alors un PRICE_CHANGED pour une écriture
+    # qui n'a jamais eu lieu.
     change_types = []
+    before = {field: getattr(db_listing, field) for field in PRICE_FIELDS}
+
+    _update_listing_fields(db_listing, listing, now)
 
     # 1. Changement de prix
     price_changed = False
     for field in PRICE_FIELDS:
-        old_val = getattr(db_listing, field)
-        new_val = getattr(listing, field, None)
+        old_val = before[field]
+        new_val = getattr(db_listing, field)
         if old_val != new_val:
             price_changed = True
             _add_history(
@@ -124,6 +178,7 @@ def upsert_listing(
         change_types.append("PRICE_CHANGED")
 
     # 2. Changement de contenu
+    content_hash = compute_content_hash(db_listing)
     if db_listing.content_hash != content_hash and not price_changed:
         change_types.append("UPDATED")
         _add_history(
@@ -132,6 +187,7 @@ def upsert_listing(
             old_value=db_listing.content_hash,
             new_value=content_hash,
         )
+    db_listing.content_hash = content_hash
 
     # 3. Réactivation si l'annonce était marquée REMOVED
     if db_listing.status == "removed":
@@ -139,9 +195,6 @@ def upsert_listing(
         db_listing.missing_scan_count = 0
         _add_history(session, db_listing, "REACTIVATED", now)
         change_types.append("REACTIVATED")
-
-    # Mettre à jour les champs
-    _update_listing_fields(db_listing, listing, content_hash, now)
 
     if not change_types:
         return "UNCHANGED", db_listing
@@ -232,7 +285,6 @@ def upsert_province(session: Session, province_data: dict) -> None:
 def _create_listing(
     session: Session,
     listing: ListingFull,
-    content_hash: str,
     now: datetime,
 ) -> Listing:
     db_listing = Listing(
@@ -280,7 +332,6 @@ def _create_listing(
         has_promotion=listing.has_promotion,
         status="active",
         missing_scan_count=0,
-        content_hash=content_hash,
         source_updated_at=listing.source_updated_at,
         published_at=listing.published_at,
         first_seen_at=now,
@@ -291,6 +342,8 @@ def _create_listing(
         detail_scraped_at=now if listing.source_id else None,
     )
     db_listing.description = build_contact_description(db_listing)
+    # Après build_contact_description: `description` est un champ de hash.
+    db_listing.content_hash = compute_content_hash(db_listing)
     session.add(db_listing)
     session.flush()
 
@@ -317,10 +370,13 @@ def _create_listing(
 def _update_listing_fields(
     db_listing: Listing,
     listing: ListingFull,
-    content_hash: str,
     now: datetime,
 ) -> None:
-    """Met à jour tous les champs d'une annonce existante."""
+    """Met à jour tous les champs d'une annonce existante.
+
+    N'écrit pas `content_hash`: il se calcule sur la ligne résultante, une
+    fois tous les champs posés (voir upsert_listing).
+    """
     db_listing.source_id = listing.source_id or db_listing.source_id
     db_listing.name = listing.name
     db_listing.address = listing.address or db_listing.address
@@ -335,19 +391,9 @@ def _update_listing_fields(
     db_listing.daily_price_raw = listing.daily_price_raw
     db_listing.daily_price_min = listing.daily_price_min
     db_listing.daily_price_max = listing.daily_price_max
-    db_listing.contract_monthly_raw = listing.contract_monthly_raw
-    db_listing.contract_monthly_min = listing.contract_monthly_min
-    db_listing.contract_monthly_max = listing.contract_monthly_max
-    db_listing.contract_3_month_raw = listing.contract_3_month_raw
-    db_listing.contract_3_month_min = listing.contract_3_month_min
-    db_listing.contract_3_month_max = listing.contract_3_month_max
-    db_listing.contract_6_month_raw = listing.contract_6_month_raw
-    db_listing.contract_6_month_min = listing.contract_6_month_min
-    db_listing.contract_6_month_max = listing.contract_6_month_max
-    db_listing.has_monthly_contract = listing.has_monthly_contract
+    apply_contract_fields(db_listing, listing)
     db_listing.is_verified = listing.is_verified
     db_listing.has_promotion = listing.has_promotion
-    db_listing.content_hash = content_hash
     db_listing.source_updated_at = listing.source_updated_at
     db_listing.last_seen_at = now
     db_listing.last_scraped_at = now

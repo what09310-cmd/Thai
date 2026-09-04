@@ -660,6 +660,19 @@
     font-family: var(--mono); color: var(--accent);
   }
   .mc-val.na { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .mc-room-label {
+    font-size: 10px; font-family: var(--mono); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text); margin: 10px 0 -2px;
+  }
+  .mc-room-label:first-child { margin-top: 0; }
+  .mc-room-group {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .mc-room-group .mc-room-label { margin: 0; }
+  .mc-room-terms { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mc-room-terms .mc { flex: 1 1 90px; flex-direction: column; align-items: flex-start; gap: 2px; }
 
   .modal-amenities { display: flex; flex-wrap: wrap; gap: 5px; }
   .amenity {
@@ -1310,7 +1323,7 @@ function _updateNew24hCount() {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const count = allData.filter(l => {
     if (l.status === "removed") return false;
-    return new Date(l.source_updated_at || 0).getTime() >= cutoff;
+    return new Date(l.first_seen_at || 0).getTime() >= cutoff;
   }).length;
   const el = document.getElementById("new24h-count");
   if (el) el.textContent = count ? `(${count.toLocaleString("fr-FR")})` : "";
@@ -1428,7 +1441,7 @@ function applyFilters() {
 
     if (onlyNew24h) {
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-      if (new Date(l.source_updated_at || 0).getTime() < cutoff) return false;
+      if (new Date(l.first_seen_at || 0).getTime() < cutoff) return false;
     }
 
     if (activeCity && !key(cityOf(l)).includes(key(activeCity))) return false;
@@ -1889,6 +1902,71 @@ function googleMapsEmbedUrl(l) {
   return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=${zoom}&output=embed`;
 }
 
+const humanizeRoomType = s => s ? s.toLowerCase().replace(/_/g, " ").replace(/^./, c => c.toUpperCase()) : null;
+
+function roomTypeLabel(rt) {
+  const roomType = humanizeRoomType(rt.room_type);
+  return [
+    rt.name && rt.name !== "Unknown" ? rt.name : null,
+    roomType && roomType !== rt.name ? roomType : null,
+    rt.size_sqm ? `${rt.size_sqm} m²` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+function contractRooms(l) {
+  const rooms = (l.room_types || []).filter(rt =>
+    rt.monthly_min_thb != null || rt.monthly_max_thb != null ||
+    rt.contract_1_month_thb != null || rt.contract_3_month_thb != null || rt.contract_6_month_thb != null);
+  const available = rooms.filter(rt => !rt.status || rt.status.trim().toLowerCase() === "available");
+  return available.length ? available : rooms;
+}
+
+function contractsSectionTitle(l) {
+  const useRooms = contractRooms(l);
+  if (useRooms.length === 1) {
+    const label = roomTypeLabel(useRooms[0]);
+    if (label) return label;
+  }
+  return "Room Type";
+}
+
+function renderContractsHTML(l) {
+  const fmt = n => n == null ? null : `${n.toLocaleString("en-US")} THB/month`;
+  const useRooms = contractRooms(l);
+
+  if (useRooms.length) {
+    return useRooms.map(rt => {
+      const label = roomTypeLabel(rt);
+      const terms = [
+        ["1 mois", fmt(rt.contract_1_month_thb)],
+        ["3 mois", fmt(rt.contract_3_month_thb)],
+        ["6 mois", fmt(rt.contract_6_month_thb)],
+      ].filter(([, v]) => v != null);
+      if (!terms.length) return "";
+      const termsHTML = terms.map(([term, v]) => `
+        <div class="mc">
+          <div class="mc-label">${term}</div>
+          <div class="mc-val">${esc(v)}</div>
+        </div>`).join("");
+      if (useRooms.length <= 1) return termsHTML;
+      return `
+        <div class="mc-room-group">
+          ${label ? `<div class="mc-room-label">${esc(label)}</div>` : ""}
+          <div class="mc-room-terms">${termsHTML}</div>
+        </div>`;
+    }).join("");
+  }
+
+  const contracts = [["1 mois", l.contract_monthly_raw], ["3 mois", l.contract_3_month_raw], ["6 mois", l.contract_6_month_raw]]
+    .filter(([, raw]) => raw && raw !== "-");
+  if (!contracts.length) return `<div class="mc"><div class="mc-val na">Aucun contrat disponible</div></div>`;
+  return contracts.map(([label, raw]) => `
+        <div class="mc">
+          <div class="mc-label">${label}</div>
+          <div class="mc-val">${esc(raw)}</div>
+        </div>`).join("");
+}
+
 function modalHTML(l) {
   const locs = [l.subdistrict, l.district, l.province].filter(Boolean);
   const amenities = l.amenities || [];
@@ -1918,18 +1996,9 @@ function modalHTML(l) {
       ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
     </div>` : ""}
     <div>
-      <div class="section-head">Contrats disponibles</div>
+      <div class="section-head">${esc(contractsSectionTitle(l))}</div>
       <div class="modal-contracts">
-        ${(() => {
-          const contracts = [["1 mois", l.contract_monthly_raw], ["3 mois", l.contract_3_month_raw], ["6 mois", l.contract_6_month_raw]]
-            .filter(([, raw]) => raw && raw !== "-");
-          if (!contracts.length) return `<div class="mc"><div class="mc-val na">Aucun contrat disponible</div></div>`;
-          return contracts.map(([label, raw]) => `
-        <div class="mc">
-          <div class="mc-label">${label}</div>
-          <div class="mc-val">${esc(raw)}</div>
-        </div>`).join("");
-        })()}
+        ${renderContractsHTML(l)}
       </div>
     </div>
     ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `

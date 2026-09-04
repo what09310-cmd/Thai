@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiMonth Tracker</title>
+<meta property="og:title" content="ThaiMonth Tracker">
+<meta property="og:description" content="Suivi des annonces de location en Thaïlande">
+<meta property="og:image" content="/static/logo.png">
+<meta property="og:type" content="website">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    /* Palette triips : creme, indigo, vert foret, ciel pastel. */
+    --bg:       #faf8f4;
+    --surface:  #ffffff;
+    --card:     #ffffff;
+    --border:   #e9e4da;
+    --accent:   #5046f5;
+    --accent-ink: #ffffff;
+    --forest:   #1d3c10;
+
+    /* Couleurs du logo ThaiMonth, reprises sur les pilules de prix. */
+    --brand-lime: #c7ef6c;
+    --brand-gold: #e8b765;
+
+    --blue:     #5046f5;
+    --green:    #2f9e44;
+    --red:      #e03131;
+    --purple:   #7950f2;
+    --text:     #14130f;
+    --muted:    #6c6660;
+    --dim:      #9b948b;
+    --focus:    #5046f5;
+
+    /* Degrade du ciel du hero */
+    --sky-1:    #cfe8b8;
+    --sky-2:    #dcd6f9;
+    --sky-3:    #cde8f4;
+
+    /* triips n'utilise aucune chasse fixe : --mono devient une police
+       proportionnelle. Les chiffres gardent leur alignement colonne par
+       colonne grace a font-variant-numeric: tabular-nums. */
+    --mono:     'Plus Jakarta Sans', system-ui, sans-serif;
+    --sans:     'Plus Jakarta Sans', system-ui, sans-serif;
+    --display:  'Inter', system-ui, sans-serif;
+
+    --r-pill:   9999px;
+    --r-card:   20px;
+    --r-ctl:    12px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 20;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+  }
+  .logo img {
+    height: 60px;
+    width: auto;
+    display: block;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .hstat {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .hstat b { color: var(--text); }
+
+  /* ── Barre de villes ── */
+  .city-bar {
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: var(--surface);
+  }
+  .city-bar::-webkit-scrollbar { display: none; }
+
+
+  .location-filters { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .location-filter { display:flex; align-items:center; gap:8px; }
+  .city-select {
+    min-width:240px; background:var(--card); border:1px solid var(--border);
+    border-radius:var(--r-pill); color:var(--text); font-family:var(--sans);
+    font-size:13px; padding:9px 12px; outline:none; cursor:pointer;
+  }
+  .city-select:focus { border-color:var(--accent); }
+  .city-select:disabled { opacity:.5; cursor:not-allowed; }
+
+  .city-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .05em;
+    color: var(--dim);
+    white-space: nowrap;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .btn-new24h {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 9px 14px; border-radius: var(--r-pill);
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); font-family: var(--sans);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0; transition: all .15s;
+  }
+  .btn-new24h:hover { border-color: var(--purple); color: var(--text); }
+  .btn-new24h.active { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 700; }
+  .btn-new24h .new24h-count { font-family: var(--mono); font-size: 10px; opacity: .75; }
+
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: calc(100vh - 101px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 24px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    position: sticky;
+    top: 101px;
+    height: calc(100vh - 101px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .filter-section { display: flex; flex-direction: column; gap: 9px; }
+
+  .filter-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .filter-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .filter-input:focus { border-color: var(--accent); }
+
+  .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .slider-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .slider-wrap input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider-info {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .toggle-row span { font-size: 12px; color: var(--text); }
+
+  .toggle { position: relative; width: 34px; height: 18px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: #cfc9bf;
+    border-radius: 18px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toggle-track::before {
+    content: "";
+    position: absolute;
+    width: 12px; height: 12px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--green); }
+  .toggle input:checked + .toggle-track::before { transform: translateX(16px); }
+  .toggle input:focus-visible + .toggle-track { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .toggle-blue input:checked + .toggle-track { background: var(--blue); }
+  .toggle-purple input:checked + .toggle-track { background: var(--purple); }
+
+  .btn-reset {
+    width: 100%;
+    padding: 9px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: all .15s;
+    margin-top: 4px;
+  }
+  .btn-reset:hover { border-color: var(--text); color: var(--text); }
+
+  .btn-premium {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-pill);
+    color: var(--accent-ink);
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--sans);
+    text-decoration: none;
+    text-align: center;
+    display: block;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn-premium:hover { opacity: .85; }
+
+  /* ── Main ── */
+  .main {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .result-info {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .result-info b { color: var(--accent); font-size: 14px; }
+
+  .sort-select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── Grille ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    display: flex;
+    flex-direction: column;
+  }
+  .card:hover, .card:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 10px 30px rgba(20,19,15,.10);
+  }
+
+  .card-img {
+    height: 150px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .card-img img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .card-img .no-img {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; color: var(--muted);
+  }
+
+  .modal-gallery {
+    display: flex;
+    flex-shrink: 0;
+    height: 220px;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin: 0 -18px 4px;
+    padding: 0 18px;
+  }
+  .modal-gallery-item {
+    position: relative;
+    flex-shrink: 0;
+    height: 220px;
+    max-width: 85%;
+    scroll-snap-align: start;
+  }
+  .modal-gallery-item img {
+    height: 220px;
+    width: auto;
+    max-width: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: zoom-in;
+  }
+  .badge {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    letter-spacing: .04em;
+  }
+  .badge-monthly { top: 8px; left: 8px; background: var(--green); color: #fff; }
+  .badge-verified { top: 8px; right: 8px; background: var(--blue); color: #fff; }
+  .badge-term-3 { background: var(--blue); color: #fff; }
+  .badge-term-6 { background: var(--purple); color: #fff; }
+
+  .card-badge-slot { padding: 8px 14px 0; height: 25px; box-sizing: border-box; display: flex; align-items: center; gap: 4px; }
+
+  .card-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-loc {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .loc-district {
+    background: rgba(80,70,245,.10);
+    color: var(--blue);
+    border-radius: var(--r-pill);
+    padding: 2px 9px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .loc-province {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .card-contracts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-top: auto;
+  }
+  .cc {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-ctl);
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+    min-width: 0;
+  }
+  .cc-label {
+    font-size: 9px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    margin-bottom: 0;
+  }
+  .cc-val {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.3;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+  .cc-val.na { color: var(--muted); font-weight: 400; font-size: 11px; }
+
+  .card-date {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+
+  /* ── States ── */
+  .state-box {
+    display: flex; align-items: center; justify-content: center;
+    height: 220px; color: var(--muted);
+    font-family: var(--mono); font-size: 13px; gap: 10px;
+    flex-direction: column;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Pagination ── */
+  .pager {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 8px 0;
+  }
+  .pager button {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .pager button:hover:not(:disabled) { border-color: var(--accent); }
+  .pager button.on { border-color: var(--accent); color: var(--accent); }
+  .pager button:disabled { opacity: .3; cursor: default; }
+
+  /* ── Modal ── */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(20,19,15,.45);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .overlay.open { display: flex; }
+
+  .lightbox-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    cursor: zoom-out;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-content {
+    position: relative;
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+  .lightbox-content img#lightbox-img {
+    display: block;
+    max-width: 95vw;
+    max-height: 95vh;
+    width: auto; height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: default;
+  }
+  .lightbox-close {
+    position: fixed;
+    top: 20px; right: 20px;
+    background: rgba(0,0,0,.5);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    width: 32px; height: 32px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .lightbox-close:hover { color: var(--accent); }
+  .lightbox-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,.5);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    width: 44px; height: 44px;
+    cursor: pointer;
+    font-size: 26px;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .lightbox-nav:hover { color: var(--accent); }
+  .lightbox-nav[disabled] { display: none; }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    width: 100%; max-width: 600px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  .modal-top {
+    display: flex; justify-content: flex-end; align-items: flex-start; gap: 12px;
+  }
+  .modal-close {
+    background: none; border: 1px solid var(--border);
+    border-radius: 6px; color: var(--muted);
+    width: 28px; height: 28px; cursor: pointer;
+    font-size: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    padding: 3px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .tag.green { border-color: var(--green); color: var(--green); }
+
+  .modal-contracts {
+    display: grid; grid-template-columns: 1fr; gap: 8px;
+  }
+  .mc {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-ctl); padding: 13px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .mc-label {
+    font-size: 9px; font-family: var(--mono);
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 0;
+  }
+  .mc-val {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px; font-weight: 700;
+    font-family: var(--mono); color: var(--accent);
+  }
+  .mc-val.na { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .mc-room-label {
+    font-size: 10px; font-family: var(--mono); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text); margin: 10px 0 -2px;
+  }
+  .mc-room-label:first-child { margin-top: 0; }
+  .mc-room-group {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .mc-room-group .mc-room-label { margin: 0; }
+  .mc-room-terms { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mc-room-terms .mc { flex: 1 1 90px; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+  .modal-amenities { display: flex; flex-wrap: wrap; gap: 5px; }
+  .amenity {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 4px 10px;
+    font-size: 11px; color: var(--muted); font-family: var(--mono);
+  }
+
+  .section-head {
+    font-size: 10px; font-family: var(--mono);
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+
+  .modal-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: var(--accent-ink);
+    font-weight: 700; font-size: 13px;
+    padding: 11px 22px; border-radius: var(--r-pill);
+    text-decoration: none; align-self: flex-start;
+    transition: opacity .15s;
+  }
+  .modal-link:hover { opacity: .85; }
+  a.mc-wa, a.mc-line {
+    text-decoration: none; color: inherit; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  a.mc-wa:hover { background: #25D36615; border-color: #25D366; }
+  a.mc-line:hover { background: #06C75515; border-color: #06C755; }
+.card-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.amenity-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 4px 9px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text);
+  white-space: nowrap;
+}
+  @media (max-width: 768px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .grid { grid-template-columns: 1fr; }
+    .hstat { display: none; }
+  }
+
+  /* ── Filtre région (FAB) ── */
+  .region-fab-wrap { position: fixed; left: 24px; bottom: 24px; z-index: 50; }
+  .region-fab {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s, background .15s;
+  }
+  .region-fab:hover { transform: scale(1.06); }
+  .region-fab.active { background: var(--blue); color: #fff; }
+  .region-menu {
+    position: absolute;
+    bottom: 64px; left: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 190px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  .region-menu.open { display: flex; }
+  .region-item {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .region-item:hover { background: var(--bg); }
+  .region-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+  /* ── Carte Phuket (FAB) ── */
+  .map-fab {
+    position: fixed; right: 24px; bottom: 24px; z-index: 50;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    text-decoration: none;
+    transition: transform .15s;
+  }
+  .map-fab:hover { transform: scale(1.06); }
+
+  /* ══════════════════════════════════════════════════════════════════
+     HERO — langage visuel triips : ciel pastel, nuages, navbar en
+     pilule, grosse typo Inter dont un fragment en indigo, CTA arrondi.
+     Nuages et avion dessines en CSS : aucun asset externe.
+     ══════════════════════════════════════════════════════════════════ */
+
+  .hero {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    /* La navbar etant fixe, elle n'occupe plus de place dans le flux :
+       ce retrait compense sa hauteur pour que le hero garde son cadrage. */
+    padding: 76px 20px 0;
+    background: linear-gradient(165deg,
+      var(--sky-1) 0%, var(--sky-2) 46%, var(--sky-3) 100%);
+  }
+  /* Le bas du ciel se fond dans le creme de la page */
+  .hero::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 130px; z-index: 0; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(250,248,244,0), var(--bg));
+  }
+
+  /* ── Nuages ── */
+  .cloud {
+    position: absolute; z-index: 0;
+    background: #fff; border-radius: var(--r-pill);
+    opacity: .85; pointer-events: none;
+  }
+  .cloud::before, .cloud::after {
+    content: ""; position: absolute; background: #fff; border-radius: 50%;
+  }
+  .cloud::before { width: 60%; height: 170%; left: 12%; bottom: 34%; }
+  .cloud::after  { width: 44%; height: 135%; right: 13%; bottom: 30%; }
+  .cloud-1 { width: 190px; height: 44px; top:  92px; left:  -34px; }
+  .cloud-2 { width: 130px; height: 32px; top:  40px; right:  7%;  opacity: .70; }
+  .cloud-3 { width: 240px; height: 54px; top: 258px; right: -50px; opacity: .80; }
+  .cloud-4 { width: 110px; height: 28px; top: 330px; left:   9%;  opacity: .62; }
+
+  /* ── Avion ── */
+  .plane {
+    position: absolute; z-index: 1; top: 140px; left: 7%;
+    font-size: 24px; transform: rotate(-16deg);
+    animation: drift 9s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes drift {
+    0%,100% { transform: rotate(-16deg) translate(0, 0); }
+    50%     { transform: rotate(-16deg) translate(14px, -12px); }
+  }
+
+  /* ── Navbar en pilule ── */
+  /* Fixe : reste visible pendant tout le defilement. Elle vit hors du hero,
+     dont l'overflow:hidden la retiendrait si elle etait dedans. */
+  .pillnav {
+    position: fixed; top: 18px; z-index: 100;
+    left: 50%; transform: translateX(-50%);
+    width: calc(100% - 40px); max-width: 780px;
+    background: var(--forest);
+    border-radius: var(--r-pill);
+    padding: 9px 10px 9px 22px;
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
+    box-shadow: 0 10px 28px rgba(29,60,16,.22);
+  }
+  /* Mot-symbole pose a meme la pilule, sans pastille : le PNG du logo est
+     en teal fonce et disparaitrait sur le vert foret, donc on ecrit le nom
+     en toutes lettres. La bichromie Thai/Month reprend celle du logo, en
+     versions eclaircies pour tenir le contraste sur fond sombre
+     (9:1 et 7:1 environ, tres au-dessus du seuil AA de 4.5:1). */
+  .pillnav-brand {
+    display: flex; align-items: baseline; flex-shrink: 0;
+    text-decoration: none;
+    font-family: var(--sans);
+    font-size: 25px; font-weight: 800;
+    letter-spacing: -.6px; line-height: 1;
+  }
+  .brand-thai  { color: var(--brand-lime); }
+  .brand-month { color: var(--brand-gold); }
+  .pillnav-links { display: flex; align-items: center; gap: 22px; }
+  .pillnav-links a {
+    color: #dfeed2; text-decoration: none;
+    font-size: 14px; font-weight: 500; white-space: nowrap;
+    transition: color .15s;
+  }
+  .pillnav-links a:hover { color: #fff; }
+  .pillnav-cta {
+    background: var(--accent); color: #fff;
+    border-radius: var(--r-pill); padding: 10px 20px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    white-space: nowrap; transition: filter .15s;
+  }
+  .pillnav-cta:hover { filter: brightness(1.12); }
+
+  /* ── Contenu du hero ── */
+  .hero-inner {
+    position: relative; z-index: 2;
+    max-width: 880px; margin: 0 auto;
+    padding: 58px 0 4px; text-align: center;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: rgba(255,255,255,.72);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    border-radius: var(--r-pill); padding: 7px 17px;
+    font-size: 13px; font-weight: 500; color: #443f38;
+  }
+  .hero-badge i {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #37b24d; flex-shrink: 0;
+  }
+  .hero-badge b { font-variant-numeric: tabular-nums; color: #14130f; }
+
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(32px, 5.6vw, 60px);
+    font-weight: 600; line-height: 1.13;
+    letter-spacing: -1.2px; color: #14130f;
+    margin: 22px 0 0;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+
+  .hero-sub {
+    margin: 18px auto 0; max-width: 540px;
+    font-size: 16px; line-height: 1.55; color: #5e584f;
+  }
+
+  .btn-cta {
+    display: inline-block; margin-top: 28px;
+    background: var(--accent); color: #fff;
+    border-radius: var(--r-pill); padding: 15px 34px;
+    font-size: 15px; font-weight: 600; text-decoration: none;
+    box-shadow: 0 8px 22px rgba(80,70,245,.28);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 13px 30px rgba(80,70,245,.34); }
+
+  .hero-proof {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 10px; margin-top: 28px;
+  }
+  .proof {
+    background: rgba(255,255,255,.78);
+    border-radius: var(--r-pill); padding: 9px 18px;
+    font-size: 13px; color: #4d473f;
+  }
+  .proof b { color: #14130f; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  /* ── Bandeau defilant des meilleures affaires ── */
+  .marquee {
+    position: relative; z-index: 2;
+    margin-top: 40px; padding-bottom: 46px; overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+            mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+  }
+  /* Duree calee sur la longueur de piste : les cartes font 440px, donc la
+     piste est ~2x plus longue qu'avant et il faut ~2x plus de temps pour
+     conserver la meme vitesse apparente. */
+  .marquee-track {
+    display: flex; gap: 20px; width: max-content;
+    animation: marquee-slide 125s linear infinite;
+  }
+  .marquee:hover .marquee-track,
+  .marquee:focus-within .marquee-track { animation-play-state: paused; }
+  @keyframes marquee-slide { to { transform: translateX(-50%); } }
+
+  /* Lien, pas bouton : la carte navigue vers la page payante, donc le clic
+     milieu et « ouvrir dans un nouvel onglet » doivent marcher.
+     Grand format : la photo est inseree dans une carte blanche, comme sur
+     la reference, et la ville se lit de loin. */
+  .deal {
+    display: block;
+    width: 440px; flex-shrink: 0;
+    background: #fff; border: none; padding: 10px;
+    border-radius: 22px; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(20,19,15,.10);
+    cursor: pointer; text-align: left; font: inherit; color: inherit;
+    text-decoration: none;
+    transition: transform .18s, box-shadow .18s;
+  }
+  .deal:hover, .deal:focus-visible {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 30px rgba(20,19,15,.16);
+  }
+  .deal-img {
+    position: relative; height: 268px;
+    border-radius: 16px; overflow: hidden;
+    background: var(--border);
+  }
+  .deal-img img {
+    width: 100%; height: 100%; object-fit: cover;
+    transform: scaleX(-1);
+    -webkit-user-drag: none; user-select: none;
+  }
+  .deal-img .no-img {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; color: var(--muted);
+  }
+  /* Pilule de prix : fond vert foret et vert clair du logo. Un seul prix,
+     le loyer mensuel -- ni prix barre ni comparaison entre durees. */
+  .deal-price {
+    position: absolute; top: 14px; right: 14px;
+    display: inline-flex; align-items: baseline; gap: 5px;
+    background: var(--forest);
+    border-radius: var(--r-pill); padding: 8px 20px;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 4px 14px rgba(0,0,0,.26);
+  }
+  .deal-price b { color: var(--brand-lime); font-size: 27px; font-weight: 800; letter-spacing: -.5px; }
+  .deal-price small { color: var(--brand-lime); font-size: 13px; font-weight: 600; opacity: .75; }
+  .deal-body { padding: 16px 10px 8px; }
+  .deal-route {
+    font-size: 27px; font-weight: 700; line-height: 1.15;
+    letter-spacing: -.6px; color: var(--accent);
+  }
+  .deal-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 768px) {
+    .pillnav { padding-left: 16px; }
+    .pillnav-links { display: none; }
+    .hero-inner { padding-top: 40px; }
+    .plane, .cloud-3, .cloud-4 { display: none; }
+    .deal { width: 290px; }
+    .deal-img { height: 190px; }
+    .deal-price b { font-size: 21px; }
+    .deal-route { font-size: 21px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track, .plane { animation: none; }
+    .btn-cta:hover, .deal:hover { transform: none; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     COMMENT CA MARCHE — trois cartes-tickets empilees et legerement
+     inclinees, filet pointille et encoches, puis un panneau photo + CTA.
+     La photo vient d'une vraie annonce de la base.
+     ══════════════════════════════════════════════════════════════════ */
+
+  .how { background: var(--bg); padding: 74px 24px 86px; }
+  .how-title {
+    font-family: var(--display);
+    font-size: clamp(28px, 4.4vw, 46px);
+    font-weight: 700; letter-spacing: -1px;
+    text-align: center; color: #14130f;
+    margin: 0 0 54px;
+  }
+  .how-grid {
+    max-width: 1040px; margin: 0 auto;
+    display: grid; grid-template-columns: 1.05fr .95fr;
+    gap: 54px; align-items: start;
+  }
+
+  .how-steps { list-style: none; margin: 0; padding: 0; }
+  .how-step {
+    position: relative;
+    display: flex; align-items: center; gap: 14px;
+    border-radius: 18px; padding: 26px 30px 26px 18px;
+    box-shadow: 0 8px 22px rgba(20,19,15,.09);
+  }
+  /* Empilement : chaque carte mord sur la precedente et penche un peu. */
+  .how-step-1 { background: #b9e9f4; z-index: 3; transform: rotate(-1.1deg); margin-left: 0;    }
+  .how-step-2 { background: #c7ef6c; z-index: 2; transform: rotate(.7deg);   margin: -12px 0 0 20px; }
+  .how-step-3 {
+    background: var(--forest); color: #eaf5e0; z-index: 1;
+    transform: rotate(-.6deg); margin: -12px 0 0 8px;
+  }
+
+  .how-num {
+    font-family: var(--display);
+    font-size: 32px; font-weight: 700;
+    flex-shrink: 0; width: 48px; text-align: center;
+  }
+
+  /* Filet pointille + encoches rondes facon ticket */
+  .how-body { position: relative; padding-left: 24px; flex: 1; }
+  .how-body::before {
+    content: ""; position: absolute; left: 0; top: -26px; bottom: -26px;
+    border-left: 2px dotted rgba(20,19,15,.30);
+  }
+  .how-step-3 .how-body::before { border-left-color: rgba(234,245,224,.42); }
+  .how-step::before, .how-step::after {
+    content: ""; position: absolute; left: 86px;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: var(--bg); transform: translateX(-50%);
+  }
+  .how-step::before { top: -8px; }
+  .how-step::after  { bottom: -8px; }
+
+  .how-body h3 {
+    font-size: 16px; font-weight: 700; margin: 0 0 7px;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .how-body p { margin: 0; font-size: 14px; line-height: 1.5; opacity: .85; }
+
+  /* Panneau de droite */
+  .how-aside {
+    background: #fff; border-radius: var(--r-card);
+    padding: 14px 14px 24px;
+    box-shadow: 0 10px 30px rgba(20,19,15,.08);
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+  }
+  .how-photo {
+    position: relative; width: 100%; aspect-ratio: 4 / 3.6;
+    border-radius: 14px; overflow: hidden; background: var(--border);
+  }
+  .how-photo img {
+    width: 100%; height: 100%; object-fit: cover;
+    transform: scaleX(-1);
+    -webkit-user-drag: none; user-select: none;
+  }
+  .how-caption {
+    position: absolute; left: 12px; bottom: 12px;
+    background: rgba(255,255,255,.93);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    border-radius: var(--r-pill); padding: 7px 15px;
+    font-size: 12px; font-weight: 600; color: #14130f;
+    font-variant-numeric: tabular-nums;
+  }
+  .how-cta { margin-top: 0; }
+
+  @media (max-width: 900px) {
+    .how { padding: 56px 20px 64px; }
+    .how-grid { grid-template-columns: 1fr; gap: 40px; }
+    .how-step-2 { margin-left: 14px; }
+    .how-step-3 { margin-left: 6px; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     MUR D'ANNONCES — trois pistes pleine largeur qui defilent en sens
+     alterne (gauche / droite / gauche). Chaque piste contient sa liste
+     en double : l'animation parcourt exactement la moitie de la piste,
+     donc la seconde copie prend la place de la premiere sans saut.
+     ══════════════════════════════════════════════════════════════════ */
+
+  .wall { background: var(--bg); padding: 72px 0 88px; overflow: hidden; }
+  .wall-title {
+    font-family: var(--display);
+    font-size: clamp(28px, 4.4vw, 46px);
+    font-weight: 700; letter-spacing: -1px;
+    text-align: center; color: #14130f;
+    margin: 0 0 46px; padding: 0 24px;
+  }
+
+  .wall-rows { display: flex; flex-direction: column; gap: 18px; }
+  .wall-row {
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+            mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+  }
+  /* Durees recalculees apres l'agrandissement des vignettes : la piste passe
+     de ~4900 a ~7600px, il faut donc ~1,56x plus de temps pour conserver les
+     memes 31 et 28 px/s qu'avant. */
+  .wall-track { display: flex; gap: 18px; width: max-content; }
+  .wall-track-left  { animation: wall-left  122s linear infinite; }
+  .wall-track-right { animation: wall-right 138s linear infinite; }
+  @keyframes wall-left  { from { transform: translateX(0);    } to { transform: translateX(-50%); } }
+  @keyframes wall-right { from { transform: translateX(-50%); } to { transform: translateX(0);    } }
+  .wall-row:hover .wall-track,
+  .wall-row:focus-within .wall-track { animation-play-state: paused; }
+
+  /* Lien, comme .deal ci-dessus. */
+  .wcard {
+    display: block;
+    position: relative; flex-shrink: 0;
+    width: 300px; height: 340px;
+    border: none; padding: 0; font: inherit; color: inherit; text-align: left;
+    text-decoration: none;
+    border-radius: 18px; overflow: hidden;
+    background: var(--border); cursor: pointer;
+    transition: transform .18s;
+  }
+  .wcard:hover, .wcard:focus-visible { transform: translateY(-4px); }
+  .wcard img {
+    width: 100%; height: 100%; object-fit: cover;
+    transform: scaleX(-1);
+    -webkit-user-drag: none; user-select: none;
+  }
+  /* Voile sombre : rend le texte lisible quelle que soit la photo. */
+  .wcard::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to top,
+      rgba(0,0,0,.88) 0%, rgba(0,0,0,.55) 34%, rgba(0,0,0,0) 64%);
+  }
+  /* Meme pilule que .deal-price, en plus compact. */
+  .wcard-price {
+    position: absolute; top: 12px; right: 12px; z-index: 2;
+    display: inline-flex; align-items: baseline; gap: 4px;
+    background: var(--forest);
+    border-radius: var(--r-pill); padding: 7px 16px;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 3px 12px rgba(0,0,0,.30);
+  }
+  .wcard-price b { color: var(--brand-lime); font-size: 20px; font-weight: 800; letter-spacing: -.4px; }
+  .wcard-price small { color: var(--brand-lime); font-size: 11px; font-weight: 600; opacity: .75; }
+  .wcard-body {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+    padding: 16px 18px 18px; color: #fff;
+  }
+  .wcard-loc { font-size: 19px; font-weight: 700; line-height: 1.2; letter-spacing: -.3px; }
+  .wcard-name {
+    font-size: 11px; line-height: 1.35; opacity: .86; margin-top: 3px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .wcard-terms { display: flex; gap: 6px; margin-top: 11px; }
+  .wcard-term {
+    background: rgba(255,255,255,.24);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    border-radius: var(--r-pill); padding: 4px 11px;
+    font-size: 11px; font-weight: 700; letter-spacing: .03em;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     QUESTIONS FREQUENTES — accordeons <details>/<summary> natifs, comme
+     sur la reference. Aucun JavaScript : l'ouverture, le clavier et
+     l'annonce aux lecteurs d'ecran sont geres par le navigateur.
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* La navbar fixe recouvrirait le titre quand on saute ici depuis le
+     pied de page : on decale la cible d'ancre de sa hauteur. */
+  .faq { background: var(--bg); padding: 8px 24px 96px; scroll-margin-top: 92px; }
+  .faq-inner { max-width: 620px; margin: 0 auto; }
+  .faq-title {
+    font-family: var(--display);
+    font-size: clamp(28px, 4.4vw, 46px);
+    font-weight: 700; letter-spacing: -1px;
+    text-align: center; color: #14130f;
+    margin: 0 0 40px;
+  }
+  .faq-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .faq-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .faq-card summary {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 18px 22px; cursor: pointer;
+    font-size: 16px; font-weight: 600; color: #14130f;
+    list-style: none;
+  }
+  /* Retire le triangle par defaut, remplace par le chevron */
+  .faq-card summary::-webkit-details-marker { display: none; }
+  .faq-card summary::marker { content: ""; }
+  .faq-card summary:hover { color: var(--accent); }
+  .faq-card summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 16px; }
+
+  .faq-chevron {
+    flex-shrink: 0; width: 18px; height: 18px;
+    color: var(--accent); transition: transform .2s;
+  }
+  .faq-card[open] .faq-chevron { transform: rotate(180deg); }
+
+  .faq-answer {
+    padding: 0 22px 20px;
+    font-size: 15px; line-height: 1.62; color: #5e584f;
+  }
+  .faq-answer p { margin: 0; }
+  .faq-answer p + p { margin-top: 10px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .faq-chevron { transition: none; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     APPEL FINAL — deux halos pastel (vert a gauche, lavande a droite)
+     poses sur le creme, et un gros titre indigo. Les halos sont des
+     cercles flous en pseudo-elements : aucune image.
+     ══════════════════════════════════════════════════════════════════ */
+
+  .cta-final {
+    position: relative; overflow: hidden;
+    background: var(--bg);
+    padding: 104px 24px 116px;
+    text-align: center;
+  }
+  .cta-final::before, .cta-final::after {
+    content: ""; position: absolute; top: 50%;
+    width: 540px; height: 540px; border-radius: 50%;
+    transform: translateY(-50%);
+    filter: blur(80px); opacity: .5; pointer-events: none;
+  }
+  .cta-final::before { left: -190px; background: var(--sky-1); }
+  .cta-final::after  { right: -190px; background: var(--sky-2); }
+
+  .cta-inner { position: relative; z-index: 1; max-width: 780px; margin: 0 auto; }
+  .cta-headline {
+    font-family: var(--display);
+    font-size: clamp(32px, 5.8vw, 60px);
+    font-weight: 700; line-height: 1.1; letter-spacing: -1.4px;
+    color: var(--accent); margin: 0;
+  }
+  .cta-headline b { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cta-sub {
+    font-size: clamp(19px, 2.5vw, 26px); font-weight: 700;
+    color: #14130f; margin: 28px 0 0;
+  }
+  .cta-note { font-size: 16px; line-height: 1.55; color: #5e584f; margin: 12px 0 0; }
+  .cta-final .btn-cta { margin-top: 30px; }
+
+  /* ══════════════════════════════════════════════════════════════════
+     PIED DE PAGE
+     ══════════════════════════════════════════════════════════════════ */
+
+  .site-footer {
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 30px 24px 34px;
+  }
+  .footer-links {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 12px 28px; margin-bottom: 16px;
+  }
+  .footer-links a {
+    color: #5e584f; text-decoration: none;
+    font-size: 14px; font-weight: 500;
+    transition: color .15s;
+  }
+  .footer-links a:hover { color: var(--accent); }
+  .footer-legal {
+    text-align: center; font-size: 13px; color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 768px) {
+    .cta-final { padding: 70px 20px 78px; }
+    .cta-final::before, .cta-final::after { width: 340px; height: 340px; }
+    .footer-links { gap: 10px 20px; }
+  }
+
+  @media (max-width: 768px) {
+    .faq { padding-bottom: 68px; }
+    .faq-card summary { font-size: 15px; padding: 16px 18px; }
+    .faq-answer { padding: 0 18px 18px; }
+
+    .wall { padding: 54px 0 64px; }
+    .wcard { width: 225px; height: 255px; }
+    .wcard-price b { font-size: 16px; }
+    .wcard-loc { font-size: 15px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wall-track { animation: none; }
+    .wcard:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Navbar fixe : hors du hero, qui a overflow:hidden et la retiendrait. -->
+<nav class="pillnav" aria-label="Navigation principale">
+  <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
+  <div class="pillnav-links">
+    <a href="/">Annonces</a>
+    <a href="carte-thailande.html">Carte</a>
+    <a href="premium.html">Premium</a>
+    <a href="vip.html">VIP</a>
+  </div>
+  <a class="pillnav-cta" href="payant.html">Version Payante</a>
+</nav>
+
+<!-- ══ HERO ═══════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="cloud cloud-1"></div>
+  <div class="cloud cloud-2"></div>
+  <div class="cloud cloud-3"></div>
+  <div class="cloud cloud-4"></div>
+  <div class="plane" aria-hidden="true">✈️</div>
+
+  <div class="hero-inner">
+    <span class="hero-badge">
+      <i aria-hidden="true"></i>
+      <span><b id="hero-tracked">—</b> logements suivis en Thaïlande</span>
+    </span>
+
+    <h1>Louez au mois en Thaïlande,<br>sans <em>passer par une agence</em></h1>
+
+    <p class="hero-sub">
+      On relit chaque jour les annonces de RentHub et on vous signale les
+      nouveautés, les baisses de prix et les contrats courte durée.
+    </p>
+
+    <a class="btn-cta" href="/">Voir les annonces</a>
+
+    <div class="hero-proof">
+      <div class="proof"><b id="hero-1m">—</b> contrats 1&nbsp;mois</div>
+      <div class="proof"><b id="hero-3m">—</b> à 3&nbsp;mois</div>
+      <div class="proof"><b id="hero-6m">—</b> à 6&nbsp;mois</div>
+      <div class="proof"><b id="hero-new">—</b> nouvelles sur 24&nbsp;h</div>
+    </div>
+  </div>
+
+  <!-- Meilleures affaires du moment, alimente depuis /listings -->
+  <div class="marquee" aria-label="Meilleures affaires du moment">
+    <div class="marquee-track" id="deals-track"></div>
+  </div>
+</section>
+
+<!-- ══ COMMENT ÇA MARCHE ══════════════════════════════════════════ -->
+<section class="how">
+  <h2 class="how-title">Comment ça marche</h2>
+
+  <div class="how-grid">
+    <ol class="how-steps">
+      <li class="how-step how-step-1">
+        <span class="how-num" aria-hidden="true">1.</span>
+        <div class="how-body">
+          <h3><span aria-hidden="true">🔍</span> Dites-nous ce que vous cherchez</h3>
+          <p>
+            Ville, quartier, budget, durée du contrat&nbsp;: les filtres
+            tiennent en trois clics.
+          </p>
+        </div>
+      </li>
+
+      <li class="how-step how-step-2">
+        <span class="how-num" aria-hidden="true">2.</span>
+        <div class="how-body">
+          <h3><span aria-hidden="true">🔄</span> On relit RentHub chaque jour</h3>
+          <p>
+            Chaque annonce est rescannée et comparée à la veille&nbsp;:
+            nouveautés, baisses de prix et retraits sont repérés pour vous.
+          </p>
+        </div>
+      </li>
+
+      <li class="how-step how-step-3">
+        <span class="how-num" aria-hidden="true">3.</span>
+        <div class="how-body">
+          <h3><span aria-hidden="true">🔑</span> Vous décidez sur pièces</h3>
+          <p>
+            Prix 1, 3 et 6&nbsp;mois côte à côte, équipements, photos et
+            contact direct du propriétaire.
+          </p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="how-aside">
+      <!-- Photo tiree d'une vraie annonce, remplie par renderHowPhoto() -->
+      <div class="how-photo" id="how-photo"></div>
+      <a class="btn-cta how-cta" href="/">Voir les annonces</a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ MUR D'ANNONCES ═════════════════════════════════════════════ -->
+<!-- Trois pistes en sens alterne, remplies par renderWall(). -->
+<section class="wall">
+  <h2 class="wall-title">Ce qui est disponible en ce moment</h2>
+
+  <div class="wall-rows">
+    <div class="wall-row"><div class="wall-track wall-track-left"  id="wall-1"></div></div>
+    <div class="wall-row"><div class="wall-track wall-track-right" id="wall-2"></div></div>
+    <div class="wall-row"><div class="wall-track wall-track-left"  id="wall-3"></div></div>
+  </div>
+</section>
+
+<!-- ══ QUESTIONS FRÉQUENTES ═══════════════════════════════════════ -->
+<section class="faq" id="faq">
+  <div class="faq-inner">
+    <h2 class="faq-title">Questions fréquentes</h2>
+
+    <div class="faq-list">
+      <details class="faq-card">
+        <summary>
+          Êtes-vous une agence immobilière&nbsp;?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="faq-answer">
+          <p>
+            Non. ThaiMonth suit les annonces déjà publiées sur RentHub, les
+            remet en forme et vous met en relation. La location se conclut
+            ensuite directement avec le propriétaire ou notre partenaire sur
+            place&nbsp;: nous ne détenons aucun bien et ne percevons pas de
+            commission sur le loyer.
+          </p>
+        </div>
+      </details>
+
+      <details class="faq-card">
+        <summary>
+          D&rsquo;où viennent les annonces&nbsp;?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="faq-answer">
+          <p>
+            Du site renthub.in.th, que nous relisons régulièrement. Chaque
+            passage compare l&rsquo;état actuel de chaque annonce à sa version
+            précédente, ce qui permet de repérer les nouveautés, les
+            changements de prix et les logements retirés.
+          </p>
+        </div>
+      </details>
+
+      <details class="faq-card">
+        <summary>
+          Les prix affichés ici sont-ils exacts&nbsp;?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="faq-answer">
+          <p>
+            Les loyers sont fixés en bahts par les propriétaires. Les montants
+            en euros de cette page sont <strong>indicatifs</strong>&nbsp;: ils
+            sont convertis à taux fixe, et arrondis à la dizaine au-delà de
+            150&nbsp;€.
+          </p>
+          <p>
+            Le montant exact, dans sa devise d&rsquo;origine, vous est
+            communiqué avec la fiche complète du logement.
+          </p>
+        </div>
+      </details>
+
+      <details class="faq-card">
+        <summary>
+          Que signifient 1, 3 et 6&nbsp;mois&nbsp;?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="faq-answer">
+          <p>
+            C&rsquo;est la durée d&rsquo;engagement proposée par le
+            propriétaire. Un logement peut n&rsquo;accepter que des séjours
+            longs, ou au contraire accepter le mois par mois — c&rsquo;est
+            justement ce que nous filtrons.
+          </p>
+          <p>
+            Le loyer mensuel baisse en général quand on s&rsquo;engage plus
+            longtemps.
+          </p>
+        </div>
+      </details>
+
+      <details class="faq-card">
+        <summary>
+          Comment repérez-vous les baisses de prix&nbsp;?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="faq-answer">
+          <p>
+            Chaque annonce garde un historique. Quand le loyer change d&rsquo;un
+            passage à l&rsquo;autre, l&rsquo;écart y est enregistré — c&rsquo;est
+            ce qui alimente le compteur de nouveautés des dernières 24&nbsp;heures
+            affiché en haut de page.
+          </p>
+        </div>
+      </details>
+
+      <details class="faq-card">
+        <summary>
+          Combien ça coûte&nbsp;?
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="faq-answer">
+          <p>
+            Une première sélection est gratuite et sans engagement&nbsp;: un
+            logement, sa présentation détaillée et la mise en relation.
+          </p>
+          <p>
+            Au-delà, l&rsquo;offre Recherche (19&nbsp;€, paiement unique) porte
+            la sélection à cinq logements avec un comparatif, et
+            l&rsquo;offre Premium (39&nbsp;€) lève la limite et ajoute un suivi
+            personnalisé pendant quatorze jours.
+          </p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ══ APPEL FINAL ════════════════════════════════════════════════ -->
+<section class="cta-final">
+  <div class="cta-inner">
+    <h2 class="cta-headline">
+      <b id="cta-count">—</b> logements suivis<br>partout en Thaïlande
+    </h2>
+    <p class="cta-sub">Commencez votre recherche.</p>
+    <p class="cta-note">
+      La première sélection est gratuite et sans engagement&nbsp;: un logement,
+      sa présentation détaillée et la mise en relation.
+    </p>
+    <a class="btn-cta" href="/payant.html">Commencer gratuitement</a>
+  </div>
+</section>
+
+<!-- ══ PIED DE PAGE ═══════════════════════════════════════════════ -->
+<footer class="site-footer">
+  <nav class="footer-links" aria-label="Liens de bas de page">
+    <a href="/">Annonces</a>
+    <a href="carte-thailande.html">Carte</a>
+    <a href="payant.html">Tarifs</a>
+    <a href="premium.html">Premium</a>
+    <a href="vip.html">VIP</a>
+    <a href="#faq">Questions fréquentes</a>
+  </nav>
+  <p class="footer-legal">
+    © <span id="footer-year">2026</span> ThaiMonth. Tous droits réservés.
+  </p>
+</footer>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-body" role="dialog" aria-modal="true" aria-label="Détail de l'annonce" tabindex="-1"></div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox-overlay" id="lightbox-overlay" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Fermer">✕</button>
+  <button class="lightbox-nav lightbox-prev" id="lightbox-prev" onclick="navigateLightbox(-1)" aria-label="Photo précédente">‹</button>
+  <button class="lightbox-nav lightbox-next" id="lightbox-next" onclick="navigateLightbox(1)" aria-label="Photo suivante">›</button>
+  <div class="lightbox-content">
+    <img id="lightbox-img" src="" alt="" draggable="false" oncontextmenu="return false">
+  </div>
+</div>
+
+<script>
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+
+const LINE_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#06C755"/><path fill="#fff" d="M12 5.5c-4.14 0-7.5 2.73-7.5 6.1 0 3.02 2.66 5.55 6.26 6.03.24.05.58.16.66.37.08.19.05.49.03.68l-.11.65c-.03.19-.15.75.65.41.8-.34 4.33-2.55 5.9-4.36 1.09-1.19 1.61-2.41 1.61-3.78 0-3.37-3.36-6.1-7.5-6.1Z"/></svg>`;
+const WHATSAPP_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#25D366"/><path fill="#fff" d="M12 5.3a6.7 6.7 0 0 0-5.72 10.18l-.78 2.85 2.92-.77A6.7 6.7 0 1 0 12 5.3Zm0 12.2a5.47 5.47 0 0 1-2.79-.76l-.2-.12-2.07.54.55-2.02-.13-.21a5.5 5.5 0 1 1 4.64 2.57Zm3.02-4.12c-.16-.08-.97-.48-1.12-.53-.15-.06-.26-.08-.37.08-.11.16-.42.53-.52.64-.1.11-.19.12-.36.04-.16-.08-.68-.25-1.3-.8-.48-.43-.8-.96-.9-1.12-.09-.16-.01-.25.07-.33.08-.07.16-.19.24-.28.08-.1.11-.16.16-.27.05-.11.03-.2-.01-.28-.05-.08-.37-.9-.51-1.23-.13-.32-.27-.28-.37-.28h-.31c-.11 0-.28.04-.42.2-.15.16-.55.54-.55 1.32s.57 1.53.65 1.64c.08.11 1.12 1.71 2.72 2.4.38.16.68.26.91.33.38.12.73.1 1-.06.31-.18.97-.4 1.1-.78.14-.39.14-.72.1-.79-.04-.07-.15-.11-.31-.19Z"/></svg>`;
+
+// Certaines fiches RentHub ont un WhatsApp qui n'est en fait qu'un indicatif
+// pays jamais complété par le loueur (ex: whatsapp="66", lien wa.me/66 casse
+// sur la page d'origine) : moins de 5 chiffres ne peut pas etre un numero
+// reel, donc pas la peine d'afficher la case Contact pour ca.
+function hasRealWhatsapp(raw) {
+  return !!raw && String(raw).replace(/\D/g, "").length >= 5;
+}
+
+// Affichage voulu: "(+66) 81 806 3131" — indicatif entre parenthèses, puis
+// le numéro thaï découpé 2-3-4 chiffres (format international standard des
+// mobiles thaïlandais). Les numéros hors format habituel (indicatif
+// étranger, longueur atypique) sont juste regroupés par 3 en repli.
+function formatWhatsapp(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  const cc = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  const groups = rest.length === 9
+    ? [rest.slice(0, 2), rest.slice(2, 5), rest.slice(5, 9)]
+    : (rest.match(/.{1,3}/g) || []);
+  return `(+${cc}) ${groups.join(" ")}`;
+}
+
+// Icônes pour les 28 catégories d'équipements — voir src/normalizers/amenities.py.
+const AMENITY_ICONS = {
+  "Air Conditioner": "❄️ Air Conditioner",
+  "Furnished": "🛋️ Furnished",
+  "Water Heater": "🚿 Water Heater",
+  "Fan": "🌀 Fan",
+  "Television": "📺 Television",
+  "Refrigerator": "🧊 Refrigerator",
+  "Sofa": "🪑 Sofa",
+  "Desk": "🖥️ Desk",
+  "Kitchen Stove": "🍳 Kitchen Stove",
+  "Phone": "☎️ Phone",
+  "In-room WIFI": "📶 WIFI",
+  "Cable TV": "📺 TV",
+  "Pets": "🐾 Pets",
+  "Smoking": "🚬 Smoking",
+  "Parking": "🅿️ Parking",
+  "Bicycle Parking": "🚲 Bicycle Parking",
+  "Lift": "🛗 Lift",
+  "Pool": "🏊 Pool",
+  "Fitness": "🏋️ Fitness",
+  "Security keycard": "🔑 Security keycard",
+  "Security finger print": "👆 Security finger print",
+  "CCTV": "📹 CCTV",
+  "Security": "🛡️ Security",
+  "Restaurant/Food Shop": "🍽️ Restaurant/Food Shop",
+  "Convenient Store": "🏪 Store",
+  "Laundry": "🧺 Laundry",
+  "Beauty Salon in Building": "💇 Beauty Salon in Building",
+  "EV Charger": "🔌 EV Charger",
+};
+
+let allData = [];
+let districtCoords = {};
+let addressCoords = {};
+
+// ── Init ────────────────────────────────────────────────────────────
+
+async function init() {
+  await Promise.all([loadStats(), loadListings(), loadDistrictCoords(), loadAddressCoords()]);
+}
+
+// Points GPS de repli par quartier (subdistrict/district/province),
+// pré-calculés hors-ligne via Nominatim — voir scripts/geocode_districts.py.
+// Sert de dernier recours quand ni l'annonce ni son adresse complète n'ont
+// de coordonnées, pour que le lien/carte Google Maps pointe toujours sur
+// un vrai marqueur plutôt qu'une recherche texte approximative.
+async function loadDistrictCoords() {
+  const candidates = ["district_coords.json", `${API}/static/district_coords.json`];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) { districtCoords = await r.json(); return; }
+    } catch (e) {}
+  }
+}
+
+// Points GPS par adresse complète (rue/route + quartier, quand RentHub la
+// publie) — voir scripts/geocode_addresses.py. Plus précis que le centre
+// de quartier: tombe près du bâtiment réel pour les annonces qui ont un
+// nom de rue, sinon équivalent au fallback quartier.
+async function loadAddressCoords() {
+  const candidates = ["address_coords.json", `${API}/static/address_coords.json`];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) { addressCoords = await r.json(); return; }
+    } catch (e) {}
+  }
+}
+
+
+
+// Pré-remplit les filtres depuis l'URL (ex: redirection depuis le
+// formulaire de payant.html vers les annonces correspondantes).
+
+
+// Regroupe les provinces à faible volume (<5 annonces) dans la province
+// voisine la plus proche de la même région, pour alléger le menu Ville.
+
+// Districts promus au rang de "ville" dans le menu, avec un nom plus
+// parlant (ex: le district administratif "Bang Lamung" correspond à la
+// zone touristique connue sous le nom de Pattaya).
+
+
+
+// Regroupe les villes/provinces canoniques (retournées par cityOf) en 5
+// grandes régions de Thaïlande, pour le filtre régional (bouton flottant).
+
+
+
+
+
+
+
+// Grandes villes mises en avant : correspond sur la province (ex: Bangkok,
+// Phuket) ou le district (ex: Pattaya, qui est un district de Chonburi).
+
+
+
+
+
+
+
+
+
+// Slider (échelle exponentielle : plus de précision sur les loyers bas)
+
+// Exposant choisi pour que le milieu du curseur (50%) corresponde à 10 000 ฿
+
+
+// En dessous de 100 ฿, aucun contrat réel n'existe à ce prix : on masque
+// le filtre "Contrat" plutôt que de laisser des cases à cocher inutiles.
+
+
+// Debounce texte
+
+// ── Rendu ────────────────────────────────────────────────────────────
+
+
+// ── Nom de ville affiche sur les cartes ───────────────────────────────
+// Les cartes de la vitrine ne portent que la ville. Le champ `city` est
+// presque toujours vide dans /listings, donc on retombe sur la province,
+// qui en Thailande fait office de nom de ville (Bangkok, Chiang Mai...).
+//
+// Exception : quelques districts sont la vraie destination connue, pas
+// leur province -- Bang Lamung se dit Pattaya, pas Chonburi. La table
+// vient de index.html, ou elle sert deja au menu "Ville".
+//
+// On n'importe volontairement PAS le PROVINCE_MERGE_MAP de index.html :
+// il regroupe des provinces pour le filtre (Songkhla y pointe sur Surat
+// Thani), ce qui afficherait une ville fausse sur une carte.
+
+const DISTRICT_AS_CITY = {
+  "Bang Lamung": "Pattaya",
+  "Ko Samui": "Ko Samui",
+  "Hua Hin": "Hua Hin",
+  "Ko Phangan": "Ko Phangan",
+};
+
+function cityLabel(l) {
+  const district = String(l.district || "").toLowerCase();
+  for (const [from, to] of Object.entries(DISTRICT_AS_CITY)) {
+    if (district.includes(from.toLowerCase())) return to;
+  }
+  return l.city || l.province || "";
+}
+
+// ── Prix en euros ─────────────────────────────────────────────────────
+// Taux fige en dur : les montants en euros derivent donc avec le change
+// reel. C'est aussi ce qui justifie l'arrondi -- au-dela de 150 EUR,
+// afficher l'euro pres donnerait une precision que ce taux n'a pas. En
+// dessous, on garde l'euro pres : l'ecart compte pour les petits budgets.
+
+const TAUX_THB_EUR = 38.28;
+const SEUIL_ARRONDI_EUR = 150;
+
+function eurLabel(n) {
+  const brut = n / TAUX_THB_EUR;
+  const arrondi = brut > SEUIL_ARRONDI_EUR
+    ? Math.round(brut / 10) * 10
+    : Math.round(brut);
+  return arrondi.toLocaleString("fr-FR");
+}
+
+// Les cartes n'affichent qu'un seul prix : le loyer mensuel, sans prix
+// barre ni comparaison entre durees d'engagement. Les tarifs 3 et 6 mois
+// existent dans les donnees mais ne servent ici qu'aux badges du mur.
+
+// ── Hero : pastilles de statistiques ──────────────────────────────────
+
+async function loadStats() {
+  try {
+    const s = await fetch(`${API}/stats`).then(r => r.json());
+    setHeroStat("hero-tracked", s.total_active);
+    setHeroStat("hero-1m", s.monthly_contract_count);
+    setHeroStat("hero-3m", s.three_month_contract_count);
+    setHeroStat("hero-6m", s.six_month_contract_count);
+    setHeroStat("cta-count", s.total_active);
+  } catch(e) {}
+}
+
+// Annee du copyright calculee au chargement : ecrite en dur, elle serait
+// fausse au 1er janvier suivant.
+(function () {
+  const el = document.getElementById("footer-year");
+  if (el) el.textContent = new Date().getFullYear();
+})();
+
+async function loadListings() {
+  try {
+    const limit = 500;
+    let offset = 0;
+    allData = [];
+
+    // Charge toutes les pages de l'API afin de ne perdre aucune annonce.
+    while (true) {
+      const r = await fetch(`${API}/listings?limit=${limit}&offset=${offset}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const batch = await r.json();
+      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
+
+      allData.push(...batch);
+
+      // Une page plus courte que "limit" signifie qu'il n'y a plus de résultats.
+      if (batch.length < limit) break;
+
+      offset += limit;
+    }
+
+    _updateNew24hCount();
+    renderDeals();
+  } catch(e) {
+    // Vitrine : aucune zone de résultats où afficher l'erreur. Les pastilles
+    // du hero gardent leurs tirets et les bandeaux restent vides.
+    console.error(e);
+  }
+}
+
+function _updateNew24hCount() {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const count = allData.filter(l => {
+    if (l.status === "removed") return false;
+    return new Date(l.first_seen_at || 0).getTime() >= cutoff;
+  }).length;
+  setHeroStat("hero-new", count);
+}
+
+function setHeroStat(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = Number(value || 0).toLocaleString("fr-FR");
+}
+
+// ── Hero : bandeau defilant des meilleures affaires ───────────────────
+// On retient les annonces les moins cheres qui ont une photo ET un prix
+// mensuel exploitable. contractNum() applique deja le garde-fou
+// MIN_VALID_PRICE sur les fourchettes aberrantes du scraping, donc on ne
+// re-filtre rien ici.
+
+const DEALS_COUNT = 14;
+
+function renderDeals() {
+  const track = document.getElementById("deals-track");
+  if (!track) return;
+
+  const deals = allData
+    .filter(l => l.status !== "removed"
+              && l.images && l.images.length
+              && contractNum(l.contract_monthly_raw) !== null)
+    .sort((a, b) => contractNum(a.contract_monthly_raw) - contractNum(b.contract_monthly_raw))
+    .slice(0, DEALS_COUNT);
+
+  if (!deals.length) { track.innerHTML = ""; return; }
+
+  // La liste est doublee : l'animation translate de -50%, donc la seconde
+  // moitie prend exactement la place de la premiere et la boucle est nette.
+  track.innerHTML = deals.concat(deals).map(dealHTML).join("");
+
+  renderHowPhoto();
+  renderWall();
+}
+
+// ── Mur d'annonces : trois pistes en sens alterne ─────────────────────
+// Les annonces sont reparties en round-robin plutot que par tranches :
+// allData arrive groupe par province, et decouper en trois blocs aurait
+// donne une ligne entiere de Bangkok puis une ligne entiere d'ailleurs.
+
+const WALL_ROWS = 3;
+const WALL_PER_ROW = 12;
+
+function renderWall() {
+  const rows = [
+    document.getElementById("wall-1"),
+    document.getElementById("wall-2"),
+    document.getElementById("wall-3"),
+  ];
+  if (rows.some(r => !r)) return;
+
+  const pool = allData.filter(l => l.status !== "removed"
+                                && l.images && l.images.length
+                                && contractNum(l.contract_monthly_raw) !== null);
+  if (!pool.length) { rows.forEach(r => { r.innerHTML = ""; }); return; }
+
+  const buckets = [[], [], []];
+  pool.slice(0, WALL_ROWS * WALL_PER_ROW)
+      .forEach((l, i) => buckets[i % WALL_ROWS].push(l));
+
+  buckets.forEach((items, i) => {
+    // Liste doublee : voir le commentaire de renderDeals().
+    rows[i].innerHTML = items.length
+      ? items.concat(items).map(wallCardHTML).join("")
+      : "";
+  });
+}
+
+function wallCardHTML(l) {
+  const n = contractNum(l.contract_monthly_raw);
+  const c3 = contractNum(l.contract_3_month_raw);
+  const c6 = contractNum(l.contract_6_month_raw);
+  const ville = cityLabel(l);
+
+  // Memes regles d'affichage que les badges des cartes de la grille.
+  const terms = [];
+  if (l.has_monthly_contract === "true" && n !== null) terms.push("1 MOIS");
+  if (c3 !== null) terms.push("3 MOIS");
+  if (c6 !== null) terms.push("6 MOIS");
+
+  return `<a class="wcard" href="/payant.html"
+    aria-label="Voir cette annonce à ${esc(ville)} sur la version payante">
+    <img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false"
+         oncontextmenu="return false" onerror="this.remove()">
+    <span class="wcard-price"><b>${eurLabel(n)} \u20ac</b><small>/mois</small></span>
+    <span class="wcard-body">
+      <span class="wcard-loc">${esc(ville)}</span>
+      ${terms.length ? `<span class="wcard-terms">${
+        terms.map(t => `<span class="wcard-term">${t}</span>`).join("")
+      }</span>` : ""}
+    </span>
+  </a>`;
+}
+
+// ── "Comment ca marche" : illustration tiree d'une vraie annonce ──────
+// /listings ne renvoie qu'une vignette par annonce (les galeries completes
+// n'arrivent que sur /listings/{id}), donc on ne peut pas trier sur le
+// nombre de photos : on prend la premiere annonce active qui a une image
+// et un prix mensuel exploitable. Choix stable d'un chargement a l'autre.
+
+function renderHowPhoto() {
+  const box = document.getElementById("how-photo");
+  if (!box) return;
+
+  const l = allData.find(x => x.status !== "removed"
+                           && x.images && x.images.length
+                           && contractNum(x.contract_monthly_raw) !== null);
+  if (!l) { box.innerHTML = ""; return; }
+
+  const n = contractNum(l.contract_monthly_raw);
+  const ville = cityLabel(l);
+
+  box.innerHTML = `
+    <img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false"
+         oncontextmenu="return false" onerror="this.remove()">
+    <span class="how-caption">${esc(ville)} \u00b7 ${eurLabel(n)} \u20ac/mois</span>`;
+}
+
+function dealHTML(l) {
+  const n = contractNum(l.contract_monthly_raw);
+  const ville = cityLabel(l);
+  const img = l.images && l.images.length
+    ? `<img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.querySelector('.deal-fallback')?.removeAttribute('hidden');this.remove()">`
+    : "";
+
+  return `<a class="deal" href="/payant.html"
+    aria-label="Voir cette annonce à ${esc(ville)} sur la version payante">
+    <div class="deal-img">
+      ${img}
+      <div class="deal-fallback no-img" ${img ? "hidden" : ""}>\u{1F3E0}</div>
+      <span class="deal-price"><b>${eurLabel(n)} \u20ac</b><small>/mois</small></span>
+    </div>
+    <div class="deal-body">
+      <div class="deal-route">${esc(ville)}</div>
+    </div>
+  </a>`;
+}
+
+
+
+// Retourne le nombre brut (pour le calcul), ou null si absent/invalide.
+// Certains prix sont une fourchette ("85 - 5,200 THB/month") où le bas est
+// une aberration de scraping : en dessous de MIN_VALID_PRICE, on garde le
+// haut de la fourchette ; si lui aussi est invalide, on abandonne le contrat.
+const MIN_VALID_PRICE = 1000;
+function contractNum(raw) {
+  if (!raw || raw.trim() === "-" || raw.trim() === "") return null;
+  const nums = (raw.match(/[\d,]+/g) || [])
+    .map(s => parseInt(s.replace(/,/g, ""), 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  if (!nums.length) return null;
+
+  const low = nums[0];
+  const high = nums[nums.length - 1];
+  if (low >= MIN_VALID_PRICE) return low;
+  if (high >= MIN_VALID_PRICE) return high;
+  return null;
+}
+
+function contractVal(raw) {
+  const n = contractNum(raw);
+  if (n === null) return "—";
+
+  const eur = n / 38.28;
+
+  const thb = n.toLocaleString("fr-FR");
+  const euros = eur.toLocaleString("fr-FR", {
+    maximumFractionDigits: 0
+  });
+
+  return `${thb} ฿<br>${euros} €`;
+}
+
+function esc(s) {
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// ── Pagination ────────────────────────────────────────────────────────
+
+
+
+// ── Modal ────────────────────────────────────────────────────────────
+
+let lastFocusedEl = null;
+let currentGalleryImages = [];
+let currentLightboxIndex = 0;
+
+async function openModal(id) {
+  lastFocusedEl = document.activeElement;
+  document.getElementById("overlay").classList.add("open");
+  const body = document.getElementById("modal-body");
+  body.innerHTML = `<div class="state-box"><div class="spinner"></div></div>`;
+  body.focus();
+  try {
+    const l = await fetch(`${API}/listings/${id}`).then(r => r.json());
+    body.innerHTML = modalHTML(l);
+    currentGalleryImages = l.images || [];
+  } catch(e) {
+    body.innerHTML = `<div class="state-box">Erreur de chargement</div>`;
+  }
+}
+
+function openLightbox(i) {
+  currentLightboxIndex = i;
+  document.getElementById("lightbox-img").src = currentGalleryImages[i] || "";
+  document.getElementById("lightbox-overlay").classList.add("open");
+  const showNav = currentGalleryImages.length > 1;
+  document.getElementById("lightbox-prev").disabled = !showNav;
+  document.getElementById("lightbox-next").disabled = !showNav;
+}
+function closeLightbox(e) {
+  if (e && e.target !== document.getElementById("lightbox-overlay")) return;
+  document.getElementById("lightbox-overlay").classList.remove("open");
+  document.getElementById("lightbox-img").src = "";
+}
+function navigateLightbox(delta) {
+  if (!currentGalleryImages.length) return;
+  currentLightboxIndex = (currentLightboxIndex + delta + currentGalleryImages.length) % currentGalleryImages.length;
+  document.getElementById("lightbox-img").src = currentGalleryImages[currentLightboxIndex];
+}
+
+let lightboxTouchStartX = null;
+document.getElementById("lightbox-overlay").addEventListener("touchstart", e => {
+  lightboxTouchStartX = e.changedTouches[0].clientX;
+}, { passive: true });
+document.getElementById("lightbox-overlay").addEventListener("touchend", e => {
+  if (lightboxTouchStartX === null) return;
+  const delta = e.changedTouches[0].clientX - lightboxTouchStartX;
+  lightboxTouchStartX = null;
+  if (Math.abs(delta) < 40) return;
+  navigateLightbox(delta > 0 ? -1 : 1);
+}, { passive: true });
+
+function trapModalFocus(e) {
+  if (e.key !== "Tab") return;
+  const overlay = document.getElementById("overlay");
+  if (!overlay.classList.contains("open")) return;
+  const focusable = document.getElementById("modal-body")
+    .querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault(); last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault(); first.focus();
+  }
+}
+document.addEventListener("keydown", trapModalFocus);
+
+// Point GPS de l'adresse complète (rue/route + quartier) de l'annonce,
+// si présent dans le cache chargé par loadAddressCoords(). Plus précis que
+// districtPoint() quand RentHub publie un nom de rue.
+function addressPoint(l) {
+  if (!l.address) return null;
+  return addressCoords[norm(l.address).toLowerCase()] || null;
+}
+
+// Point GPS pré-calculé du quartier (subdistrict/district/province) de
+// l'annonce, si présent dans le cache chargé par loadDistrictCoords().
+function districtPoint(l) {
+  const k = [l.subdistrict, l.district, l.province].map(v => norm(v).toLowerCase()).join("|");
+  return districtCoords[k] || null;
+}
+
+// Le point GPS le plus précis disponible pour l'annonce, du plus précis
+// au moins précis: ses propres coordonnées scrapées, son adresse complète
+// géocodée, puis le centre de son quartier. `precise: true` signifie
+// "assez précis pour zoomer près du bâtiment" (coordonnées propres ou
+// adresse avec rue/route), par opposition à un simple centre de quartier.
+function mapPoint(l) {
+  if (l.latitude != null && l.longitude != null) {
+    return { lat: l.latitude, lon: l.longitude, precise: true };
+  }
+  const ap = addressPoint(l);
+  if (ap) return { ...ap, precise: /\d/.test(l.address || "") };
+  const dp = districtPoint(l);
+  if (dp) return { ...dp, precise: false };
+  return null;
+}
+
+function mapQuery(l) {
+  const pt = mapPoint(l);
+  if (pt) return `${pt.lat},${pt.lon}`;
+  const q = l.address || [l.subdistrict, l.district, l.province].filter(Boolean).join(", ");
+  return q ? `${q}, Thailand` : null;
+}
+
+function googleMapsUrl(l) {
+  const q = mapQuery(l);
+  if (!q) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+// Embed public sans clé API (endpoint historique `output=embed`) — pas
+// aussi précis/officiel que l'API Maps Embed payante, mais suffisant
+// pour situer un point sur une carte interactive intégrée à la modal.
+function googleMapsEmbedUrl(l) {
+  const q = mapQuery(l);
+  if (!q) return null;
+  const pt = mapPoint(l);
+  const zoom = pt && pt.precise ? 17 : (pt ? 15 : 13);
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=${zoom}&output=embed`;
+}
+
+const humanizeRoomType = s => s ? s.toLowerCase().replace(/_/g, " ").replace(/^./, c => c.toUpperCase()) : null;
+
+function roomTypeLabel(rt) {
+  const roomType = humanizeRoomType(rt.room_type);
+  return [
+    rt.name && rt.name !== "Unknown" ? rt.name : null,
+    roomType && roomType !== rt.name ? roomType : null,
+    rt.size_sqm ? `${rt.size_sqm} m²` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+function contractRooms(l) {
+  const rooms = (l.room_types || []).filter(rt =>
+    rt.monthly_min_thb != null || rt.monthly_max_thb != null ||
+    rt.contract_1_month_thb != null || rt.contract_3_month_thb != null || rt.contract_6_month_thb != null);
+  const available = rooms.filter(rt => !rt.status || rt.status.trim().toLowerCase() === "available");
+  return available.length ? available : rooms;
+}
+
+function contractsSectionTitle(l) {
+  const useRooms = contractRooms(l);
+  if (useRooms.length === 1) {
+    const label = roomTypeLabel(useRooms[0]);
+    if (label) return label;
+  }
+  return "Room Type";
+}
+
+function renderContractsHTML(l) {
+  const fmt = n => n == null ? null : `${n.toLocaleString("en-US")} THB/month`;
+  const useRooms = contractRooms(l);
+
+  if (useRooms.length) {
+    return useRooms.map(rt => {
+      const label = roomTypeLabel(rt);
+      const terms = [
+        ["1 mois", fmt(rt.contract_1_month_thb)],
+        ["3 mois", fmt(rt.contract_3_month_thb)],
+        ["6 mois", fmt(rt.contract_6_month_thb)],
+      ].filter(([, v]) => v != null);
+      if (!terms.length) return "";
+      const termsHTML = terms.map(([term, v]) => `
+        <div class="mc">
+          <div class="mc-label">${term}</div>
+          <div class="mc-val">${esc(v)}</div>
+        </div>`).join("");
+      if (useRooms.length <= 1) return termsHTML;
+      return `
+        <div class="mc-room-group">
+          ${label ? `<div class="mc-room-label">${esc(label)}</div>` : ""}
+          <div class="mc-room-terms">${termsHTML}</div>
+        </div>`;
+    }).join("");
+  }
+
+  const contracts = [["1 mois", l.contract_monthly_raw], ["3 mois", l.contract_3_month_raw], ["6 mois", l.contract_6_month_raw]]
+    .filter(([, raw]) => raw && raw !== "-");
+  if (!contracts.length) return `<div class="mc"><div class="mc-val na">Aucun contrat disponible</div></div>`;
+  return contracts.map(([label, raw]) => `
+        <div class="mc">
+          <div class="mc-label">${label}</div>
+          <div class="mc-val">${esc(raw)}</div>
+        </div>`).join("");
+}
+
+function modalHTML(l) {
+  const locs = [l.subdistrict, l.district, l.province].filter(Boolean);
+  const amenities = l.amenities || [];
+  const mapsUrl = googleMapsUrl(l);
+  const embedUrl = googleMapsEmbedUrl(l);
+  const pt = mapPoint(l);
+  const precisionLabel = !pt ? ""
+    : pt.precise ? "📌 Position précise"
+    : "🔵 Position approximative (centre du quartier — RentHub ne publie pas l'adresse exacte)";
+
+  return `
+    <div class="modal-top">
+      <button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
+    </div>
+    ${l.images && l.images.length ? `
+    <div class="modal-gallery">
+      ${l.images.map((u, i) => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onclick="openLightbox(${i})" onerror="this.parentElement.style.display='none'"></div>`).join("")}
+    </div>` : ""}
+    <div class="modal-tags">
+      ${locs.map(loc => `<span class="tag">${esc(loc)}</span>`).join("")}
+      ${l.has_monthly_contract === "true" && contractVal(l.contract_monthly_raw) !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}
+      ${contractVal(l.contract_3_month_raw) !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}
+      ${contractVal(l.contract_6_month_raw) !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}
+    </div>
+    ${mapsUrl ? `
+    <div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+        <a class="modal-link" style="padding:6px 12px;font-size:11px" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Google Maps ↗</a>
+      </div>
+      ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
+      ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
+    </div>` : ""}
+    <div>
+      <div class="section-head">${esc(contractsSectionTitle(l))}</div>
+      <div class="modal-contracts">
+        ${renderContractsHTML(l)}
+      </div>
+    </div>
+    ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `
+    <div>
+      <div class="section-head">Description</div>
+      <div class="modal-contracts">
+        <div class="mc"><div class="mc-label">Deposit</div><div class="mc-val${l.deposit ? "" : " na"}">${l.deposit ? esc(l.deposit) : "Non communiqué"}</div></div>
+        ${l.electric_price && l.electric_price !== "Please contact" ? `<div class="mc"><div class="mc-label">Electric price</div><div class="mc-val">${esc(l.electric_price)}</div></div>` : ""}
+        <div class="mc"><div class="mc-label">Air Conditioner</div><div class="mc-val${amenities.includes("Air Conditioner") ? "" : " na"}">${amenities.includes("Air Conditioner") ? "YES" : "NO"}</div></div>
+      </div>
+    </div>` : ""}
+    ${amenities.length ? `
+    <div>
+      <div class="section-head">Équipements</div>
+      <div class="modal-amenities">${amenities.map(a=>`<span class="amenity">${esc(AMENITY_ICONS[a] || a)}</span>`).join("")}</div>
+    </div>` : ""}
+    ${(()=>{const hasWa=hasRealWhatsapp(l.whatsapp);return l.phone||l.line_id||hasWa ? `
+    <div>
+      <div class="section-head">Contact</div>
+      <div class="modal-contracts">
+        ${l.phone?`<div class="mc"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></div>`:""}
+        ${l.line_id?(()=>{
+          // line_verified===false : identifiant deja confirme inexistant par
+          // scripts/verify_line_ids.py -- on route vers line.me/ti/p/~<id>
+          // pour eviter un 404 (voir Listing.line_verified). Sinon (valide ou
+          // jamais verifie), page.line.me/<id> reste le lien qui marche vraiment.
+          const slug = encodeURIComponent(String(l.line_id).replace(/^@/,""));
+          const href = l.line_verified===false ? `https://line.me/ti/p/~${slug}` : `https://page.line.me/${slug}`;
+          return `<a class="mc mc-line" href="${href}" target="_blank" rel="noopener"><div class="mc-label">LINE</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${LINE_ICON_SVG} ${esc(l.line_id)}</div></a>`;
+        })():""}
+        ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
+      </div>
+    </div>` : "";})()}
+    <a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>
+  `;
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById("overlay")) return;
+  document.getElementById("overlay").classList.remove("open");
+  if (lastFocusedEl) { lastFocusedEl.focus(); lastFocusedEl = null; }
+}
+document.addEventListener("keydown", e => {
+  const lightboxOpen = document.getElementById("lightbox-overlay").classList.contains("open");
+  if (lightboxOpen && e.key === "ArrowLeft") { navigateLightbox(-1); return; }
+  if (lightboxOpen && e.key === "ArrowRight") { navigateLightbox(1); return; }
+  if (e.key !== "Escape") return;
+  if (lightboxOpen) { closeLightbox(); return; }
+  closeModal();
+});
+
+
+init();
+</script>
+</body>
+</html>

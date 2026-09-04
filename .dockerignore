@@ -1,0 +1,31 @@
+# Environnement local
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.vscode/
+.claude/
+.impeccable/
+
+# Secrets: passes au conteneur par env_file/environment, jamais copies
+.env
+
+# Base locale et sauvegardes (~200 Mo) — le conteneur utilise Postgres
+renthub.db
+renthub.db.bak-*
+*.sqlite
+*.sqlite3
+
+# Journaux et sorties
+*.log
+exports/
+
+# Caches locaux
+.scrapling/
+.whatsapp-profile/
+
+# Rien de tout ceci n'est utile a l'execution
+.git/
+.gitignore
+tests/
+CLAUDE.md

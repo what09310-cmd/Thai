@@ -1,22 +1,27 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Script pour vérifier les villes uniques dans la base RentHub
 et afficher les statistiques par province
 """
 
 import sqlite3
+import sys
 from pathlib import Path
 
-try:
-    from tabulate import tabulate
-except ImportError:
-    print("Installation de tabulate...")
-    import subprocess
-    subprocess.check_call(["pip", "install", "tabulate"])
-    from tabulate import tabulate
+from tabulate import tabulate
 
-# Chemin vers la base SQLite
-DB_PATH = Path("renthub.db")
+sys.path.insert(0, str(Path(__file__).parent))
+from src.config import settings
+
+# Chemin vers la base SQLite (dérivé de DATABASE_URL, pas d'un nom en dur:
+# sinon ce script continue silencieusement à lire un fichier obsolète dès
+# que DATABASE_URL pointe ailleurs, par ex. le Postgres de docker-compose).
+if not settings.database_url.startswith("sqlite"):
+    print(f"❌ Erreur : DATABASE_URL n'est pas SQLite ({settings.database_url!r}), "
+          "ce script ne lit qu'une base SQLite locale.")
+    exit(1)
+
+DB_PATH = Path(settings.database_url.split("///", 1)[1])
 
 if not DB_PATH.exists():
     print(f"❌ Erreur : {DB_PATH} n'existe pas !")

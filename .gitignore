@@ -25,6 +25,9 @@ renthub_listings.json
 # Base de fingerprints adaptatifs Scrapling (locale, regeneree au besoin)
 .scrapling/
 
+# Session WhatsApp Web liee (scripts/verify_whatsapp_numbers.py) — locale, ne pas versionner
+.whatsapp-profile/
+
 # Caches locaux transitoires (session/verrou/analyse) — pas de valeur en historique
 .claude/scheduled_tasks.lock
 .impeccable/hook.cache.json

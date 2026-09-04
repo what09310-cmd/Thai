@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 import json
 import logging
+import itertools
 from typing import Optional
 from datetime import datetime
 from urllib.parse import unquote
@@ -21,6 +22,10 @@ from src.normalizers.amenities import derive_amenities
 log = logging.getLogger(__name__)
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 CDN_BASE = "https://bcdn.renthub.in.th"
+
+# Nombre maximum d'occurrences "lat"/"lng" appariees dans le repli regex de
+# _extract_coordinates. Au-dela, on paie un produit cartesien pour rien.
+_MAX_COORD_MATCHES = 200
 
 
 def parse_detail_page(html: str, url: str) -> Optional[ListingDetail]:
@@ -189,6 +194,51 @@ def _extract_amenities_from_icons(soup: Selector) -> Optional[list[str]]:
     return present
 
 
+def _extract_room_types_from_next_data(next_data: Optional[dict]) -> Optional[list[RoomTypeSchema]]:
+    """Room types depuis `listing.rooms` du JSON __NEXT_DATA__.
+
+    C'est la source qui alimente le tableau "Room Type" affiché sur la page
+    (rendu côté client depuis ce JSON, pas depuis un <table> HTML statique) :
+    nom réel de la chambre, taille, prix par durée de contrat et disponibilité
+    y sont exacts, contrairement au fallback texte ci-dessous qui ne peut
+    produire que des chambres nommées "Unknown" avec un prix approximatif.
+    """
+    try:
+        rooms = next_data["props"]["pageProps"]["listing"]["rooms"]
+    except (KeyError, TypeError):
+        return None
+    if not isinstance(rooms, list) or not rooms:
+        return None
+
+    result = []
+    for room in rooms:
+        if not isinstance(room, dict):
+            continue
+        short_term = (room.get("price") or {}).get("shortTerm") or {}
+        daily = (room.get("price") or {}).get("daily") or {}
+        monthly = (room.get("price") or {}).get("monthly") or {}
+        min_size = room.get("minSize")
+        max_size = room.get("maxSize")
+        sizes = [s for s in (min_size, max_size) if s is not None]
+        size_sqm = sum(sizes) / len(sizes) if sizes else None
+        availability = room.get("availability")
+        status = None if availability is None else ("Available" if availability else "Not Available")
+
+        result.append(RoomTypeSchema(
+            name=room.get("roomName") or "Unknown",
+            room_type=room.get("roomType"),
+            size_sqm=size_sqm,
+            monthly_min_thb=monthly.get("minPrice"),
+            monthly_max_thb=monthly.get("maxPrice"),
+            contract_1_month_thb=short_term.get("oneMonth"),
+            contract_3_month_thb=short_term.get("threeMonth"),
+            contract_6_month_thb=short_term.get("sixMonth"),
+            daily_thb=daily.get("minPrice"),
+            status=status,
+        ))
+    return result
+
+
 def _extract_room_types(soup: Selector) -> list[RoomTypeSchema]:
     """
     Extrait le tableau des types de chambre.
@@ -197,6 +247,10 @@ def _extract_room_types(soup: Selector) -> list[RoomTypeSchema]:
     Room Type | Size | Monthly Rental | Daily Rental | Short Contract | Status
     + sous-tableau: Contract 1 month / Contract 3 month / Contract 6 month
     """
+    from_next_data = _extract_room_types_from_next_data(_extract_next_data(soup))
+    if from_next_data is not None:
+        return from_next_data
+
     rooms = []
 
     # Chercher la section "Room Type"
@@ -340,6 +394,8 @@ def _dict_to_room_schema(d: dict) -> RoomTypeSchema:
         name=d.get("name", ""),
         room_type=d.get("room_type"),
         size_sqm=d.get("size_sqm"),
+        monthly_min_thb=d.get("monthly_min"),
+        monthly_max_thb=d.get("monthly_max"),
         contract_1_month_thb=d.get("contract_1_month"),
         contract_3_month_thb=d.get("contract_3_month"),
         contract_6_month_thb=d.get("contract_6_month"),
@@ -480,11 +536,27 @@ def _extract_contacts_from_next_data(
     return phone, line_id, whatsapp, email
 
 
+def _page_has_whatsapp_link(soup: Selector) -> bool:
+    """True si la page affiche vraiment un bouton/lien WhatsApp (wa.me).
+
+    `contactInformation[0].whatsApp` du JSON est souvent renseigné côté site
+    sans qu'aucun bouton WhatsApp ne soit pour autant affiché sur la page
+    (le champ semble parfois dupliqué depuis le téléphone par RentHub lui-
+    même) : sur un échantillon d'annonces actives, ~60% avaient ce champ
+    rempli sans le moindre lien wa.me sur la page. On ne retient donc le
+    champ que si RentHub l'affiche lui-même comme un contact WhatsApp.
+    """
+    return any("wa.me/" in a.attrib.get("href", "") for a in soup.css("a[href]"))
+
+
 def _extract_contacts(soup: Selector) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """Extrait phone, line_id, whatsapp, email."""
     from_next_data = _extract_contacts_from_next_data(_extract_next_data(soup))
     if from_next_data:
-        return from_next_data
+        phone, line_id, whatsapp, email = from_next_data
+        if whatsapp and not _page_has_whatsapp_link(soup):
+            whatsapp = None
+        return phone, line_id, whatsapp, email
 
     # Fallback : anciennes heuristiques texte/liens, pour les pages sans
     # __NEXT_DATA__ exploitable.
@@ -678,6 +750,7 @@ def _extract_coordinates(
     Extrait latitude/longitude depuis une page RentHub.
 
     Recherche dans :
+    0. __NEXT_DATA__ (`listing.location`), la source reelle du site
     1. JSON-LD
     2. attributs HTML
     3. JavaScript
@@ -698,6 +771,29 @@ def _extract_coordinates(
             pass
 
         return None
+
+    # =========================================================
+    # 0. __NEXT_DATA__ — la source, plutot que son reflet dans le HTML
+    # =========================================================
+    #
+    # C'est de `listing.location` que le site tire lui-meme le marqueur de
+    # la carte. Les etapes 1 a 5 ci-dessous balayent le HTML entier a coups
+    # d'expressions regulieres, dont un produit cartesien entre toutes les
+    # occurrences de "lat" et toutes celles de "lng": sur une page portant
+    # un gros __NEXT_DATA__, cela fait beaucoup de travail pour retrouver
+    # une valeur directement lisible ici. Elles restent en repli pour les
+    # pages sans ce JSON.
+
+    try:
+        location = _extract_next_data(soup)["props"]["pageProps"]["listing"]["location"]
+    except (KeyError, TypeError):
+        location = None
+
+    if isinstance(location, dict):
+        result = valid(location.get("lat"), location.get("lng"))
+        if result:
+            log.debug("Coordonnees trouvees dans __NEXT_DATA__: %s", result)
+            return result
 
     # =========================================================
     # 1. JSON-LD
@@ -861,12 +957,16 @@ def _extract_coordinates(
 
     for lat_pattern, lon_pattern in patterns:
 
+        # Plafond: ces motifs matchent chaque "lat"/"lng" du HTML, JSON
+        # embarque compris. Sans borne, le produit cartesien ci-dessous
+        # explose sur une page qui en contient des milliers, pour un gain
+        # nul — la bonne paire est toujours parmi les premieres.
         lat_matches = list(
-            re.finditer(lat_pattern, html, re.I)
+            itertools.islice(re.finditer(lat_pattern, html, re.I), _MAX_COORD_MATCHES)
         )
 
         lon_matches = list(
-            re.finditer(lon_pattern, html, re.I)
+            itertools.islice(re.finditer(lon_pattern, html, re.I), _MAX_COORD_MATCHES)
         )
 
         for lat_match in lat_matches:
@@ -935,14 +1035,14 @@ def _extract_coordinates(
         r'(-?\d+(?:\.\d+)?)',
         html,
         re.I
-    )
+    )[:_MAX_COORD_MATCHES]
 
     lon_values = re.findall(
         r'(?:longitude|lng|lon)\s*[:=]\s*["\']?'
         r'(-?\d+(?:\.\d+)?)',
         html,
         re.I
-    )
+    )[:_MAX_COORD_MATCHES]
 
     for lat in lat_values:
 

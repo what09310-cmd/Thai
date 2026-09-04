@@ -15,34 +15,40 @@
   ],
   "room_types": [
     {
-      "name": "Unknown",
-      "room_type": null,
-      "size_sqm": null,
+      "name": "STUDIO",
+      "room_type": "STUDIO",
+      "size_sqm": 23.0,
+      "monthly_min_thb": 4000,
+      "monthly_max_thb": 5400,
       "contract_1_month_thb": 5400,
       "contract_3_month_thb": 5400,
       "contract_6_month_thb": 4700,
       "daily_thb": null,
-      "status": null
+      "status": "Available"
     },
     {
-      "name": "Unknown",
-      "room_type": null,
-      "size_sqm": null,
+      "name": "STUDIO",
+      "room_type": "STUDIO",
+      "size_sqm": 26.0,
+      "monthly_min_thb": 4700,
+      "monthly_max_thb": 6100,
       "contract_1_month_thb": 6100,
       "contract_3_month_thb": 6100,
       "contract_6_month_thb": 5400,
       "daily_thb": null,
-      "status": null
+      "status": "Available"
     },
     {
-      "name": "Unknown",
-      "room_type": null,
-      "size_sqm": null,
+      "name": "STUDIO",
+      "room_type": "STUDIO",
+      "size_sqm": 30.0,
+      "monthly_min_thb": 5500,
+      "monthly_max_thb": 6900,
       "contract_1_month_thb": 6900,
       "contract_3_month_thb": 6900,
       "contract_6_month_thb": 6200,
       "daily_thb": null,
-      "status": null
+      "status": "Available"
     }
   ],
   "phone": "0650713013",

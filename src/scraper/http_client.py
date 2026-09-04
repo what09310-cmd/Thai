@@ -34,22 +34,40 @@ HEADERS = {
     "Accept-Encoding": "gzip, deflate",
 }
 
+# `time.monotonic` est global au processus: il traverse sans probleme
+# plusieurs boucles d'evenements successives, contrairement aux primitives
+# asyncio ci-dessous.
 _last_request_time: float = 0.0
+
+# Sémaphore et verrou sont liés à la boucle d'événements qui les utilise en
+# premier: réutilisés depuis une autre boucle (le scan appelle asyncio.run
+# une fois par phase), ils lèvent "is bound to a different event loop" dès
+# qu'il y a vraiment contention. Ils sont donc reconstruits au changement de
+# boucle. Tant que le scraping restait strictement séquentiel, la contention
+# n'arrivait jamais et le défaut passait inaperçu.
+_primitives_loop: Optional[asyncio.AbstractEventLoop] = None
 _semaphore: Optional[asyncio.Semaphore] = None
 _throttle_lock: Optional[asyncio.Lock] = None
 
 
-def _get_semaphore() -> asyncio.Semaphore:
-    global _semaphore
-    if _semaphore is None:
+def _reset_primitives_if_loop_changed() -> None:
+    global _primitives_loop, _semaphore, _throttle_lock
+    loop = asyncio.get_running_loop()
+    if _primitives_loop is not loop:
+        _primitives_loop = loop
         _semaphore = asyncio.Semaphore(settings.max_concurrent_requests)
+        _throttle_lock = asyncio.Lock()
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    _reset_primitives_if_loop_changed()
+    assert _semaphore is not None
     return _semaphore
 
 
 def _get_throttle_lock() -> asyncio.Lock:
-    global _throttle_lock
-    if _throttle_lock is None:
-        _throttle_lock = asyncio.Lock()
+    _reset_primitives_if_loop_changed()
+    assert _throttle_lock is not None
     return _throttle_lock
 
 
