@@ -19,7 +19,7 @@ import src.api.auth as auth_module
 from src.api.auth import SESSION_COOKIE_NAME, check_credentials, create_session_token
 from src.api.main import app, get_db
 from src.config import settings
-from src.database.models import Base, Listing
+from src.database.models import Base, Listing, ListingHistory, ListingImage
 from src.models.schemas import ListingFull
 from src.normalizers.amenities import derive_amenities
 from src.parser.detail_parser import (
@@ -803,3 +803,242 @@ async def test_page_count_does_not_assume_a_fixed_page_size():
     assert pages == 3
     assert len(listings) == 21
     assert duplicates == 0
+
+
+# ── Sécurité: contournement du gate /static ─────────────────────────
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/index.html/",     # normpath retire le slash, le test d'extension non
+        "/static/premium.html/",
+        "/static/vip.html/",
+        "/static/carte.html/",
+        "/static/index.HTML/",     # la casse ne doit pas non plus ouvrir la porte
+    ],
+)
+def test_static_gate_survives_path_normalisation(client, path):
+    """Une page protégée ne doit pas devenir publique par un suffixe.
+
+    `_is_public` testait l'extension sur le chemin brut, alors que
+    StaticFiles applique `os.path.normpath` ensuite: "index.html/" ne
+    finit pas par ".html", passait donc pour un asset public, et normpath
+    servait ensuite index.html. Un seul "/" ajouté suffisait à contourner
+    le login sur *toutes* les pages protégées.
+    """
+    resp = client.get(path, follow_redirects=False)
+    assert resp.status_code in (302, 307), f"{path} a été servi sans session"
+    assert resp.headers["location"] == "/login"
+
+
+def test_static_gate_is_deny_by_default(client):
+    """Tout ce qui n'est pas un asset connu reste derrière le login.
+
+    L'ancienne règle était une blocklist: seules les extensions .html/.htm
+    étaient gardées, donc n'importe quel .js, .json, .csv ou .bak déposé
+    dans frontend/ devenait lisible sans session, sans changement de code.
+    """
+    resp = client.get("/static/anything.js", follow_redirects=False)
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"] == "/login"
+
+
+def test_public_prefix_does_not_leak_lookalike_routes(client):
+    """`startswith("/listings")` rendait /listings-admin public d'avance."""
+    resp = client.get("/listings-admin", follow_redirects=False)
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"] == "/login"
+
+
+def test_static_assets_and_public_pages_still_work(client):
+    """Le durcissement ne doit pas casser ce qui était légitimement public."""
+    assert client.get("/static/logo.png").status_code == 200
+    assert client.get("/static/payant.html").status_code == 200
+    assert client.get("/static/district_coords.json").status_code == 200
+
+
+# ── Sécurité: bornes des paramètres publics ─────────────────────────
+
+def test_listings_offset_is_bounded(client):
+    """`/listings` est public: sans borne haute, offset permet d'itérer
+    tout le catalogue page par page."""
+    assert client.get("/listings?offset=999999999").status_code == 422
+
+
+def test_like_wildcards_do_not_leak_into_the_filter(client, session):
+    """`%` envoyé par un visiteur ne doit pas devenir un joker SQL.
+
+    ilike(f"%{province}%") sans échappement transforme ?province=% en
+    "tout le catalogue", et un motif long en balayage complet sur une
+    route publique."""
+    session.add(
+        Listing(slug="p1", name="P1", url="https://x/1", province="Bangkok", status="active")
+    )
+    session.commit()
+
+    assert client.get("/listings?province=%25").json() == []
+    assert len(client.get("/listings?province=Bangkok").json()) == 1
+
+
+def test_rental_request_rejects_oversized_fields(client):
+    """Les colonnes sont des VARCHAR(50): SQLite les accepte en silence,
+    Postgres lève une DataError non gérée (500)."""
+    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
+    ok = client.post(
+        "/rental-requests",
+        json={"city": "Bangkok", "duration": "1 mois", "budget": "10000"},
+    )
+    assert ok.status_code == 201
+
+    resp = client.post(
+        "/rental-requests",
+        json={"city": "x" * 500, "duration": "1 mois", "budget": "10000"},
+    )
+    assert resp.status_code == 422
+    client.cookies.clear()
+
+
+def test_logout_clears_the_session(client):
+    """Sans /logout, la seule révocation possible était la rotation du
+    mot de passe du site."""
+    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
+    assert client.get("/", follow_redirects=False).status_code == 200
+
+    out = client.post("/logout", follow_redirects=False)
+    assert out.status_code == 303
+    assert out.headers["location"] == "/login"
+
+    # C'est l'en-tete emis qui compte: le pot a cookies du client de test
+    # garde le cookie pose a la main (domaine vide) a cote de celui que la
+    # reponse supprime (domaine testserver), donc l'inspecter ne prouverait
+    # rien sur le comportement du serveur.
+    set_cookie = out.headers["set-cookie"]
+    assert set_cookie.startswith(f'{SESSION_COOKIE_NAME}=""')
+    assert "Max-Age=0" in set_cookie or "01 Jan 1970" in set_cookie
+
+    # Et sans cookie, la page protegee redirige bien vers le login.
+    client.cookies.clear()
+    assert client.get("/", follow_redirects=False).status_code in (302, 307)
+
+
+# ── Detection de changements: pistes d'audit ────────────────────────
+
+def _history_kinds(session, listing_id: int) -> set[str]:
+    return {
+        h.change_type
+        for h in session.query(ListingHistory).filter(
+            ListingHistory.listing_id == listing_id
+        )
+    }
+
+
+def test_a_price_change_does_not_hide_a_content_change(session):
+    """Prix ET contenu modifies au meme scan: les deux doivent etre traces.
+
+    La ligne UPDATED etait conditionnee a `not price_changed`, alors que
+    `content_hash` etait ecrase dans tous les cas. Le changement de contenu
+    disparaissait donc definitivement: au scan suivant le hash stocke est
+    deja le nouveau, plus rien ne le signale.
+    """
+    _, listing = upsert_listing(
+        session, _listing_full(name="Studio A", price_monthly_min=9000), NOW
+    )
+    session.commit()
+    listing_id = listing.id
+
+    later = NOW + timedelta(days=1)
+    upsert_listing(
+        session,
+        _listing_full(name="Studio A entierement renove", price_monthly_min=12000),
+        later,
+    )
+    session.commit()
+
+    kinds = _history_kinds(session, listing_id)
+    assert "PRICE_CHANGED" in kinds
+    assert "UPDATED" in kinds, "le changement de contenu a ete perdu"
+
+
+def test_an_unchanged_scan_still_writes_no_history(session):
+    """Garde-fou de l'invariant central: en levant la condition
+    `not price_changed`, on ne doit pas se mettre a ecrire des UPDATED
+    fantomes quand rien ne bouge."""
+    _, listing = upsert_listing(session, _listing_full(price_monthly_min=9000), NOW)
+    session.commit()
+    listing_id = listing.id
+    before = session.query(ListingHistory).filter(
+        ListingHistory.listing_id == listing_id
+    ).count()
+
+    upsert_listing(session, _listing_full(price_monthly_min=9000), NOW + timedelta(days=1))
+    session.commit()
+
+    after = session.query(ListingHistory).filter(
+        ListingHistory.listing_id == listing_id
+    ).count()
+    assert after == before
+
+
+def test_amenities_extraction_order_is_deterministic():
+    """L'ordre des equipements entre dans le content_hash via json.dumps.
+
+    Les deux sources sont ordonnees (ordre du DOM pour la grille d'icones,
+    ordre d'insertion du dict pour la derivation textuelle). Ce test verrouille
+    cette propriete: la rendre dependante d'un `set` ferait basculer le hash
+    d'un scan a l'autre sans qu'aucune donnee n'ait change, exactement le
+    genre d'UPDATED fantome que les invariants de scan combattent.
+    """
+    text = "Air conditioner, wifi, swimming pool, fitness, parking available"
+    runs = [derive_amenities(text) for _ in range(5)]
+    assert all(r == runs[0] for r in runs)
+    assert runs[0], "l'echantillon doit produire des equipements"
+
+
+# ── Fusion raw/detail ───────────────────────────────────────────────
+
+def test_raw_and_detail_schemas_stay_disjoint():
+    """`_merge_listing` fait `{**raw, **detail}`: le detail ECRASE le raw.
+
+    C'est sans consequence tant que les deux modeles n'ont aucun champ en
+    commun. Le jour ou l'un d'eux gagne un champ deja porte par l'autre --
+    `from_structured_list` en particulier, qui decide si une source a le
+    droit d'effacer les contrats -- une valeur par defaut du detail ecraserait
+    silencieusement la valeur scrapee, et l'invariant de scan tomberait sans
+    qu'aucun test ne bronche.
+    """
+    from src.models.schemas import ListingDetail, ListingRaw
+
+    common = set(ListingRaw.model_fields) & set(ListingDetail.model_fields)
+    assert common == set(), (
+        f"Champs communs a ListingRaw et ListingDetail: {sorted(common)}. "
+        "Revoir _merge_listing (scripts/run_scraper.py) avant d'ajouter ce champ."
+    )
+
+
+def test_excluded_image_never_becomes_the_thumbnail(client, session):
+    """Une image ecartee a la relecture ne doit jamais s'afficher.
+
+    _thumbnail_map ne filtrait `excluded` que dans la sous-requete calculant
+    la plus petite position. La jointure externe, elle, ne portait que sur
+    (listing_id, position): comme des positions dupliquees existent en base,
+    l'image exclue partageant cette position revenait dans le resultat et
+    pouvait l'emporter dans le dict final.
+    """
+    _, listing = upsert_listing(session, _listing_full(), NOW)
+    session.flush()
+
+    # Deux images en position 0 (doublon reel en base), la premiere ecartee.
+    session.add_all([
+        ListingImage(
+            listing_id=listing.id, image_url="https://cdn/exclue.jpg",
+            position=0, excluded=True,
+        ),
+        ListingImage(
+            listing_id=listing.id, image_url="https://cdn/bonne.jpg",
+            position=0, excluded=False,
+        ),
+    ])
+    session.commit()
+
+    payload = client.get("/listings").json()
+    assert payload[0]["images"] == ["https://cdn/bonne.jpg"]

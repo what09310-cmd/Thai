@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import posixpath
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
@@ -27,7 +28,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy import func, desc, distinct, inspect, text as sa_text
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -60,6 +61,10 @@ app = FastAPI(
 # etait un moyen simple de demander tout le catalogue sur une route publique.
 _MAX_SINCE_HOURS = 24 * 366
 
+# Meme raison que _MAX_SINCE_HOURS: sans plafond, `offset` est le moyen le
+# plus simple d'aspirer le catalogue depuis une route publique.
+_MAX_OFFSET = 100_000
+
 # Le frontend est servi par cette meme application: aucune page tierce n'a
 # besoin d'appeler l'API. allow_origins=["*"] n'ouvrait donc rien d'utile,
 # seulement la consommation de /listings depuis n'importe quel site.
@@ -78,6 +83,31 @@ if _ALLOWED_ORIGINS:
     )
 
 
+# Origines relevees dans frontend/: Leaflet et son plugin markercluster
+# (unpkg), les polices Google, l'iframe Google Maps des pages de detail, et
+# les images d'annonces (bcdn.renthub.in.th) + les tuiles OpenStreetMap.
+#
+# `script-src` porte 'unsafe-inline': chaque page embarque ~2000 lignes de JS
+# en ligne. Cette CSP ne contient donc PAS le XSS par script inline; ce
+# qu'elle apporte est ailleurs -- `connect-src 'self'` bloque l'exfiltration
+# vers un serveur tiers, `object-src 'none'` et `base-uri 'self'` ferment
+# deux vecteurs classiques, `frame-ancestors` empeche le clickjacking.
+# Passer aux nonces suppose d'extraire le JS des pages: voir la
+# deduplication du frontend, hors perimetre de cette passe.
+_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://unpkg.com",
+    "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: https:",
+    "frame-src https://www.google.com https://maps.google.com",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'self'",
+])
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """En-tetes de securite sur toute reponse.
 
@@ -85,22 +115,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     *integrent* des iframes Google Maps, qu'il ne faut surtout pas bloquer.
     Ce qu'on interdit, c'est que l'application soit elle-meme encadree par
     un site tiers (clickjacking sur les pages publiques).
+
+    Ce middleware est enregistre *apres* AuthMiddleware, donc en position
+    la plus externe: sans cela la RedirectResponse du gate d'auth sortait
+    sans aucun de ces en-tetes, puisqu'elle ne traverse pas call_next.
     """
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'self'")
+        response.headers.setdefault("Content-Security-Policy", _CSP)
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         return response
 
 
-app.add_middleware(SecurityHeadersMiddleware)
-
-
 PUBLIC_PATHS = {
     "/login",
+    "/logout",
     "/health",
     "/payant.html",
     "/stats",
@@ -112,6 +144,25 @@ PUBLIC_PATH_PREFIXES = (
 
 _STATIC_PREFIX = "/static/"
 
+# Seuls ces types de fichiers sont servis sans session sous /static.
+# Liste blanche et non liste noire: l'ancienne regle ne gardait que .html
+# et .htm, donc tout autre fichier depose dans frontend/ (un .js, un .json
+# de configuration, un .bak laisse par un editeur) devenait lisible par
+# n'importe qui sans le moindre changement de code.
+_PUBLIC_ASSET_SUFFIXES = (
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".json",
+)
+
+
+def _matches_public_prefix(path: str) -> bool:
+    """Prefixe public, sur des segments entiers.
+
+    `path.startswith("/listings")` faisait aussi passer /listings-admin ou
+    /listingsanything: la premiere route ainsi nommee serait nee sans
+    authentification, sans que personne ne s'en apercoive.
+    """
+    return any(path == p or path.startswith(p + "/") for p in PUBLIC_PATH_PREFIXES)
+
 
 def _is_public(path: str) -> bool:
     """Determine si un chemin est accessible sans cookie de session.
@@ -120,13 +171,24 @@ def _is_public(path: str) -> bool:
     passer librement que les assets (logo, JSON de coordonnees). Une page
     .html atteinte par ce biais suit la meme regle que sa route directe,
     sinon /static/index.html contourne purement et simplement le login.
+
+    Le chemin est normalise AVANT d'etre juge, parce que StaticFiles lui
+    applique `os.path.normpath` ensuite. Les deux etapes n'etaient pas
+    d'accord: "/static/index.html/" ne finit pas par ".html", passait donc
+    pour un asset public, puis normpath retirait le slash final et servait
+    index.html. Un seul caractere ajoute suffisait a contourner le login
+    sur toutes les pages protegees (variantes NTFS "index.html." et
+    "index.html%20" incluses, les points et espaces finaux etant ignores
+    a l'ouverture du fichier sous Windows).
     """
     if path.startswith(_STATIC_PREFIX):
-        name = path[len(_STATIC_PREFIX):]
-        if not name.lower().endswith((".html", ".htm")):
+        name = posixpath.normpath(path[len(_STATIC_PREFIX):]).rstrip(". ")
+        if not name or name.startswith(("/", "../")) or name in ("..", "."):
+            return False
+        if f"/{name}" in PUBLIC_PATHS:
             return True
-        return f"/{name}" in PUBLIC_PATHS
-    return path in PUBLIC_PATHS or path.startswith(PUBLIC_PATH_PREFIXES)
+        return name.lower().endswith(_PUBLIC_ASSET_SUFFIXES)
+    return path in PUBLIC_PATHS or _matches_public_prefix(path)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -140,6 +202,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(AuthMiddleware)
+# Ajoute en dernier => middleware le plus externe: ses en-tetes couvrent
+# aussi les redirections emises par AuthMiddleware.
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 _LOGIN_PAGE = """<!doctype html>
@@ -204,6 +269,26 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
         SESSION_COOKIE_NAME,
         create_session_token(),
         max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+    )
+    return response
+
+
+@app.post("/logout")
+def logout():
+    """Efface le cookie de session.
+
+    Le jeton ne porte ni identifiant de session ni nonce (src/api/auth.py):
+    il n'existe donc pas de revocation cote serveur, et la seule facon
+    d'invalider *tous* les jetons en circulation reste la rotation de
+    SITE_PASSWORD, qui entre dans la cle de signature. Effacer le cookie
+    couvre le cas courant: rendre la main sur un poste partage.
+    """
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
         httponly=True,
         samesite="lax",
         secure=settings.cookie_secure,
@@ -338,10 +423,13 @@ class ProvinceResponse(BaseModel):
 
 
 class RentalRequestCreate(BaseModel):
-    city: str
-    duration: str
-    budget: str
-    conditions: Optional[str] = None
+    # Bornes alignees sur les colonnes (models.py: String(50)). Sans elles,
+    # SQLite stocke silencieusement une valeur de plusieurs Mo tandis que
+    # Postgres leve une DataError non rattrapee, donc un 500.
+    city: str = Field(min_length=1, max_length=50)
+    duration: str = Field(min_length=1, max_length=50)
+    budget: str = Field(min_length=1, max_length=50)
+    conditions: Optional[str] = Field(None, max_length=2000)
 
 
 class RentalRequestResponse(BaseModel):
@@ -376,6 +464,17 @@ class StatsResponse(BaseModel):
 # publiques payant.html et /test).
 _CONTACT_FIELDS = ("phone", "line_id", "whatsapp", "email")
 
+# Colonnes de suivi interne: aucun interet pour un client, et elles
+# decrivent le fonctionnement du tracker (etat du hash, nombre de scans
+# manques, identifiants cote source). `/listings` etant public, elles
+# partaient a tout visiteur avec le reste de la ligne, `response_model`
+# valant `list[dict]` -- FastAPI ne filtre alors rien.
+_INTERNAL_FIELDS = (
+    "content_hash", "missing_scan_count", "source", "source_id", "slug",
+    "created_at", "updated_at", "last_scraped_at", "detail_scraped_at",
+    "last_seen_at",
+)
+
 
 def _listing_to_response(
     listing: Listing,
@@ -395,6 +494,8 @@ def _listing_to_response(
     if not include_contact:
         for field in _CONTACT_FIELDS:
             d[field] = None
+    for field in _INTERNAL_FIELDS:
+        d.pop(field, None)
     return d
 
 
@@ -424,6 +525,13 @@ def _thumbnail_map(db: SASession, listing_ids: list[int]) -> dict[int, str]:
     # existent en base (l'ancien calcul de position en produisait), et la
     # jointure rend alors deux lignes pour une meme annonce. Sans ordre
     # explicite, la vignette affichee changeait d'une requete a l'autre.
+    # Le filtre `excluded` doit etre rappele ici: la sous-requete choisit
+    # bien la plus petite position parmi les images non exclues, mais la
+    # jointure ne porte que sur (listing_id, position). Or des positions
+    # dupliquees existent en base (voir le commentaire ci-dessus), donc une
+    # image exclue partageant cette position etait ramenee elle aussi, et
+    # pouvait l'emporter dans le dict final -- exactement l'image qu'une
+    # relecture manuelle avait ecartee.
     rows = (
         db.query(ListingImage.listing_id, ListingImage.image_url)
         .join(
@@ -431,6 +539,7 @@ def _thumbnail_map(db: SASession, listing_ids: list[int]) -> dict[int, str]:
             (ListingImage.listing_id == first_position.c.listing_id)
             & (ListingImage.position == first_position.c.position),
         )
+        .filter(ListingImage.excluded.isnot(True))
         .order_by(desc(ListingImage.id))
         .all()
     )
@@ -452,11 +561,24 @@ def _listings_to_response(
     ]
 
 
+def _match_text(column, value):
+    """Egalite insensible a la casse, jokers SQL neutralises.
+
+    `ilike(f"%{value}%")` laissait `%` et `_` agir comme des jokers: sur une
+    route publique, `?province=%` rendait tout le catalogue et un motif long
+    forcait un balayage complet a chaque appel. Les valeurs stockees sont des
+    libelles exacts ("Bangkok", "Bang Lamung"), et le frontend n'envoie que
+    ceux-la: la correspondance exacte est donc aussi ce que veut l'appelant.
+    """
+    escaped = value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+    return column.ilike(escaped, escape="\\")
+
+
 def _apply_filters(query, province, district, price_min, price_max, monthly, status):
     if province:
-        query = query.filter(Listing.province.ilike(f"%{province}%"))
+        query = query.filter(_match_text(Listing.province, province))
     if district:
-        query = query.filter(Listing.district.ilike(f"%{district}%"))
+        query = query.filter(_match_text(Listing.district, district))
     if price_min is not None:
         query = query.filter(
             (Listing.price_monthly_max >= price_min) |
@@ -480,15 +602,17 @@ def _apply_filters(query, province, district, price_min, price_max, monthly, sta
 @app.get("/listings", response_model=list[dict])
 def get_listings(
     request: Request,
-    province: Optional[str] = Query(None),
-    district: Optional[str] = Query(None),
-    price_min: Optional[int] = Query(None),
-    price_max: Optional[int] = Query(None),
+    province: Optional[str] = Query(None, max_length=100),
+    district: Optional[str] = Query(None, max_length=100),
+    price_min: Optional[int] = Query(None, ge=0, le=100_000_000),
+    price_max: Optional[int] = Query(None, ge=0, le=100_000_000),
     monthly: Optional[bool] = Query(None),
-    status: Optional[str] = Query(None, description="active | removed"),
+    status: Optional[str] = Query(None, description="active | removed", max_length=20),
     updated_since: Optional[date] = Query(None),
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    # Borne haute: `/listings` est public, et un offset non borne permet
+    # d'iterer tout le catalogue page par page.
+    offset: int = Query(0, ge=0, le=_MAX_OFFSET),
     db: SASession = Depends(get_db),
 ):
     query = db.query(Listing)
@@ -548,9 +672,13 @@ def get_updated_listings(
         .distinct()
         .scalar_subquery()
     )
+    # Un `limit` sans `order_by` laisse le moteur choisir *quelles* lignes
+    # il rend: deux appels identiques pouvaient renvoyer des sous-ensembles
+    # differents. Meme tri que /listings, departage par id compris.
     listings = (
         db.query(Listing)
         .filter(Listing.id.in_(listing_ids))
+        .order_by(desc(Listing.source_updated_at), desc(Listing.id))
         .limit(limit)
         .all()
     )
@@ -575,9 +703,13 @@ def get_price_changed_listings(
         .distinct()
         .scalar_subquery()
     )
+    # Un `limit` sans `order_by` laisse le moteur choisir *quelles* lignes
+    # il rend: deux appels identiques pouvaient renvoyer des sous-ensembles
+    # differents. Meme tri que /listings, departage par id compris.
     listings = (
         db.query(Listing)
         .filter(Listing.id.in_(listing_ids))
+        .order_by(desc(Listing.source_updated_at), desc(Listing.id))
         .limit(limit)
         .all()
     )
@@ -587,10 +719,10 @@ def get_price_changed_listings(
 @app.get("/listings/monthly", response_model=list[dict])
 def get_monthly_listings(
     request: Request,
-    province: Optional[str] = Query(None),
-    price_max: Optional[int] = Query(None),
+    province: Optional[str] = Query(None, max_length=100),
+    price_max: Optional[int] = Query(None, ge=0, le=100_000_000),
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=_MAX_OFFSET),
     db: SASession = Depends(get_db),
 ):
     """Annonces avec Contract monthly disponible."""
@@ -602,7 +734,7 @@ def get_monthly_listings(
         )
     )
     if province:
-        query = query.filter(Listing.province.ilike(f"%{province}%"))
+        query = query.filter(_match_text(Listing.province, province))
     if price_max:
         query = query.filter(
             Listing.contract_monthly_min <= price_max
@@ -692,9 +824,13 @@ def get_stats(db: SASession = Depends(get_db)):
         Listing.status == "active",
     ).scalar()
 
-    last_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    # `today_start` (minuit local, calcule plus haut) et non 24 h glissantes:
+    # les trois compteurs "du jour" de cette reponse doivent mesurer la meme
+    # fenetre. new_today utilisait `now - 24h` pendant que updated_today et
+    # price_changed_today partaient de minuit, si bien que les trois chiffres
+    # presentes cote a cote ne parlaient pas du meme intervalle.
     new_today = db.query(func.count(Listing.id)).filter(
-        Listing.first_seen_at >= last_24h
+        Listing.first_seen_at >= today_start
     ).scalar()
 
     # count(distinct listing_id) et non count(distinct id): `id` est la clé

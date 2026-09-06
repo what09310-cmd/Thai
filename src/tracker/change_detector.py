@@ -178,8 +178,18 @@ def upsert_listing(
         change_types.append("PRICE_CHANGED")
 
     # 2. Changement de contenu
+    #
+    # Indépendant de `price_changed`: la condition portait auparavant un
+    # `and not price_changed`, alors que `content_hash` était écrasé dans
+    # tous les cas juste en dessous. Un scan qui changeait à la fois le prix
+    # et le contenu (titre, description, équipements) n'écrivait donc aucune
+    # ligne UPDATED, et le scan suivant comparait au hash déjà mis à jour:
+    # le changement de contenu était perdu pour de bon.
+    #
+    # L'invariant « un scan sans changement n'écrit pas d'historique » tient
+    # toujours: la condition reste l'inégalité des hash.
     content_hash = compute_content_hash(db_listing)
-    if db_listing.content_hash != content_hash and not price_changed:
+    if db_listing.content_hash != content_hash:
         change_types.append("UPDATED")
         _add_history(
             session, db_listing, "UPDATED", now,

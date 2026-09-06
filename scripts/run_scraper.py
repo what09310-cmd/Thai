@@ -463,13 +463,25 @@ def _run_scan(
 
 
 def _merge_listing(listing_raw, detail) -> ListingFull:
-    """Fusionne ListingRaw et ListingDetail en ListingFull."""
+    """Fusionne ListingRaw et ListingDetail en ListingFull.
+
+    Attention: `{**raw, **detail}` fait *primer* le détail, y compris
+    lorsqu'il porte une valeur par défaut. Le résultat n'est correct que
+    parce que les deux modèles n'ont aujourd'hui aucun champ en commun
+    (voir tests/test_bugfix_regression.py::test_raw_and_detail_schemas_stay_disjoint,
+    qui verrouille cette propriété).
+
+    Ajouter à ListingDetail un champ déjà porté par ListingRaw suffirait à
+    casser silencieusement les invariants de scan: `from_structured_list`
+    retomberait à False sur toute annonce dont la page détail a été lue, et
+    apply_contract_fields cesserait de reconnaître les sources autoritaires.
+    Un tel ajout impose de fusionner champ par champ.
+    """
     from src.models.schemas import ListingFull
 
     raw_data = listing_raw.model_dump()
     detail_data = detail.model_dump() if detail else {}
 
-    # Les champs du détail enrichissent le raw (sans écraser)
     merged = {**raw_data, **detail_data}
     return ListingFull(**merged)
 
