@@ -207,13 +207,25 @@ async def scrape_location_listings(
 
 async def scrape_all_location_listings(
     max_pages_per_location: Optional[int] = None,
+    provinces: Optional[list[str]] = None,
 ) -> AsyncIterator[ListingRaw]:
     """
-    Parcourt toutes les provinces thaïlandaises via
-    /en/short-term-rental/<slug> et scrape celles qui ont du contenu
-    (les autres sont simplement ignorées).
+    Parcourt les provinces thaïlandaises via /en/short-term-rental/<slug>
+    et scrape celles qui ont du contenu (les autres sont simplement
+    ignorées).
+
+    `provinces`, si fourni, restreint le parcours à ces slugs (ex:
+    ["bangkok"]) au lieu des 77 provinces de THAI_PROVINCES — pour les
+    scans fréquents où seul le plus gros marché doit être revu à chaque
+    fois, la couverture complète restant réservée à un scan périodique
+    sans ce filtre.
     """
-    for name, slug in THAI_PROVINCES.items():
+    items = THAI_PROVINCES.items()
+    if provinces is not None:
+        wanted = set(provinces)
+        items = [(name, slug) for name, slug in items if slug in wanted]
+
+    for name, slug in items:
         url = f"{BASE_URL}/en/short-term-rental/{slug}"
         count = 0
         async for listing in scrape_location_listings(url, max_pages=max_pages_per_location):

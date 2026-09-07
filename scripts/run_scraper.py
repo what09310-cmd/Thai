@@ -131,6 +131,14 @@ def setup_logging(verbose: bool = False) -> None:
          "(ex: ko-samui). Ces annonces sont gardées si elles ont un Short-Term Rental "
          "Contract (1, 3 ou 6 mois) — voir has_short_term_contract.",
 )
+@click.option(
+    "--locations-provinces", type=str, default=None,
+    help="Avec --include-locations, restreint le scraping par lieu à ces provinces "
+         "(slugs séparés par des virgules, ex: bangkok,phuket) au lieu des 77. "
+         "Pour un scan fréquent qui ne revoit que les plus gros marchés — le scan "
+         "complet (sans cette option) reste nécessaire pour ne perdre aucune annonce "
+         "1/3/6 mois des petites provinces.",
+)
 def main(
     one_month_only: bool,
     max_pages: Optional[int],
@@ -142,6 +150,7 @@ def main(
     init_db_only: bool,
     update_provinces: bool,
     include_locations: bool,
+    locations_provinces: Optional[str],
 ) -> None:
     setup_logging(verbose)
     log = logging.getLogger(__name__)
@@ -197,6 +206,16 @@ def main(
     if province:
         console.print(f"[yellow]   Province: {province}[/yellow]")
 
+    locations_provinces_list = (
+        [p.strip() for p in locations_provinces.split(",") if p.strip()]
+        if locations_provinces
+        else None
+    )
+    if locations_provinces_list:
+        console.print(
+            f"[yellow]   Lieux restreints à: {', '.join(locations_provinces_list)}[/yellow]"
+        )
+
     seen_slugs: set[str] = set()
     listings_to_process: list["ListingRaw"] = []
 
@@ -214,6 +233,7 @@ def main(
             province=province,
             scrape_details=scrape_details,
             include_locations=include_locations,
+            locations_provinces=locations_provinces_list,
         )
     except BaseException as exc:
         # Sans cette reprise, un scan interrompu (reseau, Ctrl-C, plantage)
@@ -284,6 +304,7 @@ def _run_scan(
     province: Optional[str],
     scrape_details: bool,
     include_locations: bool,
+    locations_provinces: Optional[list[str]] = None,
 ) -> None:
     """Corps du scan, isolé pour que main() puisse marquer l'échec."""
 
@@ -327,6 +348,7 @@ def _run_scan(
             nonlocal added_1b, skipped_1b
             async for listing_raw in scrape_all_location_listings(
                 max_pages_per_location=max_pages,
+                provinces=locations_provinces,
             ):
                 if listing_raw.slug in known_slugs_1b:
                     continue
@@ -436,10 +458,12 @@ def _run_scan(
                 continue
 
         # Détecter les annonces supprimées (seulement si scan complet).
-        # --max-pages tronque la collecte: sans cette garde, toutes les
-        # annonces non vues voient missing_scan_count augmenter et le
-        # catalogue entier bascule en "removed" au bout de 3 runs.
-        if not one_month_only and not province and not max_pages:
+        # --max-pages tronque la collecte, et --locations-provinces ne revoit
+        # qu'une partie des provinces par lieu: sans cette garde, les annonces
+        # courte-durée des provinces non couvertes ce run-là verraient
+        # missing_scan_count augmenter et basculeraient en "removed" à tort
+        # au bout de 3 scans restreints.
+        if not one_month_only and not province and not max_pages and not locations_provinces:
             removed = mark_removed_listings(session, seen_slugs, scan_time)
             stats["removed"] = removed
         else:
