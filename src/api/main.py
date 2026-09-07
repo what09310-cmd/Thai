@@ -27,7 +27,9 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Depends, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse, HTMLResponse, JSONResponse, RedirectResponse,
+)
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy import func, desc, distinct, inspect, text as sa_text
@@ -37,6 +39,7 @@ from src.database.session import SessionLocal, init_db, engine
 from src.database.models import (
     Listing, ListingHistory, ListingImage, Province, ScanLog, RentalRequest,
 )
+from src.api import rate_limit
 from src.api.auth import (
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE_SECONDS,
@@ -64,6 +67,12 @@ _MAX_SINCE_HOURS = 24 * 366
 # Meme raison que _MAX_SINCE_HOURS: sans plafond, `offset` est le moyen le
 # plus simple d'aspirer le catalogue depuis une route publique.
 _MAX_OFFSET = 100_000
+
+# Taille de l'echantillon servi a un visiteur non authentifie. La vitrine
+# (/test, /payant.html) doit convaincre, pas livrer le catalogue: borner
+# `limit` ET ignorer `offset` (voir _public_offset) sont indissociables,
+# un plafond seul se contourne en bouclant sur les pages suivantes.
+PUBLIC_DEMO_LIMIT = 12
 
 # Le frontend est servi par cette meme application: aucune page tierce n'a
 # besoin d'appeler l'API. allow_origins=["*"] n'ouvrait donc rien d'utile,
@@ -154,14 +163,31 @@ _PUBLIC_ASSET_SUFFIXES = (
 )
 
 
-def _matches_public_prefix(path: str) -> bool:
-    """Prefixe public, sur des segments entiers.
+# Routes servant des donnees, par opposition aux pages et aux assets. Ce
+# sont elles qu'on plafonne en debit: /health est sonde une fois par
+# seconde au demarrage par le lanceur (renthub.ps1) et /login tient deja
+# son propre compteur (src/api/auth.py).
+_RATE_LIMITED_PREFIXES = (
+    "/listings",
+    "/stats",
+    "/provinces",
+    "/history",
+    "/rental-requests",
+)
+
+
+def _matches_prefix(path: str, prefixes: tuple[str, ...]) -> bool:
+    """Prefixe compare sur des segments entiers.
 
     `path.startswith("/listings")` faisait aussi passer /listings-admin ou
     /listingsanything: la premiere route ainsi nommee serait nee sans
     authentification, sans que personne ne s'en apercoive.
     """
-    return any(path == p or path.startswith(p + "/") for p in PUBLIC_PATH_PREFIXES)
+    return any(path == p or path.startswith(p + "/") for p in prefixes)
+
+
+def _matches_public_prefix(path: str) -> bool:
+    return _matches_prefix(path, PUBLIC_PATH_PREFIXES)
 
 
 def _is_public(path: str) -> bool:
@@ -201,7 +227,39 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Plafond de requetes par IP sur les routes de donnees.
+
+    Les bornes posees sur `limit`, `offset` et `since_hours` decident ce
+    qu'une requete rend; elles ne disent rien du nombre de requetes. Sur
+    une route publique, l'echantillon de la vitrine se reconstitue donc en
+    bouclant -- et la page de login, elle, se force au meme rythme. Ce
+    middleware ferme la boucle.
+
+    Enregistre entre AuthMiddleware et SecurityHeadersMiddleware, donc
+    execute apres ce dernier: le 429 sort avec les en-tetes de securite.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if not _matches_prefix(request.url.path, _RATE_LIMITED_PREFIXES):
+            return await call_next(request)
+        max_per_minute = (
+            rate_limit.AUTHENTICATED_MAX_PER_MINUTE
+            if _is_authenticated(request)
+            else rate_limit.ANONYMOUS_MAX_PER_MINUTE
+        )
+        retry_after = rate_limit.register_hit(_client_key(request), max_per_minute)
+        if retry_after is not None:
+            return JSONResponse(
+                {"detail": "Trop de requetes, reessayez dans un instant."},
+                status_code=429,
+                headers={"Retry-After": str(retry_after)},
+            )
+        return await call_next(request)
+
+
 app.add_middleware(AuthMiddleware)
+app.add_middleware(RateLimitMiddleware)
 # Ajoute en dernier => middleware le plus externe: ses en-tetes couvrent
 # aussi les redirections emises par AuthMiddleware.
 app.add_middleware(SecurityHeadersMiddleware)
@@ -456,6 +514,24 @@ class StatsResponse(BaseModel):
     last_scan: Optional[datetime]
 
 
+class PublicStatsResponse(BaseModel):
+    """Ce que /stats rend a un visiteur non authentifie.
+
+    Les seuls compteurs affiches par le hero de la vitrine. Les absents
+    ne decrivent pas le catalogue mais l'activite: `by_province` donne la
+    couverture geographique, `updated_today`/`price_changed_today` le
+    rythme d'actualisation, `last_scan` la frequence de collecte,
+    `total_removed` la rotation du parc. Un prospect n'en fait rien; un
+    concurrent, si.
+    """
+
+    total_active: int
+    new_today: int
+    monthly_contract_count: int
+    three_month_contract_count: int
+    six_month_contract_count: int
+
+
 # — Helpers —
 
 # Coordonnées de contact directes: visibles seulement des visiteurs
@@ -476,10 +552,33 @@ _INTERNAL_FIELDS = (
 )
 
 
+# Ce qui fait la valeur du catalogue, au-dela des coordonnees de contact:
+# l'adresse exacte, la position GPS et surtout le lien vers l'annonce
+# source. Livrer ce dernier, c'est livrer l'origine de chaque ligne, donc
+# tout le travail d'agregation -- une vitrine n'en a pas besoin, elle
+# montre quartier, prix et photos.
+_PRECIOUS_FIELDS = ("address", "latitude", "longitude", "url")
+
+
+def _public_limit(limit: int, authenticated: bool) -> int:
+    """Plafonne la taille de page pour un visiteur non authentifie."""
+    return limit if authenticated else min(limit, PUBLIC_DEMO_LIMIT)
+
+
+def _public_offset(offset: int, authenticated: bool) -> int:
+    """Neutralise la pagination pour un visiteur non authentifie.
+
+    Indispensable au plafond de _public_limit: sans cela l'echantillon
+    n'est que la premiere page d'une serie, et le catalogue s'aspire par
+    tranches de PUBLIC_DEMO_LIMIT.
+    """
+    return offset if authenticated else 0
+
+
 def _listing_to_response(
     listing: Listing,
     images: Optional[list[str]] = None,
-    include_contact: bool = False,
+    authenticated: bool = False,
 ) -> dict:
     d = {}
     for col in Listing.__table__.columns:
@@ -491,8 +590,8 @@ def _listing_to_response(
         ordered = sorted((i for i in listing.images if not i.excluded), key=lambda i: i.position)
         images = [img.image_url for img in ordered]
     d["images"] = images
-    if not include_contact:
-        for field in _CONTACT_FIELDS:
+    if not authenticated:
+        for field in _CONTACT_FIELDS + _PRECIOUS_FIELDS:
             d[field] = None
     for field in _INTERNAL_FIELDS:
         d.pop(field, None)
@@ -547,7 +646,7 @@ def _thumbnail_map(db: SASession, listing_ids: list[int]) -> dict[int, str]:
 
 
 def _listings_to_response(
-    db: SASession, listings: list[Listing], include_contact: bool = False
+    db: SASession, listings: list[Listing], authenticated: bool = False
 ) -> list[dict]:
     """Serialise une liste d'annonces avec leur seule vignette."""
     thumbnails = _thumbnail_map(db, [l.id for l in listings])
@@ -555,7 +654,7 @@ def _listings_to_response(
         _listing_to_response(
             l,
             images=[thumbnails[l.id]] if l.id in thumbnails else [],
-            include_contact=include_contact,
+            authenticated=authenticated,
         )
         for l in listings
     ]
@@ -615,6 +714,7 @@ def get_listings(
     offset: int = Query(0, ge=0, le=_MAX_OFFSET),
     db: SASession = Depends(get_db),
 ):
+    authenticated = _is_authenticated(request)
     query = db.query(Listing)
     query = _apply_filters(query, province, district, price_min, price_max, monthly, status)
 
@@ -626,12 +726,12 @@ def get_listings(
     # offset du frontend perd ou duplique des lignes.
     listings = (
         query.order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .offset(offset)
-        .limit(limit)
+        .offset(_public_offset(offset, authenticated))
+        .limit(_public_limit(limit, authenticated))
         .all()
     )
 
-    return _listings_to_response(db, listings, include_contact=_is_authenticated(request))
+    return _listings_to_response(db, listings, authenticated=authenticated)
 
 
 @app.get("/listings/new", response_model=list[dict])
@@ -643,15 +743,16 @@ def get_new_listings(
 ):
     """Annonces détectées pour la première fois dans les N dernières heures."""
     from datetime import timedelta
+    authenticated = _is_authenticated(request)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
     listings = (
         db.query(Listing)
         .filter(Listing.first_seen_at >= cutoff)
         .order_by(desc(Listing.first_seen_at))
-        .limit(limit)
+        .limit(_public_limit(limit, authenticated))
         .all()
     )
-    return _listings_to_response(db, listings, include_contact=_is_authenticated(request))
+    return _listings_to_response(db, listings, authenticated=authenticated)
 
 
 @app.get("/listings/updated", response_model=list[dict])
@@ -662,6 +763,7 @@ def get_updated_listings(
     db: SASession = Depends(get_db),
 ):
     from datetime import timedelta
+    authenticated = _is_authenticated(request)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
     listing_ids = (
         db.query(ListingHistory.listing_id)
@@ -679,10 +781,10 @@ def get_updated_listings(
         db.query(Listing)
         .filter(Listing.id.in_(listing_ids))
         .order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .limit(limit)
+        .limit(_public_limit(limit, authenticated))
         .all()
     )
-    return _listings_to_response(db, listings, include_contact=_is_authenticated(request))
+    return _listings_to_response(db, listings, authenticated=authenticated)
 
 
 @app.get("/listings/price-changed", response_model=list[dict])
@@ -693,6 +795,7 @@ def get_price_changed_listings(
     db: SASession = Depends(get_db),
 ):
     from datetime import timedelta
+    authenticated = _is_authenticated(request)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
     listing_ids = (
         db.query(ListingHistory.listing_id)
@@ -710,10 +813,10 @@ def get_price_changed_listings(
         db.query(Listing)
         .filter(Listing.id.in_(listing_ids))
         .order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .limit(limit)
+        .limit(_public_limit(limit, authenticated))
         .all()
     )
-    return _listings_to_response(db, listings, include_contact=_is_authenticated(request))
+    return _listings_to_response(db, listings, authenticated=authenticated)
 
 
 @app.get("/listings/monthly", response_model=list[dict])
@@ -726,6 +829,7 @@ def get_monthly_listings(
     db: SASession = Depends(get_db),
 ):
     """Annonces avec Contract monthly disponible."""
+    authenticated = _is_authenticated(request)
     query = (
         db.query(Listing)
         .filter(
@@ -741,11 +845,11 @@ def get_monthly_listings(
         )
     listings = (
         query.order_by(Listing.contract_monthly_min)
-        .offset(offset)
-        .limit(limit)
+        .offset(_public_offset(offset, authenticated))
+        .limit(_public_limit(limit, authenticated))
         .all()
     )
-    return _listings_to_response(db, listings, include_contact=_is_authenticated(request))
+    return _listings_to_response(db, listings, authenticated=authenticated)
 
 
 @app.get("/listings/{listing_id}", response_model=dict)
@@ -753,7 +857,7 @@ def get_listing(listing_id: int, request: Request, db: SASession = Depends(get_d
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Annonce non trouvée")
-    return _listing_to_response(listing, include_contact=_is_authenticated(request))
+    return _listing_to_response(listing, authenticated=_is_authenticated(request))
 
 
 @app.get("/history/{listing_id}", response_model=list[HistoryResponse])
@@ -790,8 +894,11 @@ def get_provinces(db: SASession = Depends(get_db)):
     return provinces
 
 
-@app.get("/stats", response_model=StatsResponse)
-def get_stats(db: SASession = Depends(get_db)):
+# response_model=None: la route rend deux formes selon la session
+# (StatsResponse ou PublicStatsResponse), que FastAPI ne peut pas decrire
+# par un modele unique sans rendre tous les champs optionnels.
+@app.get("/stats", response_model=None)
+def get_stats(request: Request, db: SASession = Depends(get_db)):
     from datetime import timedelta, date as date_type
 
     # "Aujourd'hui" au sens de l'utilisateur, donc dans settings.tz
@@ -808,7 +915,6 @@ def get_stats(db: SASession = Depends(get_db)):
     ).astimezone(timezone.utc)
 
     total_active = db.query(func.count(Listing.id)).filter(Listing.status == "active").scalar()
-    total_removed = db.query(func.count(Listing.id)).filter(Listing.status == "removed").scalar()
     monthly_count = db.query(func.count(Listing.id)).filter(
         Listing.has_monthly_contract == "true",
         Listing.status == "active",
@@ -853,6 +959,20 @@ def get_stats(db: SASession = Depends(get_db)):
         )
         .scalar()
     )
+
+    if not _is_authenticated(request):
+        # Sortie avant les agregats reserves aux comptes: `by_province`
+        # est un GROUP BY sur toute la table, execute a chaque ouverture
+        # de la vitrine s'il restait ici.
+        return PublicStatsResponse(
+            total_active=total_active or 0,
+            new_today=new_today or 0,
+            monthly_contract_count=monthly_count or 0,
+            three_month_contract_count=three_month_count or 0,
+            six_month_contract_count=six_month_count or 0,
+        )
+
+    total_removed = db.query(func.count(Listing.id)).filter(Listing.status == "removed").scalar()
 
     # Par province
     by_province = (

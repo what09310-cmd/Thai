@@ -275,6 +275,10 @@ def test_listings_pagination_is_stable(client, session):
     """À source_updated_at identique, deux pages ne doivent ni se
     recouvrir ni perdre de lignes (le frontend pagine toute la base)."""
     _add_listings(session, 6, updated_at=NOW)
+    # Session requise: `offset` est neutralisé pour un visiteur anonyme
+    # (main.py::_public_offset), qui ne reçoit qu'un échantillon figé. La
+    # pagination que ce test protège est celle du frontend authentifié.
+    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
 
     first = client.get("/listings?limit=3&offset=0").json()
     second = client.get("/listings?limit=3&offset=3").json()
@@ -704,6 +708,10 @@ def test_stats_counts_listings_not_history_rows(session, client):
         )
     session.commit()
 
+    # `price_changed_today` ne figure que dans la réponse authentifiée:
+    # le rythme d'actualisation n'est pas servi à la vitrine
+    # (main.py::PublicStatsResponse).
+    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
     assert client.get("/stats").json()["price_changed_today"] == 1
 
 

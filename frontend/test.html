@@ -1368,7 +1368,7 @@
       <div class="proof"><b id="hero-1m">—</b> contrats 1&nbsp;mois</div>
       <div class="proof"><b id="hero-3m">—</b> à 3&nbsp;mois</div>
       <div class="proof"><b id="hero-6m">—</b> à 6&nbsp;mois</div>
-      <div class="proof"><b id="hero-new">—</b> nouvelles sur 24&nbsp;h</div>
+      <div class="proof"><b id="hero-new">—</b> nouvelles aujourd'hui</div>
     </div>
   </div>
 
@@ -1816,6 +1816,10 @@ async function loadStats() {
   try {
     const s = await fetch(`${API}/stats`).then(r => r.json());
     setHeroStat("hero-tracked", s.total_active);
+    // Comptage côté serveur: `allData` ne contient plus qu'un échantillon
+    // de DEMO_SAMPLE_SIZE annonces, dont on ne peut plus déduire le
+    // volume réel des nouveautés.
+    setHeroStat("hero-new", s.new_today);
     setHeroStat("hero-1m", s.monthly_contract_count);
     setHeroStat("hero-3m", s.three_month_contract_count);
     setHeroStat("hero-6m", s.six_month_contract_count);
@@ -1830,44 +1834,31 @@ async function loadStats() {
   if (el) el.textContent = new Date().getFullYear();
 })();
 
+// Taille de l'échantillon public. Doit rester alignée sur
+// PUBLIC_DEMO_LIMIT (src/api/main.py) : au-delà, l'API tronque
+// silencieusement.
+const DEMO_SAMPLE_SIZE = 12;
+
 async function loadListings() {
   try {
-    const limit = 500;
-    let offset = 0;
-    allData = [];
+    // Un seul appel, et pas de pagination : cette page est une vitrine,
+    // pas un client du catalogue. L'API plafonne de toute façon une
+    // requête anonyme à PUBLIC_DEMO_LIMIT annonces et ignore `offset`
+    // (main.py::_public_limit, _public_offset), donc boucler sur les
+    // pages suivantes rendrait la même page indéfiniment.
+    const r = await fetch(`${API}/listings?limit=${DEMO_SAMPLE_SIZE}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
 
-    // Charge toutes les pages de l'API afin de ne perdre aucune annonce.
-    while (true) {
-      const r = await fetch(`${API}/listings?limit=${limit}&offset=${offset}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const batch = await r.json();
+    if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
+    allData = batch;
 
-      const batch = await r.json();
-      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
-
-      allData.push(...batch);
-
-      // Une page plus courte que "limit" signifie qu'il n'y a plus de résultats.
-      if (batch.length < limit) break;
-
-      offset += limit;
-    }
-
-    _updateNew24hCount();
     renderDeals();
   } catch(e) {
     // Vitrine : aucune zone de résultats où afficher l'erreur. Les pastilles
     // du hero gardent leurs tirets et les bandeaux restent vides.
     console.error(e);
   }
-}
-
-function _updateNew24hCount() {
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const count = allData.filter(l => {
-    if (l.status === "removed") return false;
-    return new Date(l.first_seen_at || 0).getTime() >= cutoff;
-  }).length;
-  setHeroStat("hero-new", count);
 }
 
 function setHeroStat(id, value) {
@@ -2119,6 +2110,15 @@ function trapModalFocus(e) {
 }
 document.addEventListener("keydown", trapModalFocus);
 
+// Normalisation partagée par les deux caches de coordonnées ci-dessous.
+// Cette page l'appelait sans jamais la définir (elle n'existait que dans
+// index.html et premium.html): toute ouverture de modale levait un
+// ReferenceError dans districtPoint(), donc aucune carte ne s'affichait
+// sur la vitrine publique.
+function norm(v) {
+  return String(v ?? "").trim();
+}
+
 // Point GPS de l'adresse complète (rue/route + quartier) de l'annonce,
 // si présent dans le cache chargé par loadAddressCoords(). Plus précis que
 // districtPoint() quand RentHub publie un nom de rue.
@@ -2308,7 +2308,7 @@ function modalHTML(l) {
         ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
       </div>
     </div>` : "";})()}
-    <a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>
+    ${l.url ? `<a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>` : ""}
   `;
 }
 

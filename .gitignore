@@ -31,3 +31,6 @@ renthub_listings.json
 # Caches locaux transitoires (session/verrou/analyse) — pas de valeur en historique
 .claude/scheduled_tasks.lock
 .impeccable/hook.cache.json
+
+# URL du tunnel Cloudflare ephemere, reecrite a chaque demarrage (renthub.ps1)
+tunnel_url.txt
