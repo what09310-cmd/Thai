@@ -934,16 +934,15 @@
     -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
             mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
   }
-  /* Duree calee sur la longueur de piste : les cartes font 440px, donc la
-     piste est ~2x plus longue qu'avant et il faut ~2x plus de temps pour
-     conserver la meme vitesse apparente. */
+  /* Piste pilotee en JS (voir setupDealsMarquee()), pas en CSS : il faut
+     pouvoir intercepter le glisser-deposer a la souris, comme sur
+     triips.com. cursor:grab vient d'ici pour que les cartes (qui n'ont
+     pas de cursor a elles) l'heritent au survol. */
   .marquee-track {
     display: flex; gap: 20px; width: max-content;
-    animation: marquee-slide 125s linear infinite;
+    cursor: grab; user-select: none; -webkit-user-drag: none;
   }
-  .marquee:hover .marquee-track,
-  .marquee:focus-within .marquee-track { animation-play-state: paused; }
-  @keyframes marquee-slide { to { transform: translateX(-50%); } }
+  .marquee-track:active, .marquee-track.is-dragging { cursor: grabbing; }
 
   /* Lien, pas bouton : la carte navigue vers la page payante, donc le clic
      milieu et « ouvrir dans un nouvel onglet » doivent marcher.
@@ -955,7 +954,7 @@
     background: #fff; border: none; padding: 10px;
     border-radius: 22px; overflow: hidden;
     box-shadow: 0 8px 24px rgba(20,19,15,.10);
-    cursor: pointer; text-align: left; font: inherit; color: inherit;
+    text-align: left; font: inherit; color: inherit;
     text-decoration: none;
     transition: transform .18s, box-shadow .18s;
   }
@@ -1008,7 +1007,7 @@
     .deal-route { font-size: 21px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .marquee-track, .plane { animation: none; }
+    .plane { animation: none; }
     .btn-cta:hover, .deal:hover { transform: none; }
   }
 
@@ -1789,6 +1788,97 @@ function cityLabel(l) {
   return l.city || l.province || "";
 }
 
+// ── Photos de ville ────────────────────────────────────────────────────
+// Le bandeau, le mur et "comment ca marche" montraient la photo de la
+// piece elle-meme (l.images[0]) : sur la demo publique, ca donne un
+// apercu gratuit du catalogue reel. On affiche a la place une photo qui
+// illustre la ville de l'annonce (source : Wikipedia/Wikimedia Commons,
+// une image par province), la meme pour toutes les annonces d'une ville
+// donnee. cityLabel() peut renvoyer une ville de district (Pattaya, Ko
+// Samui...) en plus des provinces : ces cles sont dans la meme table.
+const PROVINCE_IMAGES = {
+  "Bangkok": "/static/img/provinces/bangkok.jpg",
+  "Pathumthani": "/static/img/provinces/pathumthani.jpg",
+  "Samut Prakarn": "/static/img/provinces/samut-prakarn.jpg",
+  "Chonburi": "/static/img/provinces/chonburi.jpg",
+  "Nonthaburi": "/static/img/provinces/nonthaburi.jpg",
+  "Phuket": "/static/img/provinces/phuket.jpg",
+  "Chiang Mai": "/static/img/provinces/chiang-mai.jpg",
+  "Rayong": "/static/img/provinces/rayong.jpg",
+  "Nakhon Pathom": "/static/img/provinces/nakhon-pathom.jpg",
+  "Nakhon Ratchasima": "/static/img/provinces/nakhon-ratchasima.jpg",
+  "Samut Sakhon": "/static/img/provinces/samut-sakhon.jpg",
+  "Khon Kaen": "/static/img/provinces/khon-kaen.jpg",
+  "Phra Nakhon Sri Ayutthaya": "/static/img/provinces/phra-nakhon-sri-ayutthaya.jpg",
+  "Songkhla": "/static/img/provinces/songkhla.jpg",
+  "Surat Thani": "/static/img/provinces/surat-thani.jpg",
+  "Chachoengsao": "/static/img/provinces/chachoengsao.jpg",
+  "Chiang Rai": "/static/img/provinces/chiang-rai.jpg",
+  "Prachaubkirikhan": "/static/img/provinces/prachaubkirikhan.jpg",
+  "Ratchburi": "/static/img/provinces/ratchburi.jpg",
+  "Phitsanulok": "/static/img/provinces/phitsanulok.jpg",
+  "Udon Thani": "/static/img/provinces/udon-thani.jpg",
+  "Ubon Ratchathani": "/static/img/provinces/ubon-ratchathani.jpg",
+  "Krabi": "/static/img/provinces/krabi.jpg",
+  "Lamphang": "/static/img/provinces/lamphang.jpg",
+  "Petchburi": "/static/img/provinces/petchburi.jpg",
+  "Maha Sarakham": "/static/img/provinces/maha-sarakham.jpg",
+  "Nakhon Nayok": "/static/img/provinces/nakhon-nayok.jpg",
+  "Nakhon Sri Thammarat": "/static/img/provinces/nakhon-sri-thammarat.jpg",
+  "Prachinburi": "/static/img/provinces/prachinburi.jpg",
+  "Saraburi": "/static/img/provinces/saraburi.jpg",
+  "Suphanburi": "/static/img/provinces/suphanburi.jpg",
+  "Surin": "/static/img/provinces/surin.jpg",
+  "Chaiyaphum": "/static/img/provinces/chaiyaphum.jpg",
+  "Lopburi": "/static/img/provinces/lopburi.jpg",
+  "Nong Bua Lam Phu": "/static/img/provinces/nong-bua-lam-phu.jpg",
+  "Si Sa Ket": "/static/img/provinces/si-sa-ket.jpg",
+  "Buri Ram": "/static/img/provinces/buri-ram.jpg",
+  "Ranong": "/static/img/provinces/ranong.jpg",
+  "Sakon Nakhon": "/static/img/provinces/sakon-nakhon.jpg",
+  "Samut Songkram": "/static/img/provinces/samut-songkram.jpg",
+  "Singburi": "/static/img/provinces/singburi.png",
+  "Amnat Charoen": "/static/img/provinces/amnat-charoen.jpg",
+  "Chainat": "/static/img/provinces/chainat.jpg",
+  "Chanthaburi": "/static/img/provinces/chanthaburi.jpg",
+  "Kanchanaburi": "/static/img/provinces/kanchanaburi.jpg",
+  "Lamphun": "/static/img/provinces/lamphun.jpg",
+  "Mukdahan": "/static/img/provinces/mukdahan.jpg",
+  "Pattani": "/static/img/provinces/pattani.jpg",
+  "Phrae": "/static/img/provinces/phrae.jpg",
+  "Roi Et": "/static/img/provinces/roi-et.jpg",
+  "Tak": "/static/img/provinces/tak.jpg",
+  "Trang": "/static/img/provinces/trang.jpg",
+  "Uthai Thani": "/static/img/provinces/uthai-thani.jpg",
+  "Yala": "/static/img/provinces/yala.jpg",
+  "Yasothon": "/static/img/provinces/yasothon.jpg",
+  "Pattaya": "/static/img/provinces/pattaya.jpg",
+  "Ko Samui": "/static/img/provinces/ko-samui.jpg",
+  "Hua Hin": "/static/img/provinces/hua-hin.jpg",
+  "Ko Phangan": "/static/img/provinces/ko-phangan.jpg",
+};
+const PROVINCE_IMAGE_FALLBACK = "/static/img/provinces/bangkok.jpg";
+
+// Regroupement pour le bandeau du haut et "comment ca marche" seulement :
+// Samut Prakarn fait partie du Grand Bangkok et n'est pas une ville que
+// les visiteurs reconnaissent. Volontairement PAS applique a cityLabel()
+// (mur d'annonces, grille, carte) -- meme logique que le commentaire sur
+// DISTRICT_AS_CITY plus haut : ca afficherait une ville fausse ailleurs,
+// la ou la precision compte (carte) ou ou la vraie photo du logement
+// suffit deja a situer l'annonce (mur).
+const CITY_DISPLAY_MERGE = {
+  "Samut Prakarn": "Bangkok",
+};
+
+function dealCityLabel(l) {
+  const ville = cityLabel(l);
+  return CITY_DISPLAY_MERGE[ville] || ville;
+}
+
+function cityImage(l) {
+  return PROVINCE_IMAGES[dealCityLabel(l)] || PROVINCE_IMAGE_FALLBACK;
+}
+
 // ── Prix en euros ─────────────────────────────────────────────────────
 // Taux fige en dur : les montants en euros derivent donc avec le change
 // reel. C'est aussi ce qui justifie l'arrondi -- au-dela de 150 EUR,
@@ -1878,21 +1968,186 @@ function renderDeals() {
   const track = document.getElementById("deals-track");
   if (!track) return;
 
-  const deals = allData
+  const pool = allData
     .filter(l => l.status !== "removed"
               && l.images && l.images.length
               && contractNum(l.contract_monthly_raw) !== null)
-    .sort((a, b) => contractNum(a.contract_monthly_raw) - contractNum(b.contract_monthly_raw))
-    .slice(0, DEALS_COUNT);
+    .sort((a, b) => contractNum(a.contract_monthly_raw) - contractNum(b.contract_monthly_raw));
+
+  // Un prix affiche n'apparait qu'une fois dans la bande : deux cartes a
+  // "340 €" se lisent comme un doublon, meme si les villes different. On
+  // garde la premiere (la moins chere du pool trie) et on pioche plus loin.
+  const seen = new Set();
+  const candidates = [];
+  for (const l of pool) {
+    const key = eurLabel(contractNum(l.contract_monthly_raw));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push(l);
+  }
+
+  // La bande defile en boucle : deux cartes de la meme ville cote a cote se
+  // lisent comme un doublon. On choisit donc chaque carte en evitant la ville
+  // de la precedente. S'il ne reste plus que des cartes de cette ville, on
+  // raccourcit la bande plutot que d'afficher deux fois la meme ville collees.
+  const deals = [];
+  const rest = candidates.slice();
+  while (deals.length < DEALS_COUNT && rest.length) {
+    const prev = deals.length ? dealCityLabel(deals[deals.length - 1]) : null;
+    const i = rest.findIndex((l) => dealCityLabel(l) !== prev);
+    if (i < 0) break;
+    deals.push(rest.splice(i, 1)[0]);
+  }
+  // La piste reboucle : la derniere carte touche la premiere.
+  while (deals.length > 2 && dealCityLabel(deals[deals.length - 1]) === dealCityLabel(deals[0])) {
+    deals.pop();
+  }
 
   if (!deals.length) { track.innerHTML = ""; return; }
 
-  // La liste est doublee : l'animation translate de -50%, donc la seconde
-  // moitie prend exactement la place de la premiere et la boucle est nette.
+  // La liste est doublee : setupDealsMarquee() boucle la position sur la
+  // moitie de la largeur de la piste, donc la seconde moitie prend
+  // exactement la place de la premiere et la boucle est nette.
   track.innerHTML = deals.concat(deals).map(dealHTML).join("");
+  setupDealsMarquee();
+  track._measure && track._measure();
 
   renderHowPhoto();
   renderWall();
+}
+
+// ── Glisser-deposer a la souris, comme sur triips.com ──────────────────
+// L'ancienne piste etait une animation CSS pure : jolie, mais impossible
+// a intercepter au clic. On reprend ici le meme principe que le bandeau
+// "trending" de triips.com (translateX pilote en rAF, vitesse lissee vers
+// une vitesse de croisiere, le glisser prend la main sur la position et
+// la relache en douceur) applique directement a la piste deja doublee.
+function setupDealsMarquee() {
+  const track = document.getElementById("deals-track");
+  if (!track || track.dataset.marqueeReady) return;
+  track.dataset.marqueeReady = "1";
+
+  const LOOP_DUR = 125; // meme duree apparente que l'ancienne animation CSS
+  const LERP = 14;
+  let pos = 0, vel = 0, lastTime = null;
+  let dragging = false, hasDragged = false, dragStartX = 0, dragStartPos = 0;
+  let lw = 0;
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function measure() { lw = track.scrollWidth / 2; }
+  window.addEventListener("resize", measure);
+  window.addEventListener("load", measure);
+  track._measure = measure;
+
+  function clamp() {
+    if (lw <= 0) measure();
+    if (lw <= 0) return;
+    while (pos < -lw) pos += lw;
+    while (pos > 0) pos -= lw;
+    track.style.transform = `translateX(${pos}px)`;
+  }
+
+  let rafId = null;
+  function tick(now) {
+    if (lw <= 0) measure();
+    if (lw <= 0) { rafId = requestAnimationFrame(tick); return; }
+    const nv = -lw / LOOP_DUR;
+    if (lastTime === null) { lastTime = now; vel = nv; }
+    const dt = Math.min(0.1, (now - lastTime) / 1000);
+    lastTime = now;
+    if (!dragging) {
+      const k = Math.min(1, LERP * dt);
+      vel += (nv - vel) * k;
+      pos += vel * dt;
+    }
+    while (pos < -lw) pos += lw;
+    while (pos > 0) pos -= lw;
+    track.style.transform = `translateX(${pos}px)`;
+    rafId = requestAnimationFrame(tick);
+  }
+  function startRAF() {
+    if (reduced) { measure(); return; }
+    if (!rafId) { measure(); rafId = requestAnimationFrame(tick); }
+  }
+  function stopRAF() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; lastTime = null; }
+  }
+  document.addEventListener("visibilitychange", () => { document.hidden ? stopRAF() : startRAF(); });
+
+  // On coupe aussi la piste au clavier : sinon elle continue de glisser
+  // sous une carte qui vient de recevoir le focus.
+  track.addEventListener("focusin", stopRAF);
+  track.addEventListener("focusout", () => { if (inView && !document.hidden) startRAF(); });
+
+  let inView = true;
+  if ("IntersectionObserver" in window) {
+    const vobs = new IntersectionObserver((entries) => {
+      inView = entries[0] && entries[0].isIntersecting;
+      if (inView && !document.hidden) startRAF(); else stopRAF();
+    }, { root: null, rootMargin: "200px 0px", threshold: 0 });
+    vobs.observe(track);
+  }
+  if (inView) startRAF();
+
+  function endDrag() {
+    dragging = false;
+    track.classList.remove("is-dragging");
+    setTimeout(() => { hasDragged = false; }, 0);
+  }
+
+  track.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true; hasDragged = false;
+    track.classList.add("is-dragging");
+    dragStartX = e.clientX; dragStartPos = pos; vel = 0;
+    function mm(ev) {
+      if (!dragging) return;
+      const dx = ev.clientX - dragStartX;
+      if (Math.abs(dx) > 4) hasDragged = true;
+      pos = dragStartPos + dx;
+      clamp();
+    }
+    function mu() {
+      endDrag();
+      document.removeEventListener("mousemove", mm);
+      document.removeEventListener("mouseup", mu);
+    }
+    document.addEventListener("mousemove", mm);
+    document.addEventListener("mouseup", mu);
+  });
+
+  track.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    if (!t) return;
+    dragging = true; hasDragged = false;
+    track.classList.add("is-dragging");
+    dragStartX = t.clientX; dragStartPos = pos; vel = 0;
+    function tm(ev) {
+      if (!dragging) return;
+      const ct = ev.touches[0];
+      if (!ct) return;
+      const dx = ct.clientX - dragStartX;
+      if (Math.abs(dx) > 4) { hasDragged = true; ev.preventDefault(); }
+      pos = dragStartPos + dx;
+      clamp();
+    }
+    function te() {
+      endDrag();
+      document.removeEventListener("touchmove", tm);
+      document.removeEventListener("touchend", te);
+      document.removeEventListener("touchcancel", te);
+    }
+    document.addEventListener("touchmove", tm, { passive: false });
+    document.addEventListener("touchend", te);
+    document.addEventListener("touchcancel", te);
+  }, { passive: true });
+
+  // Un clic qui a fait glisser la piste de plus de 4px ne doit pas suivre
+  // le lien de la carte : sinon glisser envoie sur /payant.html.
+  track.addEventListener("click", (e) => {
+    if (hasDragged) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
 }
 
 // ── Mur d'annonces : trois pistes en sens alterne ─────────────────────
@@ -1970,20 +2225,18 @@ function renderHowPhoto() {
   if (!l) { box.innerHTML = ""; return; }
 
   const n = contractNum(l.contract_monthly_raw);
-  const ville = cityLabel(l);
+  const ville = dealCityLabel(l);
 
   box.innerHTML = `
-    <img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false"
+    <img src="${esc(cityImage(l))}" alt="" loading="lazy" draggable="false"
          oncontextmenu="return false" onerror="this.remove()">
     <span class="how-caption">${esc(ville)} \u00b7 ${eurLabel(n)} \u20ac/mois</span>`;
 }
 
 function dealHTML(l) {
   const n = contractNum(l.contract_monthly_raw);
-  const ville = cityLabel(l);
-  const img = l.images && l.images.length
-    ? `<img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.querySelector('.deal-fallback')?.removeAttribute('hidden');this.remove()">`
-    : "";
+  const ville = dealCityLabel(l);
+  const img = `<img src="${esc(cityImage(l))}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.querySelector('.deal-fallback')?.removeAttribute('hidden');this.remove()">`;
 
   return `<a class="deal" href="/payant.html"
     aria-label="Voir cette annonce à ${esc(ville)} sur la version payante">
