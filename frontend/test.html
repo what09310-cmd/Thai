@@ -41,6 +41,11 @@
     --sky-2:    #dcd6f9;
     --sky-3:    #cde8f4;
 
+    /* Silhouettes du hero : deux plans de profondeur, tenus a faible
+       opacite pour ne jamais concurrencer le titre. */
+    --skyline-back:  #2f9e44;
+    --skyline-front: #5b46c8;
+
     /* triips n'utilise aucune chasse fixe : --mono devient une police
        proportionnelle. Les chiffres gardent leur alignement colonne par
        colonne grace a font-variant-numeric: tabular-nums. */
@@ -780,9 +785,10 @@
   .map-fab:hover { transform: scale(1.06); }
 
   /* ══════════════════════════════════════════════════════════════════
-     HERO — langage visuel triips : ciel pastel, nuages, navbar en
-     pilule, grosse typo Inter dont un fragment en indigo, CTA arrondi.
-     Nuages et avion dessines en CSS : aucun asset externe.
+     HERO — langage visuel triips : ciel pastel, navbar en pilule,
+     grosse typo Inter dont un fragment en indigo, CTA arrondi.
+     Le decor est une skyline thailandaise (temples + tours) dessinee
+     en SVG inline, plus deux nuages CSS : aucun asset externe.
      ══════════════════════════════════════════════════════════════════ */
 
   .hero {
@@ -803,11 +809,13 @@
     background: linear-gradient(to bottom, rgba(250,248,244,0), var(--bg));
   }
 
-  /* ── Nuages ── */
+  /* ── Nuages residuels ── */
+  /* Deux nuages seulement, tres pales : ils gardent un peu de profondeur
+     dans le ciel sans revenir concurrencer la skyline. */
   .cloud {
     position: absolute; z-index: 0;
     background: #fff; border-radius: var(--r-pill);
-    opacity: .85; pointer-events: none;
+    opacity: .45; pointer-events: none;
   }
   .cloud::before, .cloud::after {
     content: ""; position: absolute; background: #fff; border-radius: 50%;
@@ -815,21 +823,29 @@
   .cloud::before { width: 60%; height: 170%; left: 12%; bottom: 34%; }
   .cloud::after  { width: 44%; height: 135%; right: 13%; bottom: 30%; }
   .cloud-1 { width: 190px; height: 44px; top:  92px; left:  -34px; }
-  .cloud-2 { width: 130px; height: 32px; top:  40px; right:  7%;  opacity: .70; }
-  .cloud-3 { width: 240px; height: 54px; top: 258px; right: -50px; opacity: .80; }
-  .cloud-4 { width: 110px; height: 28px; top: 330px; left:   9%;  opacity: .62; }
+  .cloud-2 { width: 130px; height: 32px; top:  40px; right:  7%;  opacity: .34; }
 
-  /* ── Avion ── */
-  .plane {
-    position: absolute; z-index: 1; top: 140px; left: 7%;
-    font-size: 24px; transform: rotate(-16deg);
-    animation: drift 9s ease-in-out infinite;
-    pointer-events: none;
+  /* ── Skyline thailandaise ── */
+  /* Elle est ancree sur .hero-inner, pas sur .hero : le bandeau des
+     affaires vit lui aussi dans le hero, donc un bottom:0 aurait pose la
+     skyline sous les cartes. Ancree ici, sa ligne de sol tombe juste
+     au-dessus du bandeau et sous le bloc de texte.
+     Le hero est centre et borne a 880px : left/translate/100vw la
+     ressortent en pleine largeur.
+     z-index -1 dans le contexte d'empilement de .hero-inner (z-index:2) :
+     derriere le titre, mais toujours devant le ciel.
+     Le masque efface le haut des silhouettes : les fleches et antennes
+     s'evaporent avant d'atteindre la ligne de titre. */
+  .hero-skyline {
+    position: absolute; z-index: -1; pointer-events: none;
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    width: 100vw; height: 200px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 46%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 46%);
   }
-  @keyframes drift {
-    0%,100% { transform: rotate(-16deg) translate(0, 0); }
-    50%     { transform: rotate(-16deg) translate(14px, -12px); }
-  }
+  .hero-skyline svg { display: block; width: 100%; height: 100%; }
+  .skyline-back  { fill: var(--skyline-back);  opacity: .18; }
+  .skyline-front { fill: var(--skyline-front); opacity: .26; }
 
   /* ── Navbar en pilule ── */
   /* Fixe : reste visible pendant tout le defilement. Elle vit hors du hero,
@@ -858,13 +874,6 @@
   }
   .brand-thai  { color: var(--brand-lime); }
   .brand-month { color: var(--brand-gold); }
-  .pillnav-links { display: flex; align-items: center; gap: 22px; }
-  .pillnav-links a {
-    color: #dfeed2; text-decoration: none;
-    font-size: 14px; font-weight: 500; white-space: nowrap;
-    transition: color .15s;
-  }
-  .pillnav-links a:hover { color: #fff; }
   .pillnav-cta {
     background: var(--accent); color: #fff;
     border-radius: var(--r-pill); padding: 10px 20px;
@@ -880,17 +889,22 @@
     padding: 58px 0 4px; text-align: center;
   }
   .hero-badge {
-    display: inline-flex; align-items: center; gap: 9px;
+    display: inline-flex; align-items: center; gap: 11px;
     background: rgba(255,255,255,.72);
     -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-    border-radius: var(--r-pill); padding: 7px 17px;
-    font-size: 13px; font-weight: 500; color: #443f38;
+    border-radius: var(--r-pill); padding: 10px 22px;
+    font-size: 15px; font-weight: 500; color: #443f38;
   }
   .hero-badge i {
-    width: 8px; height: 8px; border-radius: 50%;
+    width: 10px; height: 10px; border-radius: 50%;
     background: #37b24d; flex-shrink: 0;
   }
   .hero-badge b { font-variant-numeric: tabular-nums; color: #14130f; }
+
+  @media (max-width: 768px) {
+    .hero-badge { gap: 10px; padding: 9px 19px; font-size: 14px; }
+    .hero-badge i { width: 9px; height: 9px; }
+  }
 
   .hero h1 {
     font-family: var(--display);
@@ -911,10 +925,7 @@
     background: var(--accent); color: #fff;
     border-radius: var(--r-pill); padding: 15px 34px;
     font-size: 15px; font-weight: 600; text-decoration: none;
-    box-shadow: 0 8px 22px rgba(80,70,245,.28);
-    transition: transform .15s, box-shadow .15s;
   }
-  .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 13px 30px rgba(80,70,245,.34); }
 
   .hero-proof {
     display: flex; flex-wrap: wrap; justify-content: center;
@@ -998,17 +1009,15 @@
 
   @media (max-width: 768px) {
     .pillnav { padding-left: 16px; }
-    .pillnav-links { display: none; }
     .hero-inner { padding-top: 40px; }
-    .plane, .cloud-3, .cloud-4 { display: none; }
+    .hero-skyline { height: 138px; }
     .deal { width: 290px; }
     .deal-img { height: 190px; }
     .deal-price b { font-size: 21px; }
     .deal-route { font-size: 21px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .plane { animation: none; }
-    .btn-cta:hover, .deal:hover { transform: none; }
+    .deal:hover { transform: none; }
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -1039,12 +1048,9 @@
     box-shadow: 0 8px 22px rgba(20,19,15,.09);
   }
   /* Empilement : chaque carte mord sur la precedente et penche un peu. */
-  .how-step-1 { background: #b9e9f4; z-index: 3; transform: rotate(-1.1deg); margin-left: 0;    }
-  .how-step-2 { background: #c7ef6c; z-index: 2; transform: rotate(.7deg);   margin: -12px 0 0 20px; }
-  .how-step-3 {
-    background: var(--forest); color: #eaf5e0; z-index: 1;
-    transform: rotate(-.6deg); margin: -12px 0 0 8px;
-  }
+  .how-step-1 { background: #a52028; color: #fff; z-index: 3; transform: rotate(-1.1deg); margin-left: 0; }
+  .how-step-2 { background: #ffffff;              z-index: 2; transform: rotate(.7deg);   margin: -12px 0 0 20px; }
+  .how-step-3 { background: #2d2a4a; color: #fff; z-index: 1; transform: rotate(-.6deg); margin: -12px 0 0 8px; }
 
   .how-num {
     font-family: var(--display);
@@ -1058,7 +1064,8 @@
     content: ""; position: absolute; left: 0; top: -26px; bottom: -26px;
     border-left: 2px dotted rgba(20,19,15,.30);
   }
-  .how-step-3 .how-body::before { border-left-color: rgba(234,245,224,.42); }
+  .how-step-1 .how-body::before,
+  .how-step-3 .how-body::before { border-left-color: rgba(255,255,255,.45); }
   .how-step::before, .how-step::after {
     content: ""; position: absolute; left: 86px;
     width: 17px; height: 17px; border-radius: 50%;
@@ -1331,12 +1338,6 @@
 <!-- Navbar fixe : hors du hero, qui a overflow:hidden et la retiendrait. -->
 <nav class="pillnav" aria-label="Navigation principale">
   <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
-  <div class="pillnav-links">
-    <a href="/">Annonces</a>
-    <a href="carte-thailande.html">Carte</a>
-    <a href="premium.html">Premium</a>
-    <a href="vip.html">VIP</a>
-  </div>
   <a class="pillnav-cta" href="payant.html">Version Payante</a>
 </nav>
 
@@ -1344,9 +1345,6 @@
 <section class="hero">
   <div class="cloud cloud-1"></div>
   <div class="cloud cloud-2"></div>
-  <div class="cloud cloud-3"></div>
-  <div class="cloud cloud-4"></div>
-  <div class="plane" aria-hidden="true">✈️</div>
 
   <div class="hero-inner">
     <span class="hero-badge">
@@ -1368,6 +1366,74 @@
       <div class="proof"><b id="hero-3m">—</b> à 3&nbsp;mois</div>
       <div class="proof"><b id="hero-6m">—</b> à 6&nbsp;mois</div>
       <div class="proof"><b id="hero-new">—</b> nouvelles aujourd'hui</div>
+    </div>
+
+    <!-- Skyline : plan lointain (vert) puis plan proche (violet). Chedis et
+         wat a gauche, prang de style Wat Arun au centre, tours de Bangkok a
+         droite. Purement decoratif, donc masquee aux lecteurs d'ecran. -->
+    <div class="hero-skyline" aria-hidden="true">
+      <svg viewBox="0 0 1440 260" preserveAspectRatio="xMidYMax slice"
+           xmlns="http://www.w3.org/2000/svg" focusable="false">
+        <g class="skyline-back">
+          <rect x="20"   y="174" width="54" height="86"/>
+          <rect x="86"   y="142" width="38" height="118"/>
+          <rect x="136"  y="190" width="64" height="70"/>
+          <rect x="214"  y="160" width="44" height="100"/>
+          <rect x="470"  y="168" width="50" height="92"/>
+          <rect x="534"  y="196" width="70" height="64"/>
+          <rect x="618"  y="140" width="40" height="120"/>
+          <rect x="980"  y="156" width="58" height="104"/>
+          <rect x="1050" y="184" width="46" height="76"/>
+          <rect x="1112" y="142" width="64" height="118"/>
+          <rect x="1250" y="170" width="40" height="90"/>
+          <rect x="1304" y="194" width="76" height="66"/>
+          <rect x="1394" y="150" width="46" height="110"/>
+          <!-- chedis lointains -->
+          <path d="M300 260v-24h60v24Zm7-24v-16h46v16Zm6-16v-14h34v14Zm1-14q2-38 16-56 14 18 16 56Zm13-58v-26h6v26Zm3-26-5-8 5-22 5 22Z"/>
+          <path d="M850 260v-24h60v24Zm7-24v-16h46v16Zm6-16v-14h34v14Zm1-14q2-38 16-56 14 18 16 56Zm13-58v-26h6v26Zm3-26-5-8 5-22 5 22Z"/>
+        </g>
+
+        <g class="skyline-front">
+          <!-- chedi principal, a gauche -->
+          <path d="M52 260v-30h86v30Zm10-30v-20h66v20Zm9-20v-18h48v18Zm2-18q3-54 22-80 19 26 22 80Zm19-84v-30h6v30Zm3-30-6-10 6-30 6 30Z"/>
+
+          <!-- wat : salle et trois toits superposes, avec chofa aux extremites -->
+          <path d="M170 260v-46h190v46Z"/>
+          <path d="M160 214l40-38h130l40 38Z"/>
+          <path d="M186 176l30-34h98l30 34Z"/>
+          <path d="M206 142l26-24h66l26 24Z"/>
+          <path d="M160 214q-13-9-7-26 11 11 11 26Z"/>
+          <path d="M370 214q13-9 7-26-11 11-11 26Z"/>
+          <path d="M232 118q-8-8-3-18 8 7 8 18Z"/>
+          <path d="M298 118q8-8 3-18-8 7-8 18Z"/>
+
+          <!-- petits batiments de liaison -->
+          <rect x="404" y="220" width="52" height="40"/>
+          <rect x="470" y="206" width="44" height="54"/>
+          <rect x="770" y="212" width="66" height="48"/>
+          <rect x="854" y="226" width="42" height="34"/>
+
+          <!-- prang central, silhouette de type Wat Arun -->
+          <path d="M668 260v-42l7-5v-18l7-6v-20q14-70 18-109 4 39 18 109v20l7 6v18l7 5v42Z"/>
+
+          <!-- palmiers -->
+          <path d="M556 260q-4-46 10-78l9 4q-12 30-9 74Z"/>
+          <path d="M570 186q-22-14-38-8 14-14 38 2Zm0 0q-10-24-28-30 20-2 28 26Zm0 0q22-16 39-11-13-15-39 5Zm0 0q9-24 26-32-20-3-26 27Z"/>
+          <path d="M916 260q-3-40 9-68l8 4q-10 26-8 64Z"/>
+          <path d="M928 196q-19-12-33-7 12-12 33 2Zm0 0q-9-21-24-26 17-2 24 23Zm0 0q19-14 34-10-11-13-34 5Z"/>
+
+          <!-- tours de Bangkok -->
+          <path d="M940 260V140h18v-18h18v-18h34v156Z"/>
+          <path d="M1030 260V96l14-26h26l14 26v164Z"/>
+          <rect x="1055" y="20" width="4" height="52"/>
+          <rect x="1104" y="150" width="46" height="110"/>
+          <rect x="1176" y="118" width="34" height="142"/>
+          <circle cx="1193" cy="110" r="21"/>
+          <path d="M1240 260V132l60-24v152Z"/>
+          <rect x="1320" y="168" width="52" height="92"/>
+          <rect x="1386" y="196" width="46" height="64"/>
+        </g>
+      </svg>
     </div>
   </div>
 
@@ -2157,6 +2223,35 @@ function setupDealsMarquee() {
 
 const WALL_ROWS = 3;
 const WALL_PER_ROW = 12;
+// Largeur occupee par une vignette, prise dans sa version la plus etroite :
+// .wcard mesure 225px sous 768px de large (300px au-dela) plus le gap de
+// 18px de .wall-track. Sert a calculer combien de copies d'une piste il
+// faut pour couvrir l'ecran -- sous-estimer la vignette allonge un peu la
+// piste, la surestimer y laisserait un trou.
+const WALL_CARD_W = 243;
+
+// Largeur a couvrir par une piste. `window.innerWidth` vaut 0 quand la
+// page est rendue dans un onglet encore masque, ce qui donnait une seule
+// copie de la liste et donc le trou qu'on cherche a supprimer : on prend
+// la plus grande des mesures disponibles, avec un plancher genereux.
+function wallViewportWidth() {
+  const el = document.querySelector(".wall-rows");
+  return Math.max(
+    el ? el.getBoundingClientRect().width : 0,
+    document.documentElement.clientWidth || 0,
+    window.innerWidth || 0,
+    1440
+  );
+}
+
+// Une fenetre elargie peut rendre les pistes plus courtes que l'ecran :
+// on les reconstruit apres le redimensionnement, puis on redemande aux
+// marquees de se re-mesurer.
+let wallResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(wallResizeTimer);
+  wallResizeTimer = setTimeout(renderWall, 200);
+});
 
 function renderWall() {
   const rows = [
@@ -2176,10 +2271,22 @@ function renderWall() {
       .forEach((l, i) => buckets[i % WALL_ROWS].push(l));
 
   buckets.forEach((items, i) => {
-    // Liste doublee : voir le commentaire de renderDeals().
-    rows[i].innerHTML = items.length
-      ? items.concat(items).map(wallCardHTML).join("")
-      : "";
+    if (!items.length) { rows[i].innerHTML = ""; return; }
+    // L'echantillon public est petit (PUBLIC_DEMO_LIMIT), et le filtre
+    // ci-dessus en retire encore une part : une piste ne contenait par
+    // moment que deux ou trois vignettes, donc moins large que la
+    // fenetre. L'animation translate la piste de la moitie de sa
+    // largeur, si bien qu'une piste trop courte laissait un trou a
+    // gauche -- la section paraissait manquer d'annonces.
+    // On repete donc la liste jusqu'a couvrir la largeur visible avant
+    // de doubler l'ensemble (le doublement est ce qui rend la boucle
+    // continue : voir le commentaire de renderDeals()).
+    const copies = Math.max(1, Math.ceil(
+      wallViewportWidth() / (items.length * WALL_CARD_W)
+    ));
+    let seq = [];
+    for (let k = 0; k < copies; k++) seq = seq.concat(items);
+    rows[i].innerHTML = seq.concat(seq).map(wallCardHTML).join("");
   });
 }
 
