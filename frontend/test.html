@@ -41,9 +41,8 @@
     --sky-2:    #dcd6f9;
     --sky-3:    #cde8f4;
 
-    /* Silhouettes du hero : deux plans de profondeur, tenus a faible
-       opacite pour ne jamais concurrencer le titre. */
-    --skyline-back:  #2f9e44;
+    /* Silhouettes du hero : un seul plan, tenu a faible opacite pour ne
+       jamais concurrencer le titre. */
     --skyline-front: #5b46c8;
 
     /* triips n'utilise aucune chasse fixe : --mono devient une police
@@ -839,13 +838,12 @@
   .hero-skyline {
     position: absolute; z-index: -1; pointer-events: none;
     bottom: -8px; left: 50%; transform: translateX(-50%);
-    width: 100vw; height: 200px;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 46%);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 46%);
+    width: 100vw; height: 168px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 62%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 62%);
   }
   .hero-skyline svg { display: block; width: 100%; height: 100%; }
-  .skyline-back  { fill: var(--skyline-back);  opacity: .18; }
-  .skyline-front { fill: var(--skyline-front); opacity: .26; }
+  .skyline-front { fill: var(--skyline-front); opacity: .16; }
 
   /* ── Navbar en pilule ── */
   /* Fixe : reste visible pendant tout le defilement. Elle vit hors du hero,
@@ -1010,7 +1008,7 @@
   @media (max-width: 768px) {
     .pillnav { padding-left: 16px; }
     .hero-inner { padding-top: 40px; }
-    .hero-skyline { height: 138px; }
+    .hero-skyline { height: 116px; }
     .deal { width: 290px; }
     .deal-img { height: 190px; }
     .deal-price b { font-size: 21px; }
@@ -1374,27 +1372,14 @@
     <div class="hero-skyline" aria-hidden="true">
       <svg viewBox="0 0 1440 260" preserveAspectRatio="xMidYMax slice"
            xmlns="http://www.w3.org/2000/svg" focusable="false">
-        <g class="skyline-back">
-          <rect x="20"   y="174" width="54" height="86"/>
-          <rect x="86"   y="142" width="38" height="118"/>
-          <rect x="136"  y="190" width="64" height="70"/>
-          <rect x="214"  y="160" width="44" height="100"/>
-          <rect x="470"  y="168" width="50" height="92"/>
-          <rect x="534"  y="196" width="70" height="64"/>
-          <rect x="618"  y="140" width="40" height="120"/>
-          <rect x="980"  y="156" width="58" height="104"/>
-          <rect x="1050" y="184" width="46" height="76"/>
-          <rect x="1112" y="142" width="64" height="118"/>
-          <rect x="1250" y="170" width="40" height="90"/>
-          <rect x="1304" y="194" width="76" height="66"/>
-          <rect x="1394" y="150" width="46" height="110"/>
-          <!-- chedis lointains -->
-          <path d="M300 260v-24h60v24Zm7-24v-16h46v16Zm6-16v-14h34v14Zm1-14q2-38 16-56 14 18 16 56Zm13-58v-26h6v26Zm3-26-5-8 5-22 5 22Z"/>
-          <path d="M850 260v-24h60v24Zm7-24v-16h46v16Zm6-16v-14h34v14Zm1-14q2-38 16-56 14 18 16 56Zm13-58v-26h6v26Zm3-26-5-8 5-22 5 22Z"/>
-        </g>
-
+        <!-- Un seul plan, et le minimum de silhouettes qui evoque encore la
+             Thailande : un chedi et un wat a gauche, un prang de style Wat
+             Arun au centre, un palmier, trois tours de Bangkok a droite.
+             La version precedente empilait un second plan de treize
+             immeubles et une quinzaine de formes de plus : le decor se lisait
+             comme une texture derriere le titre au lieu d'un horizon. -->
         <g class="skyline-front">
-          <!-- chedi principal, a gauche -->
+          <!-- chedi, a gauche -->
           <path d="M52 260v-30h86v30Zm10-30v-20h66v20Zm9-20v-18h48v18Zm2-18q3-54 22-80 19 26 22 80Zm19-84v-30h6v30Zm3-30-6-10 6-30 6 30Z"/>
 
           <!-- wat : salle et trois toits superposes, avec chofa aux extremites -->
@@ -1407,31 +1392,19 @@
           <path d="M232 118q-8-8-3-18 8 7 8 18Z"/>
           <path d="M298 118q8-8 3-18-8 7-8 18Z"/>
 
-          <!-- petits batiments de liaison -->
-          <rect x="404" y="220" width="52" height="40"/>
-          <rect x="470" y="206" width="44" height="54"/>
-          <rect x="770" y="212" width="66" height="48"/>
-          <rect x="854" y="226" width="42" height="34"/>
-
           <!-- prang central, silhouette de type Wat Arun -->
           <path d="M668 260v-42l7-5v-18l7-6v-20q14-70 18-109 4 39 18 109v20l7 6v18l7 5v42Z"/>
 
-          <!-- palmiers -->
-          <path d="M556 260q-4-46 10-78l9 4q-12 30-9 74Z"/>
-          <path d="M570 186q-22-14-38-8 14-14 38 2Zm0 0q-10-24-28-30 20-2 28 26Zm0 0q22-16 39-11-13-15-39 5Zm0 0q9-24 26-32-20-3-26 27Z"/>
+          <!-- palmier -->
           <path d="M916 260q-3-40 9-68l8 4q-10 26-8 64Z"/>
           <path d="M928 196q-19-12-33-7 12-12 33 2Zm0 0q-9-21-24-26 17-2 24 23Zm0 0q19-14 34-10-11-13-34 5Z"/>
 
           <!-- tours de Bangkok -->
-          <path d="M940 260V140h18v-18h18v-18h34v156Z"/>
           <path d="M1030 260V96l14-26h26l14 26v164Z"/>
           <rect x="1055" y="20" width="4" height="52"/>
-          <rect x="1104" y="150" width="46" height="110"/>
           <rect x="1176" y="118" width="34" height="142"/>
           <circle cx="1193" cy="110" r="21"/>
           <path d="M1240 260V132l60-24v152Z"/>
-          <rect x="1320" y="168" width="52" height="92"/>
-          <rect x="1386" y="196" width="46" height="64"/>
         </g>
       </svg>
     </div>
