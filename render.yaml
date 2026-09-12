@@ -1,0 +1,31 @@
+databases:
+  - name: renthub-db
+    databaseName: renthub
+    user: renthub
+    plan: free
+
+services:
+  - type: web
+    name: renthub-tracker-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn src.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renthub-db
+          property: connectionString
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: CORS_ALLOW_ORIGINS
+        value: "https://what09310-cmd.github.io"
+      - key: TZ
+        value: "Asia/Bangkok"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SITE_USERNAME
+        value: admin
+      - key: SITE_PASSWORD
+        generateValue: true
