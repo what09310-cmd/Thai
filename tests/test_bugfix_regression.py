@@ -240,9 +240,11 @@ def test_static_html_requires_session(client):
     assert client.get("/static/logo.png").status_code == 200
     assert client.get("/static/payant.html").status_code == 200
 
-    # premium.html a été repassé derrière le login: /static ne doit pas le
-    # laisser passer non plus.
-    gated = client.get("/static/premium.html", follow_redirects=False)
+    # Seuls "/" (index.html) et vip.html sont protégés: les autres pages
+    # passent, directement comme via /static.
+    assert client.get("/static/premium.html").status_code == 200
+    assert client.get("/premium.html").status_code == 200
+    gated = client.get("/static/vip.html", follow_redirects=False)
     assert gated.status_code in (302, 307)
     assert gated.headers["location"] == "/login"
 
@@ -275,11 +277,6 @@ def test_listings_pagination_is_stable(client, session):
     """À source_updated_at identique, deux pages ne doivent ni se
     recouvrir ni perdre de lignes (le frontend pagine toute la base)."""
     _add_listings(session, 6, updated_at=NOW)
-    # Session requise: `offset` est neutralisé pour un visiteur anonyme
-    # (main.py::_public_offset), qui ne reçoit qu'un échantillon figé. La
-    # pagination que ce test protège est celle du frontend authentifié.
-    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
-
     first = client.get("/listings?limit=3&offset=0").json()
     second = client.get("/listings?limit=3&offset=3").json()
 
@@ -663,11 +660,10 @@ def test_since_hours_windows_are_bounded(client, path):
 def test_oversized_session_cookie_is_rejected_without_error(client):
     """int() lève au-delà de 4300 chiffres: la charge doit être bornée avant.
 
-    Route protegee et non "/": la racine est publique (page vitrine), donc
-    ne passe plus par le garde d'authentification quel que soit le cookie.
+    Seuls "/" et /vip.html passent par le garde d'authentification.
     """
     client.cookies.set(SESSION_COOKIE_NAME, "9" * 5000 + ".deadbeef")
-    response = client.get("/premium.html", follow_redirects=False)
+    response = client.get("/vip.html", follow_redirects=False)
 
     assert response.status_code == 307
     assert response.headers["location"] == "/login"
@@ -823,9 +819,7 @@ async def test_page_count_does_not_assume_a_fixed_page_size():
     "path",
     [
         "/static/index.html/",     # normpath retire le slash, le test d'extension non
-        "/static/premium.html/",
         "/static/vip.html/",
-        "/static/carte.html/",
         "/static/index.HTML/",     # la casse ne doit pas non plus ouvrir la porte
     ],
 )
@@ -843,23 +837,12 @@ def test_static_gate_survives_path_normalisation(client, path):
     assert resp.headers["location"] == "/login"
 
 
-def test_static_gate_is_deny_by_default(client):
-    """Tout ce qui n'est pas un asset connu reste derrière le login.
-
-    L'ancienne règle était une blocklist: seules les extensions .html/.htm
-    étaient gardées, donc n'importe quel .js, .json, .csv ou .bak déposé
-    dans frontend/ devenait lisible sans session, sans changement de code.
-    """
-    resp = client.get("/static/anything.js", follow_redirects=False)
-    assert resp.status_code in (302, 307)
-    assert resp.headers["location"] == "/login"
-
-
-def test_public_prefix_does_not_leak_lookalike_routes(client):
-    """`startswith("/listings")` rendait /listings-admin public d'avance."""
-    resp = client.get("/listings-admin", follow_redirects=False)
-    assert resp.status_code in (302, 307)
-    assert resp.headers["location"] == "/login"
+def test_everything_outside_protected_paths_is_public(client):
+    """La regle est une liste de pages protegees, pas une liste publique:
+    assets, pages secondaires et routes API sont servis sans session."""
+    assert client.get("/static/anything.js", follow_redirects=False).status_code == 404
+    assert client.get("/carte.html", follow_redirects=False).status_code == 200
+    assert client.get("/provinces", follow_redirects=False).status_code == 200
 
 
 def test_static_assets_and_public_pages_still_work(client):
@@ -914,11 +897,10 @@ def test_logout_clears_the_session(client):
     """Sans /logout, la seule révocation possible était la rotation du
     mot de passe du site.
 
-    Route protegee et non "/": la racine est publique (page vitrine), donc
-    y acceder ne prouve rien sur l'etat de la session.
+    Seuls "/" et /vip.html passent par le garde d'authentification.
     """
     client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
-    assert client.get("/premium.html", follow_redirects=False).status_code == 200
+    assert client.get("/vip.html", follow_redirects=False).status_code == 200
 
     out = client.post("/logout", follow_redirects=False)
     assert out.status_code == 303
@@ -934,7 +916,7 @@ def test_logout_clears_the_session(client):
 
     # Et sans cookie, la page protegee redirige bien vers le login.
     client.cookies.clear()
-    assert client.get("/premium.html", follow_redirects=False).status_code in (302, 307)
+    assert client.get("/vip.html", follow_redirects=False).status_code in (302, 307)
 
 
 # ── Detection de changements: pistes d'audit ────────────────────────

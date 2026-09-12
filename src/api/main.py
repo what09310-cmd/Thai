@@ -14,8 +14,11 @@ Endpoints:
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
+import math
 import posixpath
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
@@ -68,11 +71,10 @@ _MAX_SINCE_HOURS = 24 * 366
 # plus simple d'aspirer le catalogue depuis une route publique.
 _MAX_OFFSET = 100_000
 
-# Taille de l'echantillon servi a un visiteur non authentifie. La vitrine
-# (/test, /payant.html) doit convaincre, pas livrer le catalogue: borner
-# `limit` ET ignorer `offset` (voir _public_offset) sont indissociables,
-# un plafond seul se contourne en bouclant sur les pages suivantes.
-PUBLIC_DEMO_LIMIT = 12
+# Un visiteur non authentifie recoit le catalogue entier avec des
+# coordonnees GPS *approximatives* (les cartes carte-*.html sont publiques
+# et en ont besoin), mais sans contacts, adresse exacte ni lien source:
+# voir _listing_to_response et _approximate_position.
 
 # Le frontend est servi par cette meme application: aucune page tierce n'a
 # besoin d'appeler l'API. allow_origins=["*"] n'ouvrait donc rien d'utile,
@@ -139,30 +141,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-PUBLIC_PATHS = {
+# Seules ces pages exigent une session; tout le reste (autres pages, API,
+# assets) est accessible sans login. index.html est le nom de fichier
+# derriere "/", il faut donc le proteger aussi sous /static.
+PROTECTED_PATHS = {
     "/",
-    "/login",
-    "/logout",
-    "/health",
-    "/payant.html",
-    "/stats",
-    "/test",
+    "/index.html",
+    "/vip.html",
 }
-PUBLIC_PATH_PREFIXES = (
-    "/listings",
-)
 
 _STATIC_PREFIX = "/static/"
-
-# Seuls ces types de fichiers sont servis sans session sous /static.
-# Liste blanche et non liste noire: l'ancienne regle ne gardait que .html
-# et .htm, donc tout autre fichier depose dans frontend/ (un .js, un .json
-# de configuration, un .bak laisse par un editeur) devenait lisible par
-# n'importe qui sans le moindre changement de code.
-_PUBLIC_ASSET_SUFFIXES = (
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".json",
-)
-
 
 # Routes servant des donnees, par opposition aux pages et aux assets. Ce
 # sont elles qu'on plafonne en debit: /health est sonde une fois par
@@ -187,35 +175,26 @@ def _matches_prefix(path: str, prefixes: tuple[str, ...]) -> bool:
     return any(path == p or path.startswith(p + "/") for p in prefixes)
 
 
-def _matches_public_prefix(path: str) -> bool:
-    return _matches_prefix(path, PUBLIC_PATH_PREFIXES)
-
-
 def _is_public(path: str) -> bool:
     """Determine si un chemin est accessible sans cookie de session.
 
-    Le montage /static sert tout le repertoire `frontend/`: on n'y laisse
-    passer librement que les assets (logo, JSON de coordonnees). Une page
-    .html atteinte par ce biais suit la meme regle que sa route directe,
-    sinon /static/index.html contourne purement et simplement le login.
+    Seules les pages de PROTECTED_PATHS exigent une session. Le montage
+    /static sert tout le repertoire `frontend/`: une page protegee atteinte
+    par ce biais suit la meme regle que sa route directe, sinon
+    /static/index.html contourne purement et simplement le login.
 
     Le chemin est normalise AVANT d'etre juge, parce que StaticFiles lui
-    applique `os.path.normpath` ensuite. Les deux etapes n'etaient pas
-    d'accord: "/static/index.html/" ne finit pas par ".html", passait donc
-    pour un asset public, puis normpath retirait le slash final et servait
-    index.html. Un seul caractere ajoute suffisait a contourner le login
-    sur toutes les pages protegees (variantes NTFS "index.html." et
-    "index.html%20" incluses, les points et espaces finaux etant ignores
-    a l'ouverture du fichier sous Windows).
+    applique `os.path.normpath` ensuite: "/static/index.html/" ou les
+    variantes NTFS "index.html." et "index.html%20" servaient index.html
+    sans passer par le login.
     """
     if path.startswith(_STATIC_PREFIX):
         name = posixpath.normpath(path[len(_STATIC_PREFIX):]).rstrip(". ")
         if not name or name.startswith(("/", "../")) or name in ("..", "."):
             return False
-        if f"/{name}" in PUBLIC_PATHS:
-            return True
-        return name.lower().endswith(_PUBLIC_ASSET_SUFFIXES)
-    return path in PUBLIC_PATHS or _matches_public_prefix(path)
+        # Comparaison insensible a la casse: NTFS sert index.HTML comme index.html.
+        return f"/{name.lower()}" not in PROTECTED_PATHS
+    return path not in PROTECTED_PATHS
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -558,22 +537,35 @@ _INTERNAL_FIELDS = (
 # source. Livrer ce dernier, c'est livrer l'origine de chaque ligne, donc
 # tout le travail d'agregation -- une vitrine n'en a pas besoin, elle
 # montre quartier, prix et photos.
-_PRECIOUS_FIELDS = ("address", "latitude", "longitude", "url")
+_PRECIOUS_FIELDS = ("address", "url")
 
 
-def _public_limit(limit: int, authenticated: bool) -> int:
-    """Plafonne la taille de page pour un visiteur non authentifie."""
-    return limit if authenticated else min(limit, PUBLIC_DEMO_LIMIT)
+# Rayon du flou applique a la position d'un visiteur anonyme (metres),
+# facon Airbnb: le point rendu est decale de FUZZ_MIN..FUZZ_MAX metres dans
+# une direction fixe par annonce, et la carte dessine un cercle de
+# FUZZ_CIRCLE_M de rayon autour, dans lequel se trouve toujours la vraie
+# position. Le frontend doit garder FUZZ_CIRCLE_M >= FUZZ_MAX_M.
+FUZZ_MIN_M = 100
+FUZZ_MAX_M = 300
+FUZZ_CIRCLE_M = 350
 
 
-def _public_offset(offset: int, authenticated: bool) -> int:
-    """Neutralise la pagination pour un visiteur non authentifie.
+def _approximate_position(listing_id: int, lat: float, lon: float) -> tuple[float, float]:
+    """Decale une position de facon deterministe et imprevisible.
 
-    Indispensable au plafond de _public_limit: sans cela l'echantillon
-    n'est que la premiere page d'une serie, et le catalogue s'aspire par
-    tranches de PUBLIC_DEMO_LIMIT.
+    Deterministe (derive de l'id via la cle secrete) pour qu'un client ne
+    puisse pas retrouver le vrai point en moyennant plusieurs requetes;
+    derive de SECRET_KEY pour qu'on ne puisse pas recalculer le decalage
+    depuis l'id seul.
     """
-    return offset if authenticated else 0
+    digest = hmac.new(
+        settings.secret_key.encode(), f"geo:{listing_id}".encode(), hashlib.sha256
+    ).digest()
+    angle = int.from_bytes(digest[:4], "big") / 2**32 * 2 * math.pi
+    dist = FUZZ_MIN_M + int.from_bytes(digest[4:8], "big") / 2**32 * (FUZZ_MAX_M - FUZZ_MIN_M)
+    dlat = dist * math.cos(angle) / 111_320
+    dlon = dist * math.sin(angle) / (111_320 * math.cos(math.radians(lat)))
+    return round(lat + dlat, 5), round(lon + dlon, 5)
 
 
 def _listing_to_response(
@@ -591,9 +583,15 @@ def _listing_to_response(
         ordered = sorted((i for i in listing.images if not i.excluded), key=lambda i: i.position)
         images = [img.image_url for img in ordered]
     d["images"] = images
+    d["location_approx"] = False
     if not authenticated:
         for field in _CONTACT_FIELDS + _PRECIOUS_FIELDS:
             d[field] = None
+        if d.get("latitude") is not None and d.get("longitude") is not None:
+            d["latitude"], d["longitude"] = _approximate_position(
+                listing.id, d["latitude"], d["longitude"]
+            )
+            d["location_approx"] = True
     for field in _INTERNAL_FIELDS:
         d.pop(field, None)
     return d
@@ -727,8 +725,8 @@ def get_listings(
     # offset du frontend perd ou duplique des lignes.
     listings = (
         query.order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .offset(_public_offset(offset, authenticated))
-        .limit(_public_limit(limit, authenticated))
+        .offset(offset)
+        .limit(limit)
         .all()
     )
 
@@ -750,7 +748,7 @@ def get_new_listings(
         db.query(Listing)
         .filter(Listing.first_seen_at >= cutoff)
         .order_by(desc(Listing.first_seen_at))
-        .limit(_public_limit(limit, authenticated))
+        .limit(limit)
         .all()
     )
     return _listings_to_response(db, listings, authenticated=authenticated)
@@ -782,7 +780,7 @@ def get_updated_listings(
         db.query(Listing)
         .filter(Listing.id.in_(listing_ids))
         .order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .limit(_public_limit(limit, authenticated))
+        .limit(limit)
         .all()
     )
     return _listings_to_response(db, listings, authenticated=authenticated)
@@ -814,7 +812,7 @@ def get_price_changed_listings(
         db.query(Listing)
         .filter(Listing.id.in_(listing_ids))
         .order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .limit(_public_limit(limit, authenticated))
+        .limit(limit)
         .all()
     )
     return _listings_to_response(db, listings, authenticated=authenticated)
@@ -846,8 +844,8 @@ def get_monthly_listings(
         )
     listings = (
         query.order_by(Listing.contract_monthly_min)
-        .offset(_public_offset(offset, authenticated))
-        .limit(_public_limit(limit, authenticated))
+        .offset(offset)
+        .limit(limit)
         .all()
     )
     return _listings_to_response(db, listings, authenticated=authenticated)

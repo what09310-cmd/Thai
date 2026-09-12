@@ -11,7 +11,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.api.auth import SESSION_COOKIE_NAME, create_session_token
-from src.api.main import PUBLIC_DEMO_LIMIT
 from src.database.models import Listing, ListingHistory
 
 
@@ -43,62 +42,26 @@ def _authenticate(client) -> None:
     client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
 
 
-# ── Echantillon: volume ──────────────────────────────────────────────
+# ── Volume ───────────────────────────────────────────────────────────
 
-def test_anonymous_listings_are_capped_to_a_sample(client, session):
-    _add_listings(session, PUBLIC_DEMO_LIMIT + 20)
+def test_anonymous_listings_get_the_full_catalogue(client, session):
+    """Les cartes (carte-*.html) sont publiques: sans le catalogue entier
+    et ses coordonnees, elles n'ont rien a afficher."""
+    _add_listings(session, 32)
     body = client.get("/listings?limit=500").json()
-    assert len(body) == PUBLIC_DEMO_LIMIT
-
-
-def test_anonymous_cannot_paginate_past_the_sample(client, session):
-    """Plafonner `limit` sans neutraliser `offset` ne protege rien.
-
-    Un plafond a 12 laisse aspirer le catalogue en 12 annonces a la fois:
-    l'echantillon public doit rester la *meme* page, pas la premiere d'une
-    serie.
-    """
-    _add_listings(session, PUBLIC_DEMO_LIMIT + 20)
-    first = [l["id"] for l in client.get("/listings").json()]
-    later = [l["id"] for l in client.get(f"/listings?offset={PUBLIC_DEMO_LIMIT}").json()]
-    assert later == first
-
-
-def test_authenticated_listings_keep_the_full_catalogue(client, session):
-    _add_listings(session, PUBLIC_DEMO_LIMIT + 20)
-    _authenticate(client)
-    body = client.get("/listings?limit=500").json()
-    assert len(body) == PUBLIC_DEMO_LIMIT + 20
-
-
-@pytest.mark.parametrize(
-    "path",
-    ["/listings", "/listings/new", "/listings/updated",
-     "/listings/price-changed", "/listings/monthly"],
-)
-def test_every_listing_route_caps_anonymous_volume(client, session, path):
-    """Le plafond doit couvrir toutes les routes de liste, pas seulement /listings."""
-    _add_listings(session, PUBLIC_DEMO_LIMIT + 20)
-    now = datetime.now(timezone.utc)
-    for listing in session.query(Listing).all():
-        for change in ("UPDATED", "PRICE_CHANGED"):
-            session.add(
-                ListingHistory(
-                    listing_id=listing.id, change_type=change, changed_at=now
-                )
-            )
-    session.commit()
-    body = client.get(f"{path}?limit=500").json()
-    assert len(body) == PUBLIC_DEMO_LIMIT, path
+    assert len(body) == 32
+    first = [l["id"] for l in client.get("/listings?limit=12").json()]
+    later = [l["id"] for l in client.get("/listings?limit=12&offset=12").json()]
+    assert later != first
 
 
 # ── Echantillon: contenu ─────────────────────────────────────────────
 
-_PRECIOUS = ("address", "latitude", "longitude", "url")
+_PRECIOUS = ("address", "url")
 
 
-def test_anonymous_listings_hide_address_gps_and_source_url(client, session):
-    """Adresse exacte, GPS et lien source constituent le produit vendu.
+def test_anonymous_listings_hide_address_and_source_url(client, session):
+    """Adresse exacte et lien source constituent le produit vendu.
 
     Le lien RentHub en particulier: le livrer, c'est livrer la source de
     chaque annonce, donc tout le travail d'agregation.
@@ -107,18 +70,43 @@ def test_anonymous_listings_hide_address_gps_and_source_url(client, session):
     listing = client.get("/listings").json()[0]
     for field in _PRECIOUS:
         assert listing[field] is None, field
-    # Ce qui reste doit suffire a une vitrine.
+    # Ce qui reste doit suffire a une vitrine et a une carte: une position,
+    # mais floutee (voir test_anonymous_gps_is_fuzzed_deterministically).
+    assert listing["latitude"] is not None
+    assert listing["longitude"] is not None
+    assert listing["location_approx"] is True
     assert listing["province"] == "Bangkok"
     assert listing["district"] == "Watthana"
     assert listing["contract_monthly_min"] == 15000
 
 
-def test_authenticated_listings_keep_address_gps_and_source_url(client, session):
+def test_authenticated_listings_keep_address_and_source_url(client, session):
     _add_listings(session, 1)
     _authenticate(client)
     listing = client.get("/listings").json()[0]
     for field in _PRECIOUS:
         assert listing[field] is not None, field
+    assert listing["location_approx"] is False
+
+
+def test_anonymous_gps_is_fuzzed_deterministically(client, session):
+    """Facon Airbnb: le point anonyme est decale de 100 a 300 m, toujours
+    du meme cote pour une annonce donnee (sinon on retrouve le vrai point
+    en moyennant quelques rechargements)."""
+    import math
+    from src.api.main import FUZZ_MIN_M, FUZZ_MAX_M
+
+    _add_listings(session, 1)
+    anon = client.get("/listings").json()[0]
+    again = client.get("/listings").json()[0]
+    _authenticate(client)
+    real = client.get("/listings").json()[0]
+
+    assert (anon["latitude"], anon["longitude"]) == (again["latitude"], again["longitude"])
+    dy = (anon["latitude"] - real["latitude"]) * 111_320
+    dx = (anon["longitude"] - real["longitude"]) * 111_320 * math.cos(math.radians(real["latitude"]))
+    dist = math.hypot(dx, dy)
+    assert FUZZ_MIN_M - 2 <= dist <= FUZZ_MAX_M + 2, dist
 
 
 def test_anonymous_listing_detail_hides_the_same_fields(client, session):

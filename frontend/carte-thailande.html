@@ -567,7 +567,7 @@
   <a class="logo" href="/" aria-label="ThaiMonth">
     <span class="logo-thai">Thai</span><span class="logo-month">Month</span>
   </a>
-  <a class="header-list" href="/">Voir la liste</a>
+  <a class="header-list" href="/payant.html">Version Payante</a>
 </header>
 
 <main>
@@ -733,6 +733,8 @@ function amenityChips(ad){
   return Object.keys(AMENITY_ICONS).filter(k => k !== "Air Conditioner" && amenities.includes(k));
 }
 
+const APPROX_RADIUS_M = 350;
+
 function pinIcon(){
   return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [12, 12] });
 }
@@ -864,7 +866,17 @@ function buildMap(){
   leafletMap.addLayer(clusterGroup);
 
   ads.forEach(ad => {
-    const marker = L.marker([ad.latitude, ad.longitude], { icon: pinIcon() })
+    // Visiteur non connecte: l'API decale la position et le signale par
+    // location_approx (main.py::_approximate_position). Comme Airbnb, on
+    // dessine alors une zone plutot qu'un point; le rayon doit rester
+    // >= FUZZ_MAX_M cote API pour que la vraie position soit dedans.
+    const marker = ad.location_approx
+      ? L.circle([ad.latitude, ad.longitude], {
+          radius: APPROX_RADIUS_M, color: "var(--accent)", weight: 2,
+          fillColor: "var(--accent)", fillOpacity: .18,
+        })
+      : L.marker([ad.latitude, ad.longitude], { icon: pinIcon() });
+    marker
       .bindPopup(popupHTML(ad), { maxWidth: 390, minWidth: 390, className: "popup-lg", autoPanPadding: [24, 24] });
     // La liste ne renvoie qu'une vignette par annonce (_thumbnail_map cote
     // API): la galerie complete n'est chargee qu'a l'ouverture du popup,
@@ -1144,7 +1156,7 @@ document.addEventListener("keydown", trapModalFocus);
 // n'apparait de toute facon pas sur la carte).
 function mapPoint(l) {
   if (l.latitude != null && l.longitude != null) {
-    return { lat: l.latitude, lon: l.longitude, precise: true };
+    return { lat: l.latitude, lon: l.longitude, precise: !l.location_approx };
   }
   return null;
 }
@@ -1246,6 +1258,7 @@ function modalHTML(l) {
   const pt = mapPoint(l);
   const precisionLabel = !pt ? ""
     : pt.precise ? "📌 Position précise"
+    : l.location_approx ? "🔵 Position approximative (zone de ~350 m — connectez-vous pour la position exacte)"
     : "🔵 Position approximative (centre du quartier — RentHub ne publie pas l'adresse exacte)";
 
   return `
