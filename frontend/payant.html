@@ -661,7 +661,10 @@
 </main>
 
 <script>
-const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+const RENDER_API = "https://thai-month.onrender.com";
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000"
+          : window.location.hostname === "what09310-cmd.github.io" ? RENDER_API
+          : window.location.origin;
 
 const nav = document.querySelector(".pillnav");
 const toggleNavState = () => {

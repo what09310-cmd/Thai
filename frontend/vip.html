@@ -236,7 +236,10 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+const RENDER_API = "https://thai-month.onrender.com";
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000"
+          : window.location.hostname === "what09310-cmd.github.io" ? RENDER_API
+          : window.location.origin;
 
 let ads = [];
 let leafletMap = null;

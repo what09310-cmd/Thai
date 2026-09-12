@@ -1026,7 +1026,10 @@
   }).observe(bar);
 })();
 
-const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+const RENDER_API = "https://thai-month.onrender.com";
+const API = window.location.origin.startsWith("file:") ? "http://localhost:8000"
+          : window.location.hostname === "what09310-cmd.github.io" ? RENDER_API
+          : window.location.origin;
 const PER_PAGE = 30;
 
 const LINE_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#06C755"/><path fill="#fff" d="M12 5.5c-4.14 0-7.5 2.73-7.5 6.1 0 3.02 2.66 5.55 6.26 6.03.24.05.58.16.66.37.08.19.05.49.03.68l-.11.65c-.03.19-.15.75.65.41.8-.34 4.33-2.55 5.9-4.36 1.09-1.19 1.61-2.41 1.61-3.78 0-3.37-3.36-6.1-7.5-6.1Z"/></svg>`;
