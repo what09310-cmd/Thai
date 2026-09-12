@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # des virgules. Vide par defaut: le frontend etant servi par cette meme
     # application, les appels sont same-origin et le CORS est inutile.
     cors_allow_origins: str = ""
+    # OAuth Google (connexion "Continuer avec Google"). Les deux vides =>
+    # le bouton n'apparait pas et /auth/google repond 404. URL de redirection
+    # a declarer dans Google Cloud Console: <origine>/auth/google/callback.
+    google_client_id: str = ""
+    google_client_secret: str = ""
     anthropic_api_key: Optional[str] = None
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

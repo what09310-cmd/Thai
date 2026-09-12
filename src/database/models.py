@@ -219,3 +219,24 @@ class ScanLog(Base):
     status: Mapped[str] = mapped_column(String(20), default="running")
     # "running" | "completed" | "failed"
     error_message: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class User(Base):
+    """Compte utilisateur (email + mot de passe, ou Google).
+
+    `password_hash` est None pour un compte cree via Google et jamais dote
+    d'un mot de passe; `google_sub` est l'identifiant stable fourni par
+    Google (l'email peut changer, pas le `sub`). `is_premium` decide l'acces
+    aux pages et champs payants (src/api/main.py::PROTECTED_PATHS).
+    """
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(100))
+    google_sub: Mapped[Optional[str]] = mapped_column(String(64), unique=True)
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

@@ -27,6 +27,7 @@ from typing import Optional
 
 from pathlib import Path
 
+from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import FastAPI, HTTPException, Query, Depends, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -37,21 +38,31 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy import func, desc, distinct, inspect, text as sa_text
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from src.database.session import SessionLocal, init_db, engine
 from src.database.models import (
-    Listing, ListingHistory, ListingImage, Province, ScanLog, RentalRequest,
+    Listing, ListingHistory, ListingImage, Province, ScanLog, RentalRequest, User,
 )
 from src.api import rate_limit
+from src.api import auth as auth_module
 from src.api.auth import (
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE_SECONDS,
+    SessionInfo,
+    authenticate_user,
     check_credentials,
     create_session_token,
+    get_or_create_google_user,
+    get_user_by_email,
     is_login_rate_limited,
+    normalize_email,
+    password_problem,
+    read_session_token,
     register_failed_login,
     register_successful_login,
-    verify_session_token,
+    register_user,
+    token_for_user,
 )
 from src.config import DEFAULT_SECRET_KEY, DEFAULT_SITE_PASSWORD, settings
 
@@ -143,12 +154,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # Seules ces pages exigent une session; tout le reste (autres pages, API,
 # assets) est accessible sans login. index.html est le nom de fichier
-# derriere "/", il faut donc le proteger aussi sous /static.
+# derriere "/", il faut donc le proteger aussi sous /static. La valeur dit
+# le niveau requis: True = compte premium (ou admin), False = n'importe
+# quel compte connecte.
 PROTECTED_PATHS = {
-    "/",
-    "/index.html",
-    "/vip.html",
+    "/": False,
+    "/index.html": False,
+    "/vip.html": True,
 }
+
+# Un compte connecte mais non premium qui demande une page premium est
+# envoye vers l'offre, pas vers le login qu'il a deja passe.
+_UPSELL_URL = "/premium.html"
 
 _STATIC_PREFIX = "/static/"
 
@@ -197,13 +214,24 @@ def _is_public(path: str) -> bool:
     return path not in PROTECTED_PATHS
 
 
+def _required_level(path: str) -> bool:
+    """Niveau exige par une page protegee (voir PROTECTED_PATHS)."""
+    if path.startswith(_STATIC_PREFIX):
+        name = posixpath.normpath(path[len(_STATIC_PREFIX):]).rstrip(". ")
+        return PROTECTED_PATHS.get(f"/{name.lower()}", True)
+    return PROTECTED_PATHS.get(path, True)
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if _is_public(path):
             return await call_next(request)
-        if not verify_session_token(request.cookies.get(SESSION_COOKIE_NAME)):
+        info = _session(request)
+        if info is None:
             return RedirectResponse(url="/login")
+        if _required_level(path) and not info.is_premium:
+            return RedirectResponse(url=_UPSELL_URL)
         return await call_next(request)
 
 
@@ -240,78 +268,257 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(AuthMiddleware)
 app.add_middleware(RateLimitMiddleware)
+# Requis par authlib pour stocker le `state` anti-CSRF entre /auth/google et
+# le callback. Cookie distinct de SESSION_COOKIE_NAME ("session"), sinon les
+# deux s'ecrasent; vide en dehors du parcours OAuth.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="oauth_state",
+    max_age=10 * 60,
+    same_site="lax",
+    https_only=settings.cookie_secure,
+)
 # Ajoute en dernier => middleware le plus externe: ses en-tetes couvrent
 # aussi les redirections emises par AuthMiddleware.
 app.add_middleware(SecurityHeadersMiddleware)
 
 
-_LOGIN_PAGE = """<!doctype html>
+_AUTH_PAGE = """<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Connexion</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
 <style>
   body {{ font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
-         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
-  form {{ background: #1e293b; padding: 2rem; border-radius: 8px; width: 280px; }}
-  input {{ width: 100%; padding: 0.6rem; margin-top: 0.5rem; margin-bottom: 1rem;
-           border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; box-sizing: border-box; }}
-  button {{ width: 100%; padding: 0.6rem; border: none; border-radius: 4px;
-            background: #3b82f6; color: white; cursor: pointer; font-weight: 600; }}
-  .error {{ color: #f87171; margin-bottom: 1rem; }}
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;
+         padding: 16px; box-sizing: border-box; }}
+  .card {{ background: #1e293b; padding: 2rem; border-radius: 8px; width: 100%; max-width: 320px; }}
+  h2 {{ margin-top: 0; }}
+  label {{ display: block; margin-top: 0.75rem; }}
+  input {{ width: 100%; padding: 0.6rem; margin-top: 0.4rem; border-radius: 4px; border: 1px solid #334155;
+           background: #0f172a; color: #e2e8f0; box-sizing: border-box; }}
+  button, .google {{ display: block; width: 100%; padding: 0.6rem; border: none; border-radius: 4px;
+            margin-top: 1rem; background: #3b82f6; color: white; cursor: pointer; font-weight: 600;
+            text-align: center; text-decoration: none; box-sizing: border-box; font-size: 1rem; }}
+  .google {{ background: #fff; color: #1f2937; }}
+  .sep {{ text-align: center; color: #64748b; margin: 1rem 0 0; font-size: 0.85rem; }}
+  .alt {{ margin-top: 1.25rem; font-size: 0.9rem; color: #94a3b8; text-align: center; }}
+  .alt a {{ color: #93c5fd; }}
+  .error {{ color: #f87171; margin-bottom: 0.5rem; }}
 </style>
 </head>
 <body>
-  <form method="post" action="/login">
-    <h2>Connexion</h2>
+  <div class="card">
+    <h2>{title}</h2>
     {error}
-    <label for="username">Identifiant</label>
-    <input type="text" id="username" name="username" autofocus required autocomplete="username">
-    <label for="password">Mot de passe</label>
-    <input type="password" id="password" name="password" required autocomplete="current-password">
-    <button type="submit">Entrer</button>
-  </form>
+    <form method="post" action="{action}">
+      <label for="username">Email{admin_hint}</label>
+      <input type="text" id="username" name="username" autofocus required autocomplete="{username_autocomplete}">
+      <label for="password">Mot de passe</label>
+      <input type="password" id="password" name="password" required autocomplete="{password_autocomplete}" minlength="{min_length}">
+      <button type="submit">{submit}</button>
+    </form>
+    {google}
+    <div class="alt">{alt}</div>
+  </div>
 </body>
 </html>"""
+
+_GOOGLE_BUTTON = (
+    '<p class="sep">ou</p>'
+    '<a class="google" href="/auth/google">Continuer avec Google</a>'
+)
+
+
+def _google_configured() -> bool:
+    return bool(settings.google_client_id and settings.google_client_secret)
+
+
+def _render_auth_page(mode: str, error: str = "") -> str:
+    err = f'<div class="error">{error}</div>' if error else ""
+    google = _GOOGLE_BUTTON if _google_configured() else ""
+    if mode == "register":
+        return _AUTH_PAGE.format(
+            title="Créer un compte", error=err, action="/register", admin_hint="",
+            username_autocomplete="email", password_autocomplete="new-password",
+            min_length=auth_module.PASSWORD_MIN_LENGTH, submit="Créer mon compte", google=google,
+            alt='Déjà un compte ? <a href="/login">Se connecter</a>',
+        )
+    return _AUTH_PAGE.format(
+        title="Connexion", error=err, action="/login", admin_hint=" ou identifiant",
+        username_autocomplete="username", password_autocomplete="current-password",
+        min_length=1, submit="Entrer", google=google,
+        alt='Pas encore de compte ? <a href="/register">Créer un compte</a>',
+    )
+
+
+oauth = OAuth()
+if _google_configured():
+    oauth.register(
+        "google",
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+
+# — Dependency —
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def _client_key(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _session(request: Request) -> SessionInfo | None:
+    return read_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+
+
 def _is_authenticated(request: Request) -> bool:
-    return verify_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+    """N'importe quel compte connecte (budget de requetes plus large)."""
+    return _session(request) is not None
 
 
-@app.get("/login", response_class=HTMLResponse)
-def login_form():
-    return _LOGIN_PAGE.format(error="")
+def _is_premium(request: Request) -> bool:
+    """Compte premium ou administrateur: contacts, adresse et lien source."""
+    info = _session(request)
+    return info is not None and info.is_premium
 
 
-@app.post("/login")
-def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
-    client_key = _client_key(request)
-    if is_login_rate_limited(client_key):
-        return HTMLResponse(
-            _LOGIN_PAGE.format(
-                error='<div class="error">Trop de tentatives, réessayez dans quelques minutes</div>'
-            ),
-            status_code=429,
-        )
-    if not check_credentials(username, password):
-        register_failed_login(client_key)
-        return HTMLResponse(_LOGIN_PAGE.format(error='<div class="error">Identifiant ou mot de passe incorrect</div>'))
-    register_successful_login(client_key)
-    response = RedirectResponse(url="/", status_code=303)
+def _login_response(token: str, url: str = "/") -> RedirectResponse:
+    response = RedirectResponse(url=url, status_code=303)
     response.set_cookie(
         SESSION_COOKIE_NAME,
-        create_session_token(),
+        token,
         max_age=SESSION_MAX_AGE_SECONDS,
         httponly=True,
         samesite="lax",
         secure=settings.cookie_secure,
     )
     return response
+
+
+_TOO_MANY_ATTEMPTS = "Trop de tentatives, réessayez dans quelques minutes"
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_form():
+    return _render_auth_page("login")
+
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: SASession = Depends(get_db),
+):
+    """Email + mot de passe d'un compte, ou SITE_USERNAME/SITE_PASSWORD.
+
+    Un seul compteur d'echecs pour les deux: l'administrateur reste aussi
+    protege du brute-force qu'avant l'arrivee des comptes.
+    """
+    client_key = _client_key(request)
+    if is_login_rate_limited(client_key):
+        return HTMLResponse(_render_auth_page("login", _TOO_MANY_ATTEMPTS), status_code=429)
+    if check_credentials(username, password):
+        register_successful_login(client_key)
+        return _login_response(create_session_token())
+    user = authenticate_user(db, username, password) if "@" in username else None
+    if user is None:
+        register_failed_login(client_key)
+        return HTMLResponse(_render_auth_page("login", "Identifiant ou mot de passe incorrect"))
+    register_successful_login(client_key)
+    user.last_login_at = datetime.now(timezone.utc)
+    db.commit()
+    return _login_response(token_for_user(user))
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_form():
+    return _render_auth_page("register")
+
+
+@app.post("/register")
+def register_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: SASession = Depends(get_db),
+):
+    """Le compteur de /login s'applique aussi ici: sinon la creation de
+    compte servirait a enumerer les emails inscrits sans limite."""
+    client_key = _client_key(request)
+    if is_login_rate_limited(client_key):
+        return HTMLResponse(_render_auth_page("register", _TOO_MANY_ATTEMPTS), status_code=429)
+    email = normalize_email(username)
+    if "@" not in email or len(email) > 320:
+        return HTMLResponse(_render_auth_page("register", "Adresse email invalide"), status_code=422)
+    problem = password_problem(password)
+    if problem:
+        return HTMLResponse(_render_auth_page("register", problem), status_code=422)
+    if get_user_by_email(db, email) is not None:
+        register_failed_login(client_key)
+        return HTMLResponse(
+            _render_auth_page("register", "Un compte existe déjà avec cet email"), status_code=409
+        )
+    user = register_user(db, email, password)
+    return _login_response(token_for_user(user))
+
+
+@app.get("/auth/google")
+async def google_login(request: Request):
+    if not _google_configured():
+        raise HTTPException(status_code=404, detail="Connexion Google non configurée")
+    redirect_uri = str(request.url_for("google_callback"))
+    if settings.cookie_secure and redirect_uri.startswith("http://"):
+        # Derriere un tunnel/proxy TLS, l'app voit du http; Google, lui,
+        # exige l'URI exacte declaree (https).
+        redirect_uri = "https://" + redirect_uri[len("http://"):]
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@app.get("/auth/google/callback")
+async def google_callback(request: Request, db: SASession = Depends(get_db)):
+    if not _google_configured():
+        raise HTTPException(status_code=404, detail="Connexion Google non configurée")
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except OAuthError as exc:
+        log.warning("Echec OAuth Google: %s", exc)
+        return HTMLResponse(
+            _render_auth_page("login", "La connexion Google a échoué, réessayez"), status_code=400
+        )
+    info = token.get("userinfo") or {}
+    sub, email = info.get("sub"), info.get("email")
+    if not sub or not email:
+        return HTMLResponse(
+            _render_auth_page("login", "Google n'a pas fourni d'adresse email"), status_code=400
+        )
+    user = get_or_create_google_user(db, sub, email, bool(info.get("email_verified")))
+    return _login_response(token_for_user(user))
+
+
+@app.get("/me")
+def me(request: Request, db: SASession = Depends(get_db)):
+    """Qui est connecte, pour que le frontend adapte ses menus."""
+    info = _session(request)
+    if info is None:
+        return {"authenticated": False, "premium": False}
+    email = settings.site_username if info.is_admin else None
+    if not info.is_admin:
+        user = db.get(User, info.user_id)
+        email = user.email if user else None
+    return {"authenticated": True, "premium": info.is_premium, "admin": info.is_admin, "email": email}
 
 
 @app.post("/logout")
@@ -381,16 +588,6 @@ async def lifespan(_app: FastAPI):
 
 
 app.router.lifespan_context = lifespan
-
-
-# — Dependency —
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # — Response models —
@@ -713,7 +910,7 @@ def get_listings(
     offset: int = Query(0, ge=0, le=_MAX_OFFSET),
     db: SASession = Depends(get_db),
 ):
-    authenticated = _is_authenticated(request)
+    authenticated = _is_premium(request)
     query = db.query(Listing)
     query = _apply_filters(query, province, district, price_min, price_max, monthly, status)
 
@@ -742,7 +939,7 @@ def get_new_listings(
 ):
     """Annonces détectées pour la première fois dans les N dernières heures."""
     from datetime import timedelta
-    authenticated = _is_authenticated(request)
+    authenticated = _is_premium(request)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
     listings = (
         db.query(Listing)
@@ -762,7 +959,7 @@ def get_updated_listings(
     db: SASession = Depends(get_db),
 ):
     from datetime import timedelta
-    authenticated = _is_authenticated(request)
+    authenticated = _is_premium(request)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
     listing_ids = (
         db.query(ListingHistory.listing_id)
@@ -794,7 +991,7 @@ def get_price_changed_listings(
     db: SASession = Depends(get_db),
 ):
     from datetime import timedelta
-    authenticated = _is_authenticated(request)
+    authenticated = _is_premium(request)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
     listing_ids = (
         db.query(ListingHistory.listing_id)
@@ -828,7 +1025,7 @@ def get_monthly_listings(
     db: SASession = Depends(get_db),
 ):
     """Annonces avec Contract monthly disponible."""
-    authenticated = _is_authenticated(request)
+    authenticated = _is_premium(request)
     query = (
         db.query(Listing)
         .filter(
@@ -856,7 +1053,7 @@ def get_listing(listing_id: int, request: Request, db: SASession = Depends(get_d
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Annonce non trouvée")
-    return _listing_to_response(listing, authenticated=_is_authenticated(request))
+    return _listing_to_response(listing, authenticated=_is_premium(request))
 
 
 @app.get("/history/{listing_id}", response_model=list[HistoryResponse])
@@ -959,7 +1156,7 @@ def get_stats(request: Request, db: SASession = Depends(get_db)):
         .scalar()
     )
 
-    if not _is_authenticated(request):
+    if not _is_premium(request):
         # Sortie avant les agregats reserves aux comptes: `by_province`
         # est un GROUP BY sur toute la table, execute a chaque ouverture
         # de la vitrine s'il restait ici.

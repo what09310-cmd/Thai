@@ -6,7 +6,15 @@ paths:
 
 ## API
 
-`src/api/main.py`: FastAPI app serving both the JSON API (`/listings*`, `/provinces`, `/stats`, `/history/{id}`) and the static frontend (mounted at `/static`, plus explicit routes per page under `frontend/`). `AuthMiddleware` gates only `PROTECTED_PATHS` (`/` = `index.html`, and `/vip.html`) behind a signed session cookie (`src/api/auth.py`); everything else — other pages, API routes, assets — is public. Files reached via `/static/...` are normalised and checked against the same list (case-insensitively, NTFS oblige) so that route doesn't bypass the login gate. Because `/listings*` is public, every query parameter there needs an explicit range: SQLite reads `LIMIT -1` as "no limit", so a `limit` without `ge=1` is a full-catalogue dump for anyone.
+`src/api/main.py`: FastAPI app serving both the JSON API (`/listings*`, `/provinces`, `/stats`, `/history/{id}`) and the static frontend (mounted at `/static`, plus explicit routes per page under `frontend/`). `AuthMiddleware` gates only `PROTECTED_PATHS` (a dict: `/` = `index.html` for any signed-in account, `/vip.html` for premium only) behind a signed session cookie (`src/api/auth.py`); everything else — other pages, API routes, assets — is public. A signed-in non-premium account asking for a premium page is redirected to `/premium.html` (the offer), not to `/login`.
+
+## Accounts
+
+Three levels share one cookie, `<user_id>.<role>.<expiry>.<hmac>` (`src/api/auth.py::read_session_token`): anonymous, `user` (free account), `premium`/`admin`. The admin is `SITE_USERNAME`/`SITE_PASSWORD` from `.env` (user id 0, no row in `users`) and counts as premium; `create_session_token()` with no argument still mints an admin token, which is what the older tests rely on. The token is verified without touching the database, so a premium upgrade only takes effect at the next login unless the route performing it re-issues the cookie via `_login_response(token_for_user(user))`.
+
+Routes: `GET/POST /login` (email+password of a `users` row, or the admin pair — the `username` form field carries both), `GET/POST /register`, `GET /auth/google` → `GET /auth/google/callback` (authlib; 404 and no button while `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are empty), `POST /logout`, `GET /me`. `/register` shares the `/login` failure counter so it cannot be used to enumerate emails. Passwords are bcrypt (`bcrypt` directly, not passlib, which breaks on bcrypt ≥ 4.1); Google accounts are matched by `google_sub`, then by email only when Google reports it verified. `SessionMiddleware` exists solely for authlib's OAuth `state`, on a separate `oauth_state` cookie so it never collides with the `session` cookie.
+
+`_is_authenticated` (any account) only decides the rate-limit budget; `_is_premium` decides whether `_listing_to_response` and `/stats` return the sold fields. A free account gets exactly the anonymous view of the data. Files reached via `/static/...` are normalised and checked against the same list (case-insensitively, NTFS oblige) so that route doesn't bypass the login gate. Because `/listings*` is public, every query parameter there needs an explicit range: SQLite reads `LIMIT -1` as "no limit", so a `limit` without `ge=1` is a full-catalogue dump for anyone.
 
 ## Public data contract
 

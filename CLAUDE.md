@@ -41,6 +41,11 @@ Index migration (run once on an existing database — `create_all` never adds in
 python scripts/migrate_add_indexes.py
 ```
 
+Users table (run once on an existing database, same reason):
+```
+python scripts/migrate_add_users.py
+```
+
 Docker Compose profiles (Postgres-backed): `docker-compose --profile scraper up`, `docker-compose --profile scheduler up`; the `api` service has no profile and starts by default with `docker-compose up`. All three services read `.env` via `env_file` — the API refuses to boot while `SECRET_KEY`/`SITE_PASSWORD` still hold their `.env.example` values.
 
 ## Task Delegation

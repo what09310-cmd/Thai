@@ -37,3 +37,5 @@ tunnel_url.txt
 
 # Config Codex locale : contient des cles API (Composio, Firecrawl, Perplexity)
 .codex/
+.env.render
+.env.local.bak
