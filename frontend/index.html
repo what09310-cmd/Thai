@@ -273,8 +273,33 @@
 
   .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
-  .slider-wrap { display: flex; flex-direction: column; gap: 4px; }
-  .slider-wrap input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .slider-wrap input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--border);
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .slider-wrap input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    cursor: pointer;
+  }
+  .slider-wrap input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    cursor: pointer;
+  }
   .slider-info {
     display: flex;
     justify-content: space-between;
@@ -282,53 +307,75 @@
     font-size: 10px;
     color: var(--muted);
   }
+  .slider-info #slider-val { color: var(--accent); font-weight: 700; }
 
-  .toggle-row {
+  /* ── Filtres : chips ── */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip { position: relative; display: inline-flex; cursor: pointer; }
+  .chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+  .chip-label {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 4px 0;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-pill);
+    background: var(--card);
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    user-select: none;
+    transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .1s;
   }
-  .toggle-row span { font-size: 12px; color: var(--text); }
+  .chip:hover .chip-label { border-color: var(--accent); color: var(--text); }
+  .chip:active .chip-label { transform: scale(.97); }
+  .chip input:checked + .chip-label {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(80,70,245,.28);
+  }
+  .chip input:focus-visible + .chip-label { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-  .toggle { position: relative; width: 34px; height: 18px; }
-  .toggle input { opacity: 0; width: 0; height: 0; }
-  .toggle-track {
-    position: absolute; inset: 0;
-    background: #cfc9bf;
-    border-radius: 18px;
-    cursor: pointer;
-    transition: background .2s;
-  }
-  .toggle-track::before {
-    content: "";
-    position: absolute;
-    width: 12px; height: 12px;
-    left: 3px; top: 3px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform .2s;
-  }
-  .toggle input:checked + .toggle-track { background: var(--green); }
-  .toggle input:checked + .toggle-track::before { transform: translateX(16px); }
-  .toggle input:focus-visible + .toggle-track { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .toggle-blue input:checked + .toggle-track { background: var(--blue); }
-  .toggle-purple input:checked + .toggle-track { background: var(--purple); }
+  .chip-monthly input:checked + .chip-label { background: var(--green); border-color: var(--green); box-shadow: 0 3px 10px rgba(47,158,68,.28); }
+  .chip-3month input:checked + .chip-label { background: var(--blue); border-color: var(--blue); box-shadow: 0 3px 10px rgba(80,70,245,.28); }
+  .chip-6month input:checked + .chip-label { background: var(--purple); border-color: var(--purple); box-shadow: 0 3px 10px rgba(121,80,242,.28); }
+
+  #contract-filter-section .chip-group .chip { flex: 1 1 0; }
+  #contract-filter-section .chip-label { width: 100%; justify-content: center; }
+
+  .chip-equip { row-gap: 8px; }
+  .chip-equip .chip { flex: 1 1 calc(50% - 4px); }
+  .chip-equip .chip-label { width: 100%; justify-content: flex-start; }
 
   .btn-reset {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     width: 100%;
-    padding: 9px;
+    padding: 10px;
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1.5px solid var(--border);
     border-radius: var(--r-pill);
     color: var(--muted);
-    font-size: 12px;
-    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: var(--sans);
     cursor: pointer;
     transition: all .15s;
     margin-top: 4px;
   }
-  .btn-reset:hover { border-color: var(--text); color: var(--text); }
+  .btn-reset:hover { border-color: var(--red); color: var(--red); background: rgba(224,49,49,.06); }
 
   /* ── Main ── */
   .main {
@@ -366,7 +413,7 @@
   /* ── Grille ── */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
   }
 
@@ -755,6 +802,12 @@
   color: var(--text);
   white-space: nowrap;
 }
+  @media (max-width: 1200px) {
+    .grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
   @media (max-width: 768px) {
     .shell { grid-template-columns: 1fr; }
     .sidebar { position: static; max-height: none; overflow: visible; border-right: none; border-bottom: 1px solid var(--border); }
@@ -887,71 +940,48 @@
 
     <div class="filter-section" id="contract-filter-section">
       <div class="filter-label">Contrat</div>
-      <div class="toggle-row">
-        <span>1 mois</span>
-        <label class="toggle">
+      <div class="chip-group">
+        <label class="chip chip-monthly">
           <input type="checkbox" id="f-monthly" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 1 mois">
-          <div class="toggle-track"></div>
+          <span class="chip-label">1 mois</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>3 mois</span>
-        <label class="toggle toggle-blue">
+        <label class="chip chip-3month">
           <input type="checkbox" id="f-3month" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 3 mois">
-          <div class="toggle-track"></div>
+          <span class="chip-label">3 mois</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>6 mois</span>
-        <label class="toggle toggle-purple">
+        <label class="chip chip-6month">
           <input type="checkbox" id="f-6month" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 6 mois">
-          <div class="toggle-track"></div>
+          <span class="chip-label">6 mois</span>
         </label>
       </div>
     </div>
 
     <div class="filter-section">
       <div class="filter-label">Équipements</div>
-      <div class="toggle-row">
-        <span>Desk</span>
-        <label class="toggle">
+      <div class="chip-group chip-equip">
+        <label class="chip">
           <input type="checkbox" id="f-am-desk" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Desk">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🖥️ Desk</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>In-room WIFI</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-wifi" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec WIFI">
-          <div class="toggle-track"></div>
+          <span class="chip-label">📶 WIFI</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Smoking</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-smoking" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Smoking">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🚬 Smoking</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Pool</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-pool" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Pool">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🏊 Pool</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Fitness</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-fitness" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Fitness">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🏋️ Fitness</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Convenient Store</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-store" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Convenient Store">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🏪 Store</span>
         </label>
       </div>
     </div>
