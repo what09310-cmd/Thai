@@ -8,37 +8,64 @@
 <meta property="og:description" content="Suivi des annonces de location en Thaïlande">
 <meta property="og:image" content="/static/logo.png">
 <meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:       #0a0a0a;
-    --surface:  #0f0f0f;
-    --card:     #0f0f0f;
-    --border:   #1a1a1a;
-    --accent:   #facc15;
-    --accent-ink: #0a0a0a;
-    --blue:     #3b82f6;
-    --green:    #4ade80;
-    --red:      #f87171;
-    --purple:   #a78bfa;
-    --text:     #e5e5e5;
-    --muted:    #a3a3a3;
-    --dim:      #525252;
-    --focus:    #facc15;
-    --mono:     'JetBrains Mono', monospace;
-    --sans:     'Inter', system-ui, sans-serif;
+    --bg:       #faf8f4;
+    --surface:  #ffffff;
+    --card:     #ffffff;
+    --border:   #e9e4da;
+    --accent:   #5046f5;
+    --accent-ink: #ffffff;
+    --brand-lime: #c7ef6c;
+    --brand-gold: #e8b765;
+    --blue:     #5046f5;
+    --green:    #2f9e44;
+    --red:      #e03131;
+    --purple:   #7950f2;
+    --text:     #14130f;
+    --muted:    #6c6660;
+    --dim:      #9b948b;
+    --focus:    #5046f5;
+    --mono:     'Plus Jakarta Sans', system-ui, sans-serif;
+    --sans:     'Plus Jakarta Sans', system-ui, sans-serif;
+    --r-pill:   9999px;
+    --r-card:   20px;
+    --r-ctl:    12px;
+    --sky-1:    #cfe8b8;
+    --sky-2:    #dcd6f9;
+    --sky-3:    #cde8f4;
   }
 
   body {
-    background: var(--bg);
+    background: var(--sky-2);
     color: var(--text);
     font-family: var(--sans);
     font-size: 14px;
     min-height: 100vh;
   }
+
+  /* Ciel : un seul degrade fixe derriere la page (::after) et une bande de
+     135px par-dessus le contenu (::before) qui masque ce qui passe sous le
+     header. Les deux partagent la meme taille pour se superposer pile. */
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    background: linear-gradient(165deg,
+      var(--sky-1) 0%, var(--sky-2) 46%, var(--sky-3) 100%) no-repeat;
+    background-size: 100vw 100vh;
+  }
+  body::after { bottom: 0; z-index: -1; }
+  body::before { height: 135px; z-index: 80; }
 
   .visually-hidden {
     position: absolute;
@@ -58,26 +85,48 @@
 
   /* ── Header ── */
   header {
-    padding: 16px 28px;
-    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 8px;
+    z-index: 100;
+    width: calc(100% - 40px);
+    max-width: 780px;
+    margin: 8px auto 0;
+    padding: 9px 10px 9px 22px;
+    background: #1d3c10;
+    border-radius: var(--r-pill);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    position: sticky;
-    top: 0;
-    background: var(--bg);
-    z-index: 20;
+    gap: 18px;
+    box-shadow: 0 10px 28px rgba(29,60,16,.22);
   }
 
   .logo {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
+    text-decoration: none;
+    font-family: var(--sans);
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -.6px;
+    line-height: 1;
   }
-  .logo img {
-    height: 60px;
-    width: auto;
-    display: block;
+  .logo-thai { color: var(--brand-lime); }
+  .logo-month { color: var(--brand-gold); }
+
+  .header-map {
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--r-pill);
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: filter .15s;
   }
+  .header-map:hover { filter: brightness(1.12); }
 
   .header-right {
     display: flex;
@@ -85,22 +134,58 @@
     gap: 20px;
   }
   .hstat {
-    font-family: var(--mono);
-    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 92px;
+    padding: 8px 14px;
+    border: 1px solid rgba(255,255,255,.7);
+    border-radius: var(--r-pill);
+    background: rgba(255,255,255,.82);
+    font-family: var(--sans);
+    font-size: 10px;
+    line-height: 1.15;
+    text-align: center;
     color: var(--muted);
   }
-  .hstat b { color: var(--text); }
+  .hstat b {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .city-stats {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .city-total {
+    flex-shrink: 0;
+  }
 
   /* ── Barre de villes ── */
   .city-bar {
-    padding: 14px 28px;
-    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 76px;
+    margin: 10px 28px 0;
+    z-index: 90;
+    padding: 14px 18px;
+    border: 1px solid rgba(255,255,255,.78);
+    border-radius: 24px;
     display: flex;
     align-items: center;
     gap: 8px;
     overflow-x: auto;
     scrollbar-width: none;
-    background: var(--surface);
+    background: rgba(255,255,255,.78);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 26px rgba(50,45,90,.08);
   }
   .city-bar::-webkit-scrollbar { display: none; }
 
@@ -109,7 +194,7 @@
   .location-filter { display:flex; align-items:center; gap:8px; }
   .city-select {
     min-width:240px; background:var(--card); border:1px solid var(--border);
-    border-radius:6px; color:var(--text); font-family:var(--sans);
+    border-radius:var(--r-pill); color:var(--text); font-family:var(--sans);
     font-size:13px; padding:9px 12px; outline:none; cursor:pointer;
   }
   .city-select:focus { border-color:var(--accent); }
@@ -127,14 +212,14 @@
 
   .btn-new24h {
     display: flex; align-items: center; justify-content: center; gap: 6px;
-    width: 100%; padding: 8px 14px; border-radius: 6px;
+    width: 100%; padding: 9px 14px; border-radius: var(--r-pill);
     border: 1px solid var(--border); background: var(--card);
     color: var(--muted); font-family: var(--sans);
     font-size: 13px; font-weight: 500; cursor: pointer;
     white-space: nowrap; flex-shrink: 0; transition: all .15s;
   }
-  .btn-new24h:hover { border-color: #a855f7; color: var(--text); }
-  .btn-new24h.active { background: #a855f7; border-color: #a855f7; color: #fff; font-weight: 700; }
+  .btn-new24h:hover { border-color: var(--purple); color: var(--text); }
+  .btn-new24h.active { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 700; }
   .btn-new24h .new24h-count { font-family: var(--mono); font-size: 10px; opacity: .75; }
 
 
@@ -143,6 +228,7 @@
     display: grid;
     grid-template-columns: 260px 1fr;
     min-height: calc(100vh - 101px);
+    padding-top: 18px;
   }
 
   /* ── Sidebar ── */
@@ -153,8 +239,9 @@
     flex-direction: column;
     gap: 28px;
     position: sticky;
-    top: 101px;
-    height: calc(100vh - 101px);
+    /* 76px (haut de la barre) + sa hauteur + 10px de marge */
+    top: calc(86px + var(--city-bar-h, 74px));
+    max-height: calc(100vh - 86px - var(--city-bar-h, 74px));
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
@@ -186,8 +273,33 @@
 
   .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
-  .slider-wrap { display: flex; flex-direction: column; gap: 4px; }
-  .slider-wrap input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .slider-wrap input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--border);
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .slider-wrap input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    cursor: pointer;
+  }
+  .slider-wrap input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    cursor: pointer;
+  }
   .slider-info {
     display: flex;
     justify-content: space-between;
@@ -195,71 +307,95 @@
     font-size: 10px;
     color: var(--muted);
   }
+  .slider-info #slider-val { color: var(--accent); font-weight: 700; }
 
-  .toggle-row {
+  /* ── Filtres : chips ── */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip { position: relative; display: inline-flex; cursor: pointer; }
+  .chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+  .chip-label {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 4px 0;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-pill);
+    background: var(--card);
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    user-select: none;
+    transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .1s;
   }
-  .toggle-row span { font-size: 12px; color: var(--text); }
+  .chip:hover .chip-label { border-color: var(--accent); color: var(--text); }
+  .chip:active .chip-label { transform: scale(.97); }
+  .chip input:checked + .chip-label {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(80,70,245,.28);
+  }
+  .chip input:focus-visible + .chip-label { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-  .toggle { position: relative; width: 34px; height: 18px; }
-  .toggle input { opacity: 0; width: 0; height: 0; }
-  .toggle-track {
-    position: absolute; inset: 0;
-    background: var(--border);
-    border-radius: 18px;
-    cursor: pointer;
-    transition: background .2s;
-  }
-  .toggle-track::before {
-    content: "";
-    position: absolute;
-    width: 12px; height: 12px;
-    left: 3px; top: 3px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform .2s;
-  }
-  .toggle input:checked + .toggle-track { background: var(--green); }
-  .toggle input:checked + .toggle-track::before { transform: translateX(16px); }
-  .toggle input:focus-visible + .toggle-track { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .toggle-blue input:checked + .toggle-track { background: var(--blue); }
-  .toggle-purple input:checked + .toggle-track { background: var(--purple); }
+  .chip-monthly input:checked + .chip-label { background: var(--green); border-color: var(--green); box-shadow: 0 3px 10px rgba(47,158,68,.28); }
+  .chip-3month input:checked + .chip-label { background: var(--blue); border-color: var(--blue); box-shadow: 0 3px 10px rgba(80,70,245,.28); }
+  .chip-6month input:checked + .chip-label { background: var(--purple); border-color: var(--purple); box-shadow: 0 3px 10px rgba(121,80,242,.28); }
+
+  #contract-filter-section .chip-group .chip { flex: 1 1 0; }
+  #contract-filter-section .chip-label { width: 100%; justify-content: center; }
+
+  .chip-equip { row-gap: 8px; }
+  .chip-equip .chip { flex: 1 1 calc(50% - 4px); }
+  .chip-equip .chip-label { width: 100%; justify-content: flex-start; }
 
   .btn-reset {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     width: 100%;
-    padding: 8px;
+    padding: 10px;
     background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-pill);
     color: var(--muted);
-    font-size: 12px;
-    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: var(--sans);
     cursor: pointer;
     transition: all .15s;
     margin-top: 4px;
   }
-  .btn-reset:hover { border-color: var(--text); color: var(--text); }
+  .btn-reset:hover { border-color: var(--red); color: var(--red); background: rgba(224,49,49,.06); }
 
   .btn-premium {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
     padding: 10px;
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    color: var(--accent-ink);
-    font-size: 12px;
-    font-weight: 800;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-pill);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 700;
     font-family: var(--sans);
     text-decoration: none;
     text-align: center;
-    display: block;
     cursor: pointer;
-    transition: opacity .15s;
+    transition: all .15s;
   }
-  .btn-premium:hover { opacity: .85; }
+  .btn-premium:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── Main ── */
   .main {
@@ -285,7 +421,7 @@
   .sort-select {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--r-pill);
     color: var(--text);
     font-family: var(--mono);
     font-size: 12px;
@@ -297,14 +433,14 @@
   /* ── Grille ── */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
   }
 
   .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--r-card);
     overflow: hidden;
     cursor: pointer;
     transition: border-color .15s, box-shadow .15s;
@@ -313,7 +449,7 @@
   }
   .card:hover, .card:focus-visible {
     border-color: var(--accent);
-    box-shadow: 0 4px 16px rgba(0,0,0,.45);
+    box-shadow: 0 10px 30px rgba(20,19,15,.10);
   }
 
   .card-img {
@@ -389,9 +525,11 @@
     background: var(--border);
     transform: scaleX(-1);
     -webkit-user-drag: none;
+    -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
-    cursor: zoom-in;
+    pointer-events: none;
+    cursor: default;
   }
   .modal-gallery-item .photo-watermark {
     height: 85px;
@@ -404,14 +542,14 @@
     font-family: var(--mono);
     font-size: 9px;
     font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 4px;
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
     letter-spacing: .05em;
   }
-  .badge-monthly { top: 8px; left: 8px; background: var(--green); color: #000; }
+  .badge-monthly { top: 8px; left: 8px; background: var(--green); color: #fff; }
   .badge-verified { top: 8px; right: 8px; background: var(--blue); color: #fff; }
   .badge-term-3 { background: var(--blue); color: #fff; }
-  .badge-term-6 { background: var(--purple); color: #000; }
+  .badge-term-6 { background: var(--purple); color: #fff; }
 
   .card-badge-slot { padding: 8px 14px 0; height: 25px; box-sizing: border-box; display: flex; align-items: center; gap: 4px; }
 
@@ -434,10 +572,10 @@
     flex-wrap: wrap;
   }
   .loc-district {
-    background: rgba(59,130,246,.15);
+    background: rgba(80,70,245,.10);
     color: var(--blue);
-    border-radius: 4px;
-    padding: 1px 7px;
+    border-radius: var(--r-pill);
+    padding: 2px 9px;
     font-family: var(--mono);
     font-size: 10px;
     font-weight: 600;
@@ -456,7 +594,7 @@
   .cc {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--r-ctl);
     padding: 6px 4px;
     display: flex;
     flex-direction: column;
@@ -515,7 +653,7 @@
   .pager button {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--r-pill);
     color: var(--text);
     font-family: var(--mono);
     font-size: 12px;
@@ -530,8 +668,8 @@
   /* ── Modal ── */
   .overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,.75);
-    backdrop-filter: blur(6px);
+    background: rgba(20,19,15,.45);
+    backdrop-filter: blur(8px);
     z-index: 100;
     display: none;
     align-items: center;
@@ -540,76 +678,10 @@
   }
   .overlay.open { display: flex; }
 
-  .lightbox-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,.92);
-    z-index: 200;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    cursor: zoom-out;
-  }
-  .lightbox-overlay.open { display: flex; }
-  .lightbox-content {
-    position: relative;
-    max-width: 95vw;
-    max-height: 95vh;
-  }
-  .lightbox-content img#lightbox-img {
-    display: block;
-    max-width: 95vw;
-    max-height: 95vh;
-    width: auto; height: auto;
-    object-fit: contain;
-    border-radius: 8px;
-    background: var(--border);
-    transform: scaleX(-1);
-    -webkit-user-drag: none;
-    user-select: none;
-    -webkit-touch-callout: none;
-    cursor: default;
-  }
-  .lightbox-content .photo-watermark-tile { border-radius: 8px; }
-  .lightbox-content .photo-watermark { height: 110px; bottom: 16px; right: 16px; }
-  .lightbox-close {
-    position: fixed;
-    top: 20px; right: 20px;
-    background: rgba(0,0,0,.5);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: #fff;
-    width: 32px; height: 32px;
-    cursor: pointer;
-    font-size: 16px;
-    display: flex; align-items: center; justify-content: center;
-    transition: color .15s;
-  }
-  .lightbox-close:hover { color: var(--accent); }
-  .lightbox-nav {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0,0,0,.5);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: #fff;
-    width: 44px; height: 44px;
-    cursor: pointer;
-    font-size: 26px;
-    line-height: 1;
-    display: flex; align-items: center; justify-content: center;
-    transition: color .15s;
-  }
-  .lightbox-nav:hover { color: var(--accent); }
-  .lightbox-nav[disabled] { display: none; }
-  .lightbox-prev { left: 20px; }
-  .lightbox-next { right: 20px; }
-
   .modal {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--r-card);
     width: 100%; max-width: 600px;
     max-height: 88vh;
     overflow-y: auto;
@@ -622,7 +694,7 @@
   }
   .modal-close {
     background: none; border: 1px solid var(--border);
-    border-radius: 6px; color: var(--muted);
+    border-radius: var(--r-pill); color: var(--muted);
     width: 28px; height: 28px; cursor: pointer;
     font-size: 14px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -634,8 +706,8 @@
   .tag {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    padding: 3px 10px;
     font-family: var(--mono);
     font-size: 11px;
     color: var(--muted);
@@ -647,7 +719,7 @@
   }
   .mc {
     background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; padding: 12px 14px;
+    border-radius: var(--r-ctl); padding: 13px 16px;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
   .mc-label {
@@ -677,7 +749,7 @@
   .modal-amenities { display: flex; flex-wrap: wrap; gap: 5px; }
   .amenity {
     background: var(--bg); border: 1px solid var(--border);
-    border-radius: 4px; padding: 3px 8px;
+    border-radius: var(--r-pill); padding: 4px 10px;
     font-size: 11px; color: var(--muted); font-family: var(--mono);
   }
 
@@ -698,18 +770,45 @@
   align-items: center;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 4px 7px;
+  border-radius: var(--r-pill);
+  padding: 4px 9px;
   font-family: var(--mono);
   font-size: 9px;
   color: var(--text);
   white-space: nowrap;
 }
+
+.listing-cta {
+  display: block;
+  margin-top: 10px;
+  padding: 9px 14px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-pill);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--sans);
+  text-align: center;
+  text-decoration: none;
+  transition: opacity .15s;
+}
+
+.listing-cta:hover { opacity: .85; }
+
+  @media (max-width: 1200px) {
+    .grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
   @media (max-width: 768px) {
     .shell { grid-template-columns: 1fr; }
-    .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .sidebar { position: static; max-height: none; overflow: visible; border-right: none; border-bottom: 1px solid var(--border); }
     .grid { grid-template-columns: 1fr; }
-    .hstat { display: none; }
+    .shell { padding-top: 0; }
+    .city-bar { margin: 24px 12px 0; padding: 12px; }
+    .city-stats { width: 100%; gap: 8px 14px; margin-left: 0; }
   }
 
   /* ── Filtre région (FAB) ── */
@@ -778,18 +877,15 @@
 <body>
 
 <header>
-  <div class="logo"><img src="/static/logo.png" alt="ThaiMonth"></div>
-  <div class="header-right">
-    <div class="hstat">Logement <b id="h-total">—</b></div>
-    <div class="hstat">1 mois dispo <b id="h-monthly">—</b></div>
-    <div class="hstat">3 mois dispo <b id="h-3month">—</b></div>
-    <div class="hstat">6 mois dispo <b id="h-6month">—</b></div>
-    <div class="hstat">🆕 New 24h <b id="h-new">—</b></div>
-  </div>
+  <a class="logo" href="/" aria-label="ThaiMonth">
+    <span class="logo-thai">Thai</span><span class="logo-month">Month</span>
+  </a>
+  <a class="header-map" href="/vip.html">Voir la carte</a>
 </header>
 
 <!-- FILTRES VILLE + QUARTIER -->
 <div class="city-bar location-filters">
+  <div class="hstat city-total"><span>Logement</span><b id="h-total">—</b></div>
   <div class="location-filter" id="featured-cities">
     <label class="city-label" for="featured-city-select">⭐ Grandes villes :</label>
     <select class="city-select" id="featured-city-select" onchange="toggleFeaturedCity(this.value)">
@@ -816,6 +912,11 @@
     <select class="city-select" id="district-select" onchange="selectDistrict(this.value)" disabled>
       <option value="">Sélectionnez d'abord une ville</option>
     </select>
+  </div>
+  <div class="city-stats" aria-label="Statistiques des logements">
+    <div class="hstat"><span>1 mois dispo</span><b id="h-monthly">—</b></div>
+    <div class="hstat"><span>3 mois dispo</span><b id="h-3month">—</b></div>
+    <div class="hstat"><span>6 mois dispo</span><b id="h-6month">—</b></div>
   </div>
 </div>
 
@@ -849,71 +950,48 @@
 
     <div class="filter-section" id="contract-filter-section">
       <div class="filter-label">Contrat</div>
-      <div class="toggle-row">
-        <span>1 mois</span>
-        <label class="toggle">
+      <div class="chip-group">
+        <label class="chip chip-monthly">
           <input type="checkbox" id="f-monthly" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 1 mois">
-          <div class="toggle-track"></div>
+          <span class="chip-label">1 mois</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>3 mois</span>
-        <label class="toggle toggle-blue">
+        <label class="chip chip-3month">
           <input type="checkbox" id="f-3month" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 3 mois">
-          <div class="toggle-track"></div>
+          <span class="chip-label">3 mois</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>6 mois</span>
-        <label class="toggle toggle-purple">
+        <label class="chip chip-6month">
           <input type="checkbox" id="f-6month" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec contrat 6 mois">
-          <div class="toggle-track"></div>
+          <span class="chip-label">6 mois</span>
         </label>
       </div>
     </div>
 
     <div class="filter-section">
       <div class="filter-label">Équipements</div>
-      <div class="toggle-row">
-        <span>Desk</span>
-        <label class="toggle">
+      <div class="chip-group chip-equip">
+        <label class="chip">
           <input type="checkbox" id="f-am-desk" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Desk">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🖥️ Desk</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>In-room WIFI</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-wifi" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec WIFI">
-          <div class="toggle-track"></div>
+          <span class="chip-label">📶 WIFI</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Smoking</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-smoking" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Smoking">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🚬 Smoking</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Pool</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-pool" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Pool">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🏊 Pool</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Fitness</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-fitness" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Fitness">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🏋️ Fitness</span>
         </label>
-      </div>
-      <div class="toggle-row">
-        <span>Convenient Store</span>
-        <label class="toggle">
+        <label class="chip">
           <input type="checkbox" id="f-am-store" onchange="applyFilters()" aria-label="Afficher uniquement les annonces avec Convenient Store">
-          <div class="toggle-track"></div>
+          <span class="chip-label">🏪 Store</span>
         </label>
       </div>
     </div>
@@ -969,19 +1047,17 @@
   <div class="modal" id="modal-body" role="dialog" aria-modal="true" aria-label="Détail de l'annonce" tabindex="-1"></div>
 </div>
 
-<!-- LIGHTBOX -->
-<div class="lightbox-overlay" id="lightbox-overlay" onclick="closeLightbox(event)">
-  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Fermer">✕</button>
-  <button class="lightbox-nav lightbox-prev" id="lightbox-prev" onclick="navigateLightbox(-1)" aria-label="Photo précédente">‹</button>
-  <button class="lightbox-nav lightbox-next" id="lightbox-next" onclick="navigateLightbox(1)" aria-label="Photo suivante">›</button>
-  <div class="lightbox-content">
-    <img id="lightbox-img" src="" alt="" draggable="false" oncontextmenu="return false">
-    <div class="photo-watermark-tile"></div>
-    <img class="photo-watermark" src="/static/logo.png" alt="">
-  </div>
-</div>
-
 <script>
+// La barre de villes passe sur deux lignes sous ~1550px : on publie sa
+// hauteur reelle pour que la sidebar sticky se cale juste en dessous.
+(() => {
+  const bar = document.querySelector(".city-bar");
+  if (!bar || !("ResizeObserver" in window)) return;
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--city-bar-h", `${bar.offsetHeight}px`);
+  }).observe(bar);
+})();
+
 const API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
 const PER_PAGE = 30;
 
@@ -1648,6 +1724,8 @@ function cardHTML(l) {
         </div>
       ` : ""}
 
+      <a class="listing-cta" href="/payant.html?listing=${encodeURIComponent(l.id)}" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">Voir l'annonce complète</a>
+
       ${(() => {
         const boxes = [
           show1 && c1 !== "—" ? `<div class="cc"><div class="cc-label">1 mois</div><div class="cc-val">${c1}</div></div>` : "",
@@ -1743,8 +1821,6 @@ function goPage(p) {
 // ── Modal ────────────────────────────────────────────────────────────
 
 let lastFocusedEl = null;
-let currentGalleryImages = [];
-let currentLightboxIndex = 0;
 
 async function openModal(id) {
   lastFocusedEl = document.activeElement;
@@ -1755,42 +1831,17 @@ async function openModal(id) {
   try {
     const l = await fetch(`${API}/listings/${id}`).then(r => r.json());
     body.innerHTML = modalHTML(l);
-    currentGalleryImages = l.images || [];
   } catch(e) {
     body.innerHTML = `<div class="state-box">Erreur de chargement</div>`;
   }
 }
 
-function openLightbox(i) {
-  currentLightboxIndex = i;
-  document.getElementById("lightbox-img").src = currentGalleryImages[i] || "";
-  document.getElementById("lightbox-overlay").classList.add("open");
-  const showNav = currentGalleryImages.length > 1;
-  document.getElementById("lightbox-prev").disabled = !showNav;
-  document.getElementById("lightbox-next").disabled = !showNav;
-}
-function closeLightbox(e) {
-  if (e && e.target !== document.getElementById("lightbox-overlay")) return;
-  document.getElementById("lightbox-overlay").classList.remove("open");
-  document.getElementById("lightbox-img").src = "";
-}
-function navigateLightbox(delta) {
-  if (!currentGalleryImages.length) return;
-  currentLightboxIndex = (currentLightboxIndex + delta + currentGalleryImages.length) % currentGalleryImages.length;
-  document.getElementById("lightbox-img").src = currentGalleryImages[currentLightboxIndex];
-}
-
-let lightboxTouchStartX = null;
-document.getElementById("lightbox-overlay").addEventListener("touchstart", e => {
-  lightboxTouchStartX = e.changedTouches[0].clientX;
-}, { passive: true });
-document.getElementById("lightbox-overlay").addEventListener("touchend", e => {
-  if (lightboxTouchStartX === null) return;
-  const delta = e.changedTouches[0].clientX - lightboxTouchStartX;
-  lightboxTouchStartX = null;
-  if (Math.abs(delta) < 40) return;
-  navigateLightbox(delta > 0 ? -1 : 1);
-}, { passive: true });
+const modalBody = document.getElementById("modal-body");
+["contextmenu", "dragstart", "selectstart", "copy"].forEach(eventName => {
+  modalBody.addEventListener(eventName, event => {
+    if (event.target.closest(".modal-gallery")) event.preventDefault();
+  });
+});
 
 function trapModalFocus(e) {
   if (e.key !== "Tab") return;
@@ -1982,7 +2033,7 @@ function modalHTML(l) {
     </div>
     ${l.images && l.images.length ? `
     <div class="modal-gallery">
-      ${l.images.map((u, i) => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onclick="openLightbox(${i})" onerror="this.parentElement.style.display='none'"><div class="photo-watermark-tile"></div><img class="photo-watermark" src="/static/logo.png" alt=""></div>`).join("")}
+      ${l.images.map(u => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.style.display='none'"><div class="photo-watermark-tile"></div><img class="photo-watermark" src="/static/logo.png" alt=""></div>`).join("")}
     </div>` : ""}
     <div class="modal-tags">
       ${locs.map(loc => `<span class="tag">${esc(loc)}</span>`).join("")}
@@ -1995,6 +2046,7 @@ function modalHTML(l) {
       ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
       ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
     </div>` : ""}
+    <a class="listing-cta" href="/payant.html?listing=${encodeURIComponent(l.id)}" onclick="event.stopPropagation()">Voir l'annonce complète</a>
     <div>
       <div class="section-head">${esc(contractsSectionTitle(l))}</div>
       <div class="modal-contracts">
@@ -2024,12 +2076,7 @@ function closeModal(e) {
   if (lastFocusedEl) { lastFocusedEl.focus(); lastFocusedEl = null; }
 }
 document.addEventListener("keydown", e => {
-  const lightboxOpen = document.getElementById("lightbox-overlay").classList.contains("open");
-  if (lightboxOpen && e.key === "ArrowLeft") { navigateLightbox(-1); return; }
-  if (lightboxOpen && e.key === "ArrowRight") { navigateLightbox(1); return; }
-  if (e.key !== "Escape") return;
-  if (lightboxOpen) { closeLightbox(); return; }
-  closeModal();
+  if (e.key === "Escape") closeModal();
 });
 
 function showLoading() {
