@@ -861,6 +861,11 @@
   .pillnav {
     position: fixed; top: 18px; z-index: 100;
     left: 50%; transform: translateX(-50%);
+    /* will-change promeut la pilule sur son propre calque GPU : sans ca,
+       certains navigateurs la repeignent en retard pendant le defilement
+       (elle "traine" a son ancienne position ecran et chevauche les cartes
+       du dessous un instant avant de rattraper le scroll). */
+    will-change: transform;
     width: calc(100% - 40px); max-width: 780px;
     background: var(--forest);
     border-radius: var(--r-pill);
@@ -916,12 +921,16 @@
 
   .hero h1 {
     font-family: var(--display);
-    font-size: clamp(32px, 5.6vw, 60px);
+    font-size: clamp(32px, 4.6vw, 46px);
     font-weight: 600; line-height: 1.13;
     letter-spacing: -1.2px; color: #14130f;
     margin: 22px 0 0;
   }
   .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero-line1 { white-space: nowrap; }
+  @media (max-width: 640px) {
+    .hero-line1 { white-space: normal; }
+  }
 
   .hero-sub {
     margin: 18px auto 0; max-width: 540px;
@@ -947,21 +956,39 @@
   .proof b { color: #14130f; font-variant-numeric: tabular-nums; font-weight: 700; }
 
   /* ── Bandeau defilant des meilleures affaires ── */
-  .marquee {
+  /* Reconstruit sur un scroll natif (overflow-x: auto + scrollLeft), comme
+     triips.com, plutot que sur une piste pilotee entierement par
+     translateX en JS : le scroll natif recoit gratuitement la molette, le
+     trackpad, le tactile et le glisser-de-la-barre, sans code specifique
+     ni risque de десync avec la pilule fixe. setupDealsMarquee() n'ajoute
+     plus que le glisser-a-la-souris et l'auto-defilement, tous deux via
+     scrollLeft. */
+  .marquee-wrap {
     position: relative; z-index: 2;
-    margin-top: 40px; padding-bottom: 46px; overflow: hidden;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
-            mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+    margin-top: 40px; padding-bottom: 46px;
   }
-  /* Piste pilotee en JS (voir setupDealsMarquee()), pas en CSS : il faut
-     pouvoir intercepter le glisser-deposer a la souris, comme sur
-     triips.com. cursor:grab vient d'ici pour que les cartes (qui n'ont
-     pas de cursor a elles) l'heritent au survol. */
+  .marquee-wrap::before, .marquee-wrap::after {
+    content: ""; position: absolute; top: 0; bottom: 46px; width: 60px;
+    z-index: 3; pointer-events: none;
+  }
+  .marquee-wrap::before {
+    left: 0;
+    background: linear-gradient(to right, var(--sky-3), transparent);
+  }
+  .marquee-wrap::after {
+    right: 0;
+    background: linear-gradient(to left, var(--sky-3), transparent);
+  }
+  .marquee {
+    overflow-x: auto; overflow-y: hidden;
+    cursor: grab; scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .marquee::-webkit-scrollbar { display: none; }
+  .marquee.is-dragging { cursor: grabbing; scroll-snap-type: none; }
   .marquee-track {
     display: flex; gap: 20px; width: max-content;
-    cursor: grab; user-select: none; -webkit-user-drag: none;
+    user-select: none; -webkit-user-drag: none;
   }
-  .marquee-track:active, .marquee-track.is-dragging { cursor: grabbing; }
 
   /* Lien, pas bouton : la carte navigue vers la page payante, donc le clic
      milieu et « ouvrir dans un nouvel onglet » doivent marcher.
@@ -1364,12 +1391,7 @@
       <span><b id="hero-tracked">—</b> logements suivis en Thaïlande</span>
     </span>
 
-    <h1>Louez au mois en Thaïlande,<br>sans <em>passer par une agence</em></h1>
-
-    <p class="hero-sub">
-      On relit chaque jour les annonces de RentHub et on vous signale les
-      nouveautés, les baisses de prix et les contrats courte durée.
-    </p>
+    <h1><span class="hero-line1">Trouver un Logement en Thaïlande</span><br><em>Au meilleur prix</em></h1>
 
     <a class="btn-cta" href="/">Voir les annonces</a>
 
@@ -1377,7 +1399,6 @@
       <div class="proof"><b id="hero-1m">—</b> contrats 1&nbsp;mois</div>
       <div class="proof"><b id="hero-3m">—</b> à 3&nbsp;mois</div>
       <div class="proof"><b id="hero-6m">—</b> à 6&nbsp;mois</div>
-      <div class="proof"><b id="hero-new">—</b> nouvelles aujourd'hui</div>
     </div>
 
     <!-- Skyline : plan lointain (vert) puis plan proche (violet). Chedis et
@@ -1425,8 +1446,10 @@
   </div>
 
   <!-- Meilleures affaires du moment, alimente depuis /listings -->
-  <div class="marquee" aria-label="Meilleures affaires du moment">
-    <div class="marquee-track" id="deals-track"></div>
+  <div class="marquee-wrap">
+    <div class="marquee" id="deals-scroll" aria-label="Meilleures affaires du moment">
+      <div class="marquee-track" id="deals-track"></div>
+    </div>
   </div>
 </section>
 
@@ -1439,10 +1462,11 @@
       <li class="how-step how-step-1">
         <span class="how-num" aria-hidden="true">1.</span>
         <div class="how-body">
-          <h3><span aria-hidden="true">🔍</span> Dites-nous ce que vous cherchez</h3>
+          <h3><span aria-hidden="true">🔍</span> Trouvez votre logement</h3>
           <p>
-            Ville, quartier, budget, durée du contrat&nbsp;: les filtres
-            tiennent en trois clics.
+            Choisissez votre ville, votre quartier, votre budget et la
+            durée de votre séjour. Affinez votre recherche en quelques
+            clics.
           </p>
         </div>
       </li>
@@ -1450,10 +1474,11 @@
       <li class="how-step how-step-2">
         <span class="how-num" aria-hidden="true">2.</span>
         <div class="how-body">
-          <h3><span aria-hidden="true">🔄</span> On relit RentHub chaque jour</h3>
+          <h3><span aria-hidden="true">📩</span> Prenez contact</h3>
           <p>
-            Chaque annonce est rescannée et comparée à la veille&nbsp;:
-            nouveautés, baisses de prix et retraits sont repérés pour vous.
+            Vous avez trouvé un logement qui vous plaît&nbsp;? Contactez
+            directement le propriétaire pour vérifier les disponibilités
+            et obtenir les dernières informations.
           </p>
         </div>
       </li>
@@ -1461,10 +1486,11 @@
       <li class="how-step how-step-3">
         <span class="how-num" aria-hidden="true">3.</span>
         <div class="how-body">
-          <h3><span aria-hidden="true">🔑</span> Vous décidez sur pièces</h3>
+          <h3><span aria-hidden="true">🔑</span> Emménagez</h3>
           <p>
-            Prix 1, 3 et 6&nbsp;mois côte à côte, équipements, photos et
-            contact direct du propriétaire.
+            Une fois votre location confirmée, il ne vous reste plus
+            qu’à préparer votre arrivée et profiter de votre séjour en
+            Thaïlande.
           </p>
         </div>
       </li>
@@ -1506,29 +1532,9 @@
         </summary>
         <div class="faq-answer">
           <p>
-            Non. ThaiMonth suit les annonces déjà publiées sur RentHub, les
-            remet en forme et vous met en relation. La location se conclut
-            ensuite directement avec le propriétaire ou notre partenaire sur
-            place&nbsp;: nous ne détenons aucun bien et ne percevons pas de
-            commission sur le loyer.
-          </p>
-        </div>
-      </details>
-
-      <details class="faq-card">
-        <summary>
-          D&rsquo;où viennent les annonces&nbsp;?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
-        </summary>
-        <div class="faq-answer">
-          <p>
-            Du site renthub.in.th, que nous relisons régulièrement. Chaque
-            passage compare l&rsquo;état actuel de chaque annonce à sa version
-            précédente, ce qui permet de repérer les nouveautés, les
-            changements de prix et les logements retirés.
+            Non. ThaiMonth est un service qui aide les locataires à trouver
+            un logement en Thaïlande et à entrer en contact avec les
+            propriétaires.
           </p>
         </div>
       </details>
@@ -1557,7 +1563,7 @@
 
       <details class="faq-card">
         <summary>
-          Que signifient 1, 3 et 6&nbsp;mois&nbsp;?
+          Est-ce que vous prenez une commission sur chaque logement&nbsp;?
           <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6 9l6 6 6-6"/>
@@ -1565,57 +1571,13 @@
         </summary>
         <div class="faq-answer">
           <p>
-            C&rsquo;est la durée d&rsquo;engagement proposée par le
-            propriétaire. Un logement peut n&rsquo;accepter que des séjours
-            longs, ou au contraire accepter le mois par mois — c&rsquo;est
-            justement ce que nous filtrons.
-          </p>
-          <p>
-            Le loyer mensuel baisse en général quand on s&rsquo;engage plus
-            longtemps.
+            Non. ThaiMonth ne prend aucune commission sur les logements.
+            Vous payez uniquement notre service de recherche et
+            d&rsquo;accompagnement.
           </p>
         </div>
       </details>
 
-      <details class="faq-card">
-        <summary>
-          Comment repérez-vous les baisses de prix&nbsp;?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
-        </summary>
-        <div class="faq-answer">
-          <p>
-            Chaque annonce garde un historique. Quand le loyer change d&rsquo;un
-            passage à l&rsquo;autre, l&rsquo;écart y est enregistré — c&rsquo;est
-            ce qui alimente le compteur de nouveautés des dernières 24&nbsp;heures
-            affiché en haut de page.
-          </p>
-        </div>
-      </details>
-
-      <details class="faq-card">
-        <summary>
-          Combien ça coûte&nbsp;?
-          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
-        </summary>
-        <div class="faq-answer">
-          <p>
-            Une première sélection est gratuite et sans engagement&nbsp;: un
-            logement, sa présentation détaillée et la mise en relation.
-          </p>
-          <p>
-            Au-delà, l&rsquo;offre Recherche (19&nbsp;€, paiement unique) porte
-            la sélection à cinq logements avec un comparatif, et
-            l&rsquo;offre Premium (39&nbsp;€) lève la limite et ajoute un suivi
-            personnalisé pendant quatorze jours.
-          </p>
-        </div>
-      </details>
     </div>
   </div>
 </section>
@@ -1631,7 +1593,7 @@
       La première sélection est gratuite et sans engagement&nbsp;: un logement,
       sa présentation détaillée et la mise en relation.
     </p>
-    <a class="btn-cta" href="/payant.html">Commencer gratuitement</a>
+    <a class="btn-cta" href="/payant.html">Version Payante</a>
   </div>
 </section>
 
@@ -2063,103 +2025,108 @@ function renderDeals() {
   // exactement la place de la premiere et la boucle est nette.
   track.innerHTML = deals.concat(deals).map(dealHTML).join("");
   setupDealsMarquee();
-  track._measure && track._measure();
+  const scroller = document.getElementById("deals-scroll");
+  scroller && scroller._measure && scroller._measure();
 
   renderHowPhoto();
   renderWall();
 }
 
-// ── Glisser-deposer a la souris, comme sur triips.com ──────────────────
-// L'ancienne piste etait une animation CSS pure : jolie, mais impossible
-// a intercepter au clic. On reprend ici le meme principe que le bandeau
-// "trending" de triips.com (translateX pilote en rAF, vitesse lissee vers
-// une vitesse de croisiere, le glisser prend la main sur la position et
-// la relache en douceur) applique directement a la piste deja doublee.
+// ── Defilement natif du bandeau des affaires, comme triips.com ─────────
+// L'ancienne piste pilotait translateX() entierement en JS (rAF + lissage
+// de vitesse) : la molette/trackpad ne faisait rien par defaut (corrige
+// une fois avec un handler wheel dedie, au prix d'un code fragile), et le
+// rendu s'est retrouve plusieurs fois desynchronise. triips.com fait
+// defiler sa bande "trending" avec un scroll natif (overflow-x:auto +
+// scrollLeft) : la molette/trackpad, le tactile et la barre de defilement
+// marchent gratuitement, sans code specifique. On reprend ce principe --
+// scrollLeft pilote a la fois le glisser-souris et l'auto-defilement --
+// et on boucle en sautant de la moitie de la largeur de la piste doublee
+// (voir renderDeals) des qu'on l'atteint.
 function setupDealsMarquee() {
+  const scroller = document.getElementById("deals-scroll");
   const track = document.getElementById("deals-track");
-  if (!track || track.dataset.marqueeReady) return;
-  track.dataset.marqueeReady = "1";
+  if (!scroller || !track || scroller.dataset.marqueeReady) return;
+  scroller.dataset.marqueeReady = "1";
 
-  const LOOP_DUR = 125; // meme duree apparente que l'ancienne animation CSS
-  const LERP = 14;
-  let pos = 0, vel = 0, lastTime = null;
-  let dragging = false, hasDragged = false, dragStartX = 0, dragStartPos = 0;
+  const SPEED = 36; // px/s, defilement automatique
   let lw = 0;
+  let dragging = false, hasDragged = false, dragStartX = 0, dragStartScroll = 0;
   const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function measure() { lw = track.scrollWidth / 2; }
   window.addEventListener("resize", measure);
   window.addEventListener("load", measure);
-  track._measure = measure;
+  scroller._measure = measure;
 
-  function clamp() {
+  function wrap() {
     if (lw <= 0) measure();
     if (lw <= 0) return;
-    while (pos < -lw) pos += lw;
-    while (pos > 0) pos -= lw;
-    track.style.transform = `translateX(${pos}px)`;
+    if (scroller.scrollLeft >= lw) scroller.scrollLeft -= lw;
+    else if (scroller.scrollLeft <= 0) scroller.scrollLeft += lw;
   }
 
-  let rafId = null;
+  let rafId = null, lastTime = null;
   function tick(now) {
     if (lw <= 0) measure();
-    if (lw <= 0) { rafId = requestAnimationFrame(tick); return; }
-    const nv = -lw / LOOP_DUR;
-    if (lastTime === null) { lastTime = now; vel = nv; }
+    if (lastTime === null) lastTime = now;
     const dt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
-    if (!dragging) {
-      const k = Math.min(1, LERP * dt);
-      vel += (nv - vel) * k;
-      pos += vel * dt;
-    }
-    while (pos < -lw) pos += lw;
-    while (pos > 0) pos -= lw;
-    track.style.transform = `translateX(${pos}px)`;
+    if (!dragging) scroller.scrollLeft += SPEED * dt;
+    wrap();
     rafId = requestAnimationFrame(tick);
   }
   function startRAF() {
     if (reduced) { measure(); return; }
-    if (!rafId) { measure(); rafId = requestAnimationFrame(tick); }
+    if (!rafId) {
+      measure();
+      if (scroller.scrollLeft <= 0) scroller.scrollLeft = 1;
+      lastTime = null;
+      rafId = requestAnimationFrame(tick);
+    }
   }
   function stopRAF() {
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; lastTime = null; }
   }
   document.addEventListener("visibilitychange", () => { document.hidden ? stopRAF() : startRAF(); });
 
-  // On coupe aussi la piste au clavier : sinon elle continue de glisser
-  // sous une carte qui vient de recevoir le focus.
-  track.addEventListener("focusin", stopRAF);
-  track.addEventListener("focusout", () => { if (inView && !document.hidden) startRAF(); });
+  // On coupe l'auto-defilement des qu'une main humaine prend la bande --
+  // survol souris, glisser, ou focus clavier sur une carte -- et on ne le
+  // relance que si aucune de ces prises n'est encore active.
+  scroller.addEventListener("mouseenter", stopRAF);
+  scroller.addEventListener("mouseleave", () => { if (!dragging) resume(); });
+  scroller.addEventListener("focusin", stopRAF);
+  scroller.addEventListener("focusout", resume);
 
   let inView = true;
+  function resume() { if (inView && !document.hidden) startRAF(); }
   if ("IntersectionObserver" in window) {
     const vobs = new IntersectionObserver((entries) => {
       inView = entries[0] && entries[0].isIntersecting;
       if (inView && !document.hidden) startRAF(); else stopRAF();
     }, { root: null, rootMargin: "200px 0px", threshold: 0 });
-    vobs.observe(track);
+    vobs.observe(scroller);
   }
   if (inView) startRAF();
 
   function endDrag() {
     dragging = false;
-    track.classList.remove("is-dragging");
+    scroller.classList.remove("is-dragging");
     setTimeout(() => { hasDragged = false; }, 0);
   }
 
-  track.addEventListener("mousedown", (e) => {
+  scroller.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
     dragging = true; hasDragged = false;
-    track.classList.add("is-dragging");
-    dragStartX = e.clientX; dragStartPos = pos; vel = 0;
+    scroller.classList.add("is-dragging");
+    dragStartX = e.clientX; dragStartScroll = scroller.scrollLeft;
     function mm(ev) {
       if (!dragging) return;
       const dx = ev.clientX - dragStartX;
       if (Math.abs(dx) > 4) hasDragged = true;
-      pos = dragStartPos + dx;
-      clamp();
+      scroller.scrollLeft = dragStartScroll - dx;
+      wrap();
     }
     function mu() {
       endDrag();
@@ -2170,35 +2137,15 @@ function setupDealsMarquee() {
     document.addEventListener("mouseup", mu);
   });
 
-  track.addEventListener("touchstart", (e) => {
-    const t = e.touches[0];
-    if (!t) return;
-    dragging = true; hasDragged = false;
-    track.classList.add("is-dragging");
-    dragStartX = t.clientX; dragStartPos = pos; vel = 0;
-    function tm(ev) {
-      if (!dragging) return;
-      const ct = ev.touches[0];
-      if (!ct) return;
-      const dx = ct.clientX - dragStartX;
-      if (Math.abs(dx) > 4) { hasDragged = true; ev.preventDefault(); }
-      pos = dragStartPos + dx;
-      clamp();
-    }
-    function te() {
-      endDrag();
-      document.removeEventListener("touchmove", tm);
-      document.removeEventListener("touchend", te);
-      document.removeEventListener("touchcancel", te);
-    }
-    document.addEventListener("touchmove", tm, { passive: false });
-    document.addEventListener("touchend", te);
-    document.addEventListener("touchcancel", te);
-  }, { passive: true });
+  // Le tactile et le trackpad font defiler scroller nativement (overflow-x:
+  // auto) : on se contente d'y accrocher le bouclage.
+  scroller.addEventListener("scroll", wrap, { passive: true });
+  scroller.addEventListener("touchstart", stopRAF, { passive: true });
+  scroller.addEventListener("touchend", resume, { passive: true });
 
   // Un clic qui a fait glisser la piste de plus de 4px ne doit pas suivre
   // le lien de la carte : sinon glisser envoie sur /payant.html.
-  track.addEventListener("click", (e) => {
+  scroller.addEventListener("click", (e) => {
     if (hasDragged) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 }
@@ -2248,14 +2195,32 @@ function renderWall() {
   ];
   if (rows.some(r => !r)) return;
 
+  // N'exiger que le prix mensuel strict rejetait les annonces qui n'ont
+  // qu'un tarif 3 ou 6 mois -- un tiers de l'echantillon deja restreint
+  // (PUBLIC_DEMO_LIMIT) -- et forcait le mur a boucler sur un pool trop
+  // petit pour couvrir l'ecran sans repetition visible. wallCardHTML
+  // affiche desormais le premier tarif disponible avec sa duree.
   const pool = allData.filter(l => l.status !== "removed"
                                 && l.images && l.images.length
-                                && contractNum(l.contract_monthly_raw) !== null);
+                                && wallPrice(l) !== null);
   if (!pool.length) { rows.forEach(r => { r.innerHTML = ""; }); return; }
 
-  const buckets = [[], [], []];
-  pool.slice(0, WALL_ROWS * WALL_PER_ROW)
-      .forEach((l, i) => buckets[i % WALL_ROWS].push(l));
+  // L'echantillon public filtre (image + prix mensuel exploitable) tombe
+  // souvent sous WALL_ROWS * WALL_PER_ROW : le decouper en 3 sous-groupes
+  // disjoints ne laissait que 2 ou 3 vignettes par piste, visiblement
+  // dupliquees des qu'on repete la piste pour couvrir l'ecran. Chaque
+  // ligne pioche desormais dans le pool entier, avec un decalage
+  // (rotation) different par ligne pour que les 3 lignes ne defilent pas
+  // en phase. Un decalage de 1 seul cran laissait deux lignes presque
+  // identiques, glissees d'une colonne -- vu en diagonale ca ressemble a
+  // une meme annonce repetee juste en dessous. Le decalage est maintenant
+  // reparti sur toute la largeur du pool (un tiers, deux tiers).
+  const base = pool.slice(0, WALL_ROWS * WALL_PER_ROW);
+  const shift = Math.max(1, Math.round(base.length / WALL_ROWS));
+  const buckets = [0, 1, 2].map(i => {
+    const offset = (i * shift) % base.length;
+    return base.slice(offset).concat(base.slice(0, offset));
+  });
 
   buckets.forEach((items, i) => {
     if (!items.length) { rows[i].innerHTML = ""; return; }
@@ -2277,7 +2242,22 @@ function renderWall() {
   });
 }
 
+// Prix a afficher sur une vignette du mur : le tarif 1 mois s'il existe,
+// sinon le premier tarif disponible (3 puis 6 mois) -- le taux depend de
+// la duree d'engagement mais reste un prix mensuel dans les trois cas.
+// Retourne null si aucun des trois n'est exploitable.
+function wallPrice(l) {
+  const n = contractNum(l.contract_monthly_raw);
+  if (n !== null) return { amount: n, term: "/mois" };
+  const c3 = contractNum(l.contract_3_month_raw);
+  if (c3 !== null) return { amount: c3, term: "/mois (3 mois)" };
+  const c6 = contractNum(l.contract_6_month_raw);
+  if (c6 !== null) return { amount: c6, term: "/mois (6 mois)" };
+  return null;
+}
+
 function wallCardHTML(l) {
+  const price = wallPrice(l);
   const n = contractNum(l.contract_monthly_raw);
   const c3 = contractNum(l.contract_3_month_raw);
   const c6 = contractNum(l.contract_6_month_raw);
@@ -2293,7 +2273,7 @@ function wallCardHTML(l) {
     aria-label="Voir cette annonce à ${esc(ville)} sur la version payante">
     <img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false"
          oncontextmenu="return false" onerror="this.remove()">
-    <span class="wcard-price"><b>${eurLabel(n)} \u20ac</b><small>/mois</small></span>
+    <span class="wcard-price"><b>${eurLabel(price ? price.amount : null)} \u20ac</b><small>${price ? esc(price.term) : ""}</small></span>
     <span class="wcard-body">
       <span class="wcard-loc">${esc(ville)}</span>
       ${terms.length ? `<span class="wcard-terms">${

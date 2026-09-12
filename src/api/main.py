@@ -140,6 +140,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 PUBLIC_PATHS = {
+    "/",
     "/login",
     "/logout",
     "/health",
