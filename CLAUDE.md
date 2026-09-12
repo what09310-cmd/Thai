@@ -46,6 +46,8 @@ Users table (run once on an existing database, same reason):
 python scripts/migrate_add_users.py
 ```
 
+Render (service "Thai Month", branche `landing-page-test`) builds with `pip install -r requirements-api.txt`, not `requirements.txt`: any new runtime dependency of `src/api/` must be added to **both** files or the deploy fails at import time.
+
 Docker Compose profiles (Postgres-backed): `docker-compose --profile scraper up`, `docker-compose --profile scheduler up`; the `api` service has no profile and starts by default with `docker-compose up`. All three services read `.env` via `env_file` — the API refuses to boot while `SECRET_KEY`/`SITE_PASSWORD` still hold their `.env.example` values.
 
 ## Task Delegation
