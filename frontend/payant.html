@@ -106,13 +106,16 @@
   }
 
   .pillnav-brand {
-    color: var(--brand-lime);
+    display: flex; align-items: baseline; flex-shrink: 0;
+    font-family: var(--sans);
     font-size: 25px;
     font-weight: 800;
     letter-spacing: -.6px;
     line-height: 1;
     text-decoration: none;
   }
+  .brand-thai  { color: var(--brand-lime); }
+  .brand-month { color: var(--brand-gold); }
 
   .pillnav-cta {
     display: inline-flex;
@@ -556,7 +559,7 @@
 <body>
 
 <nav class="pillnav" aria-label="Navigation principale">
-  <a class="pillnav-brand" href="/">ThaiMonth</a>
+  <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
   <a class="pillnav-cta" href="/carte-thailande.html">Voir la carte</a>
 </nav>
 

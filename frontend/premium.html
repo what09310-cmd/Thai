@@ -473,31 +473,27 @@
     font-size: 32px; color: var(--muted);
   }
 
-  .card-img .photo-watermark,
-  .modal-gallery-item .photo-watermark {
-    position: absolute;
-    right: 8px;
-    bottom: 8px;
-    transform: none;
-    width: auto;
-    height: 55px;
-    opacity: 1;
-    pointer-events: none;
-    background: none;
+  /* Filigrane texte "ThaiMonth" (memes couleurs que le logo de l'en-tete):
+     motif repete sur toute la photo + pastille pleine en bas a droite. */
+  .wm-tile{
+    position:absolute;inset:-40%;display:flex;flex-wrap:wrap;gap:6px 10px;
+    align-content:space-around;justify-content:space-around;
+    transform:rotate(-18deg);pointer-events:none;user-select:none;opacity:.9
   }
-
-  .photo-watermark-tile {
-    position: absolute;
-    inset: 0;
-    background-image: url('/static/logo.png');
-    background-repeat: repeat;
-    background-size: 70px auto;
-    opacity: .45;
-    pointer-events: none;
+  .wm-tile span{
+    font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.4px;
+    white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.7),0 0 8px rgba(0,0,0,.35)
   }
-  .modal-gallery-item .photo-watermark-tile {
-    background-size: 90px auto;
+  .wm-thai{ color:var(--brand-lime) }
+  .wm-month{ color:var(--brand-gold) }
+  .wm-badge{
+    position:absolute;right:10px;bottom:10px;pointer-events:none;user-select:none;
+    background:#1d3c10;border-radius:var(--r-pill);padding:6px 13px;
+    font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.4px;
+    line-height:1;box-shadow:0 3px 10px rgba(20,19,15,.35)
   }
+  .modal-gallery-item .wm-tile span{ font-size:17px }
+  .modal-gallery-item .wm-badge{ font-size:18px;padding:8px 16px;right:12px;bottom:12px }
 
   .modal-gallery {
     display: flex;
@@ -515,6 +511,8 @@
     height: 220px;
     max-width: 85%;
     scroll-snap-align: start;
+    overflow: hidden;
+    border-radius: 8px;
   }
   .modal-gallery-item img {
     height: 220px;
@@ -530,11 +528,6 @@
     -webkit-touch-callout: none;
     pointer-events: none;
     cursor: default;
-  }
-  .modal-gallery-item .photo-watermark {
-    height: 85px;
-    bottom: 12px;
-    right: 12px;
   }
 
   .badge {
@@ -1672,6 +1665,13 @@ function renderPage() {
   wrap.innerHTML = `<div class="grid">${slice.map(cardHTML).join("")}</div>`;
 }
 
+const WM_TILE_COUNT = 120;
+function watermarkHTML(){
+  const logo = `<span class="wm-thai">Thai</span><span class="wm-month">Month</span>`;
+  return `<div class="wm-tile">${Array.from({ length: WM_TILE_COUNT }, () => `<span>${logo}</span>`).join("")}</div>` +
+    `<div class="wm-badge">${logo}</div>`;
+}
+
 function cardHTML(l) {
   const district = l.district || l.subdistrict || "";
   const c1 = contractVal(l.contract_monthly_raw);
@@ -1707,7 +1707,7 @@ function cardHTML(l) {
 
   return `<div class="card" tabindex="0" role="button" aria-label="Voir le détail : ${esc(l.name || "annonce")}" onclick="openModal(${l.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal(${l.id});}">
     <div class="card-img">${l.images && l.images.length
-      ? `<img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.innerHTML='<div class=&quot;no-img&quot;>🏠</div>'"><div class="photo-watermark-tile"></div><img class="photo-watermark" src="/static/logo.png" alt="">`
+      ? `<img src="${esc(l.images[0])}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.innerHTML='<div class=&quot;no-img&quot;>🏠</div>'">${watermarkHTML()}`
       : `<div class="no-img">🏠</div>`}</div>
     <div class="card-badge-slot">${show1 && l.has_monthly_contract === "true" && c1 !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}${show3 && c3 !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}${show6 && c6 !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}</div>
 
@@ -2033,7 +2033,7 @@ function modalHTML(l) {
     </div>
     ${l.images && l.images.length ? `
     <div class="modal-gallery">
-      ${l.images.map(u => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.style.display='none'"><div class="photo-watermark-tile"></div><img class="photo-watermark" src="/static/logo.png" alt=""></div>`).join("")}
+      ${l.images.map(u => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.style.display='none'">${watermarkHTML()}</div>`).join("")}
     </div>` : ""}
     <div class="modal-tags">
       ${locs.map(loc => `<span class="tag">${esc(loc)}</span>`).join("")}

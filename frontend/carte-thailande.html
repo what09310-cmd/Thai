@@ -28,6 +28,8 @@
     --brand-lime: #c7ef6c;
     --brand-gold: #e8b765;
     --green:    #2f9e44;
+    --blue:     #5046f5;
+    --purple:   #7950f2;
     --text:     #14130f;
     --muted:    #6c6660;
     --dim:      #9b948b;
@@ -85,21 +87,405 @@
   .leaflet-popup-content{ font-family:var(--sans);font-size:13px;margin:10px 12px }
   .leaflet-popup-content-wrapper{ background:var(--card);color:var(--text);border-radius:var(--r-ctl);box-shadow:0 10px 30px rgba(20,19,15,.18) }
   .leaflet-popup-tip{ background:var(--card) }
-  .popup-price{ font-weight:800;margin-bottom:6px;color:var(--accent);font-size:14px }
-  .popup-info{ font-size:12px;color:var(--muted);margin-bottom:4px }
-  .popup-amenities{ display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px }
+
+  /* Popup "fiche": la carte occupe toute la bulle, la photo vient a fond
+     perdu, d'ou la marge nulle et l'overflow masque. */
+  .popup-lg .leaflet-popup-content-wrapper{ padding:0;overflow:hidden;border-radius:var(--r-card) }
+  .popup-lg .leaflet-popup-content{ margin:0;width:390px !important;line-height:1.45 }
+  .popup-lg .leaflet-popup-close-button{
+    color:#fff !important;background:rgba(20,19,15,.45);backdrop-filter:blur(4px);
+    border-radius:50%;width:26px !important;height:26px !important;
+    line-height:24px !important;top:10px !important;right:10px !important;
+    font-size:16px !important;z-index:5;transition:background .15s
+  }
+  .popup-lg .leaflet-popup-close-button:hover{ background:rgba(20,19,15,.7) }
+
+  .popup-card{ display:flex;flex-direction:column;max-height:82vh }
+
+  /* Photos */
+  .popup-photos-wrap{ position:relative }
+  .popup-photos{
+    display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+    background:var(--border);scrollbar-width:none
+  }
+  .popup-photos::-webkit-scrollbar{ display:none }
+  .popup-photos.is-empty{ display:none }
+  .popup-photo{ position:relative;flex:0 0 100%;height:200px;scroll-snap-align:center }
+  .popup-photo img{
+    height:200px;width:100%;object-fit:cover;display:block;background:var(--border);
+    transform:scaleX(-1);cursor:default;pointer-events:none;
+    -webkit-user-drag:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none
+  }
+  /* Filigrane texte "ThaiMonth" (memes couleurs que le logo de l'en-tete):
+     motif repete sur toute la photo + pastille pleine en bas a droite. */
+  .wm-tile{
+    position:absolute;inset:-40%;display:flex;flex-wrap:wrap;gap:6px 10px;
+    align-content:space-around;justify-content:space-around;
+    transform:rotate(-18deg);pointer-events:none;user-select:none;opacity:.9
+  }
+  .wm-tile span{
+    font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.4px;
+    white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.7),0 0 8px rgba(0,0,0,.35)
+  }
+  .wm-thai{ color:var(--brand-lime) }
+  .wm-month{ color:var(--brand-gold) }
+  .wm-badge{
+    position:absolute;right:10px;bottom:10px;pointer-events:none;user-select:none;
+    background:#1d3c10;border-radius:var(--r-pill);padding:6px 13px;
+    font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.4px;
+    line-height:1;box-shadow:0 3px 10px rgba(20,19,15,.35)
+  }
+  .modal-gallery-item .wm-tile span{ font-size:17px }
+  .modal-gallery-item .wm-badge{ font-size:18px;padding:8px 16px;right:12px;bottom:12px }
+  .popup-photos-count{
+    position:absolute;left:10px;bottom:10px;z-index:3;pointer-events:none;
+    background:rgba(20,19,15,.6);backdrop-filter:blur(4px);color:#fff;
+    border-radius:var(--r-pill);padding:3px 9px;
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em
+  }
+  .popup-photos-skel{
+    height:200px;width:100%;flex:0 0 100%;
+    background:linear-gradient(90deg,var(--border) 25%,var(--bg) 50%,var(--border) 75%);
+    background-size:200% 100%;animation:popup-skel 1.2s linear infinite
+  }
+  @keyframes popup-skel{ from{background-position:200% 0} to{background-position:-200% 0} }
+
+  /* Corps scrollable */
+  .popup-body{ padding:14px 16px 4px;overflow-y:auto;display:flex;flex-direction:column;gap:12px }
+
+  .popup-price{ display:flex;align-items:baseline;gap:7px;flex-wrap:wrap }
+  .popup-price-thb{ font-weight:800;color:var(--text);font-size:22px;line-height:1.05;letter-spacing:-.5px }
+  .popup-price-unit{ font-size:12px;font-weight:600;color:var(--muted) }
+  .popup-price-eur{ font-size:11px;color:var(--dim);font-weight:600 }
+  .popup-loc{ font-size:11.5px;color:var(--muted);margin-top:6px }
+
+  .popup-badges{ display:flex;flex-wrap:wrap;gap:5px;margin-top:8px }
+  .popup-badge{
+    border-radius:var(--r-pill);padding:3px 9px;font-size:9.5px;font-weight:800;
+    font-family:var(--mono);letter-spacing:.06em;color:#fff;white-space:nowrap
+  }
+  .popup-badge-1{ background:var(--accent) }
+  .popup-badge-3{ background:var(--purple) }
+  .popup-badge-6{ background:var(--brand-gold);color:var(--text) }
+
+  /* Specs en lignes label/valeur: plus calme que des cartes empilees,
+     et aligne sur le rendu de la modale. */
+  .popup-specs{
+    border:1px solid var(--border);border-radius:var(--r-ctl);
+    background:var(--bg);overflow:hidden
+  }
+  .popup-spec{
+    display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+    padding:8px 12px;border-bottom:1px solid var(--border)
+  }
+  .popup-spec:last-child{ border-bottom:none }
+  .popup-spec-label{
+    font-size:9.5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;
+    color:var(--dim);white-space:nowrap;flex-shrink:0
+  }
+  .popup-spec-val{ font-size:12px;font-weight:700;color:var(--text);text-align:right;word-break:break-word }
+  .popup-spec-val.na{ color:var(--dim);font-weight:500 }
+  .popup-spec-val.yes{ color:var(--green) }
+
+  .popup-section-head{
+    font-size:9.5px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:6px
+  }
+  .popup-rooms{ display:grid;grid-template-columns:1fr;gap:6px }
+  .popup-rooms .mc{ padding:8px 12px }
+  .popup-rooms .mc-val{ font-size:12px }
+  .popup-rooms .mc-room-group{ padding:9px;gap:6px }
+  .popup-rooms .mc-room-label{ font-size:9.5px }
+  .popup-rooms .mc-room-terms{ gap:6px }
+  .popup-rooms .mc-room-terms .mc{ flex:1 1 80px;padding:7px 9px }
+
+  .popup-amenities{ display:flex;flex-wrap:wrap;gap:5px }
   .popup-chip{
-    background:var(--bg);border:1px solid var(--border);border-radius:var(--r-pill);
-    padding:3px 9px;font-size:11px;color:var(--muted);white-space:nowrap
+    background:var(--card);border:1px solid var(--border);border-radius:var(--r-pill);
+    padding:3px 9px;font-size:10.5px;color:var(--muted);white-space:nowrap
   }
-  .popup-btn{
-    display:inline-block;background:var(--accent);color:var(--accent-ink);text-decoration:none;
-    padding:8px 14px;border-radius:var(--r-pill);font-size:12px;font-weight:700;
-    transition:opacity .15s
+  .popup-chip-more{ background:var(--bg);color:var(--dim);font-weight:700 }
+
+  /* Footer colle: le CTA reste visible meme si le corps defile. */
+  .popup-actions{
+    position:sticky;bottom:0;padding:12px 16px 14px;background:var(--card);
+    border-top:1px solid var(--border);display:flex;gap:6px
   }
-  .popup-btn:hover{ opacity:.85 }
-  .popup-actions{ display:flex;gap:6px;flex-wrap:wrap }
-  .popup-btn.popup-btn-call{ background:var(--green) }
+  /* `.leaflet-container a` (0,1,1) bat `.popup-btn` (0,1,0): sans ce
+     selecteur le libelle prend le bleu de lien Leaflet sur fond violet. */
+  .leaflet-container a.popup-btn{
+    flex:1;text-align:center;background:var(--accent);color:var(--accent-ink);
+    text-decoration:none;padding:11px 14px;border-radius:var(--r-pill);
+    font-size:12.5px;font-weight:700;transition:filter .15s
+  }
+  .leaflet-container a.popup-btn:hover{ filter:brightness(1.12) }
+
+  /* ── Modale (portee depuis index.html) ── */
+  .modal-gallery-item .photo-watermark {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    transform: none;
+    width: auto;
+    height: 55px;
+    opacity: 1;
+    pointer-events: none;
+    background: none;
+  }
+
+  .photo-watermark-tile {
+    position: absolute;
+    inset: 0;
+    background-image: url('/static/logo.png');
+    background-repeat: repeat;
+    background-size: 70px auto;
+    opacity: .45;
+    pointer-events: none;
+  }
+  .modal-gallery-item .photo-watermark-tile {
+    background-size: 90px auto;
+  }
+
+  .modal-gallery {
+    display: flex;
+    flex-shrink: 0;
+    height: 220px;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin: 0 -18px 4px;
+    padding: 0 18px;
+  }
+  .modal-gallery-item {
+    position: relative;
+    flex-shrink: 0;
+    height: 220px;
+    max-width: 85%;
+    scroll-snap-align: start;
+  }
+  .modal-gallery-item img {
+    height: 220px;
+    width: auto;
+    max-width: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: zoom-in;
+  }
+  .modal-gallery-item .photo-watermark {
+    height: 85px;
+    bottom: 12px;
+    right: 12px;
+  }
+
+  .badge {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    letter-spacing: .05em;
+  }
+  .badge-monthly { top: 8px; left: 8px; background: var(--green); color: #fff; }
+  .badge-verified { top: 8px; right: 8px; background: var(--blue); color: #fff; }
+  .badge-term-3 { background: var(--blue); color: #fff; }
+  .badge-term-6 { background: var(--purple); color: #fff; }
+
+  .state-box {
+    display: flex; align-items: center; justify-content: center;
+    height: 220px; color: var(--muted);
+    font-family: var(--mono); font-size: 13px; gap: 10px;
+    flex-direction: column;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(20,19,15,.45);
+    backdrop-filter: blur(8px);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .overlay.open { display: flex; }
+
+  .lightbox-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 4000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    cursor: zoom-out;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-content {
+    position: relative;
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+  .lightbox-content img#lightbox-img {
+    display: block;
+    max-width: 95vw;
+    max-height: 95vh;
+    width: auto; height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: default;
+  }
+  .lightbox-close {
+    position: fixed;
+    top: 20px; right: 20px;
+    background: rgba(0,0,0,.5);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    width: 32px; height: 32px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .lightbox-close:hover { color: var(--accent); }
+  .lightbox-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,.5);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    width: 44px; height: 44px;
+    cursor: pointer;
+    font-size: 26px;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .lightbox-nav:hover { color: var(--accent); }
+  .lightbox-nav[disabled] { display: none; }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    width: 100%; max-width: 600px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  .modal-top {
+    display: flex; justify-content: flex-end; align-items: flex-start; gap: 12px;
+  }
+  .modal-close {
+    background: none; border: 1px solid var(--border);
+    border-radius: var(--r-pill); color: var(--muted);
+    width: 28px; height: 28px; cursor: pointer;
+    font-size: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    padding: 3px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .tag.green { border-color: var(--green); color: var(--green); }
+
+  .modal-contracts {
+    display: grid; grid-template-columns: 1fr; gap: 8px;
+  }
+  .mc {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-ctl); padding: 13px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .mc-label {
+    font-size: 9px; font-family: var(--mono);
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 0;
+  }
+  .mc-val {
+    font-size: 13px; font-weight: 700;
+    font-family: var(--mono); color: var(--accent);
+  }
+  .mc-val.na { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .mc-room-label {
+    font-size: 10px; font-family: var(--mono); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text); margin: 10px 0 -2px;
+  }
+  .mc-room-label:first-child { margin-top: 0; }
+  .mc-room-group {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .mc-room-group .mc-room-label { margin: 0; }
+  .mc-room-terms { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mc-room-terms .mc { flex: 1 1 90px; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+  .modal-amenities { display: flex; flex-wrap: wrap; gap: 5px; }
+  .amenity {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 4px 10px;
+    font-size: 11px; color: var(--muted); font-family: var(--mono);
+  }
+
+  .section-head {
+    font-size: 10px; font-family: var(--mono);
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+
+  .modal-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: var(--accent-ink);
+    font-weight: 700; font-size: 13px;
+    padding: 11px 22px; border-radius: var(--r-pill);
+    text-decoration: none; align-self: flex-start;
+    transition: opacity .15s;
+  }
+  .modal-link:hover { opacity: .85; }
+  a.mc-wa, a.mc-line {
+    text-decoration: none; color: inherit; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  a.mc-wa:hover { background: #25D36615; border-color: #25D366; }
+  a.mc-line:hover { background: #06C75515; border-color: #06C755; }
+
 
   .controls{
     position:absolute;top:14px;left:14px;z-index:1000;
@@ -231,6 +617,21 @@
   </section>
 </main>
 
+<div class="overlay" id="overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-body" role="dialog" aria-modal="true" aria-label="Détail de l'annonce" tabindex="-1"></div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox-overlay" id="lightbox-overlay" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()" aria-label="Fermer">✕</button>
+  <button class="lightbox-nav lightbox-prev" id="lightbox-prev" onclick="navigateLightbox(-1)" aria-label="Photo précédente">‹</button>
+  <button class="lightbox-nav lightbox-next" id="lightbox-next" onclick="navigateLightbox(1)" aria-label="Photo suivante">›</button>
+  <div class="lightbox-content">
+    <img id="lightbox-img" src="" alt="" draggable="false" oncontextmenu="return false">
+  </div>
+</div>
+
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -240,6 +641,29 @@ const API = window.location.origin.startsWith("file:") ? "http://localhost:8000"
 let ads = [];
 let leafletMap = null;
 let clusterGroup = null;
+let currentGalleryImages = [];
+let currentLightboxIndex = 0;
+
+const LINE_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#06C755"/><path fill="#fff" d="M12 5.5c-4.14 0-7.5 2.73-7.5 6.1 0 3.02 2.66 5.55 6.26 6.03.24.05.58.16.66.37.08.19.05.49.03.68l-.11.65c-.03.19-.15.75.65.41.8-.34 4.33-2.55 5.9-4.36 1.09-1.19 1.61-2.41 1.61-3.78 0-3.37-3.36-6.1-7.5-6.1Z"/></svg>`;
+const WHATSAPP_ICON_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" style="flex-shrink:0"><rect width="24" height="24" rx="6" fill="#25D366"/><path fill="#fff" d="M12 5.3a6.7 6.7 0 0 0-5.72 10.18l-.78 2.85 2.92-.77A6.7 6.7 0 1 0 12 5.3Zm0 12.2a5.47 5.47 0 0 1-2.79-.76l-.2-.12-2.07.54.55-2.02-.13-.21a5.5 5.5 0 1 1 4.64 2.57Zm3.02-4.12c-.16-.08-.97-.48-1.12-.53-.15-.06-.26-.08-.37.08-.11.16-.42.53-.52.64-.1.11-.19.12-.36.04-.16-.08-.68-.25-1.3-.8-.48-.43-.8-.96-.9-1.12-.09-.16-.01-.25.07-.33.08-.07.16-.19.24-.28.08-.1.11-.16.16-.27.05-.11.03-.2-.01-.28-.05-.08-.37-.9-.51-1.23-.13-.32-.27-.28-.37-.28h-.31c-.11 0-.28.04-.42.2-.15.16-.55.54-.55 1.32s.57 1.53.65 1.64c.08.11 1.12 1.71 2.72 2.4.38.16.68.26.91.33.38.12.73.1 1-.06.31-.18.97-.4 1.1-.78.14-.39.14-.72.1-.79-.04-.07-.15-.11-.31-.19Z"/></svg>`;
+
+function hasRealWhatsapp(raw) {
+  return !!raw && String(raw).replace(/\D/g, "").length >= 5;
+}
+
+// Affichage voulu: "(+66) 81 806 3131" — indicatif entre parenthèses, puis
+// le numéro thaï découpé 2-3-4 chiffres (format international standard des
+// mobiles thaïlandais). Les numéros hors format habituel (indicatif
+// étranger, longueur atypique) sont juste regroupés par 3 en repli.
+function formatWhatsapp(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  const cc = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  const groups = rest.length === 9
+    ? [rest.slice(0, 2), rest.slice(2, 5), rest.slice(5, 9)]
+    : (rest.match(/.{1,3}/g) || []);
+  return `(+${cc}) ${groups.join(" ")}`;
+}
 let selectedBudget = null;
 let selectedDuration = "";
 let onlyNew = false;
@@ -313,6 +737,121 @@ function pinIcon(){
   return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [12, 12] });
 }
 
+const POPUP_MAX_CHIPS = 6;
+const detailCache = {};
+
+function popupSpec(label, value, cls){
+  const has = value != null && value !== "" && value !== "-" && value !== "Please contact";
+  return `<div class="popup-spec">` +
+    `<span class="popup-spec-label">${escapeHtml(label)}</span>` +
+    `<span class="popup-spec-val${has ? (cls ? " " + cls : "") : " na"}">${has ? escapeHtml(value) : "Non communiqu&eacute;"}</span>` +
+    `</div>`;
+}
+
+const WM_TILE_COUNT = 120;
+function watermarkHTML(){
+  const logo = `<span class="wm-thai">Thai</span><span class="wm-month">Month</span>`;
+  return `<div class="wm-tile">${Array.from({ length: WM_TILE_COUNT }, () => `<span>${logo}</span>`).join("")}</div>` +
+    `<div class="wm-badge">${logo}</div>`;
+}
+
+function popupPhotosHTML(ad, images){
+  const list = (images && images.length) ? images : (ad.images || []);
+  if (!list.length) return `<div class="popup-photos is-empty"></div>`;
+  const shown = list.slice(0, 10);
+  return `<div class="popup-photos-wrap">` +
+    `<div class="popup-photos">` +
+    shown.map((u, i) => `<div class="popup-photo">` +
+      `<img src="${escapeHtml(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" ` +
+      `onerror="this.parentElement.style.display='none'">` +
+      watermarkHTML() +
+      `</div>`).join("") +
+    `</div>` +
+    (shown.length > 1 ? `<div class="popup-photos-count">&#x1F4F7; ${shown.length}</div>` : "") +
+    `</div>`;
+}
+
+function popupHTML(ad, images){
+  const thb = priceValue(ad);
+  const amenities = ad.amenities || [];
+  const hasAc = amenities.includes("Air Conditioner");
+  const chips = amenityChips(ad);
+  const shownChips = chips.slice(0, POPUP_MAX_CHIPS);
+  const extra = chips.length - shownChips.length;
+  const locs = [ad.subdistrict, ad.district, ad.province].filter(Boolean);
+  const badges =
+    (ad.has_monthly_contract === "true" && contractNum(ad.contract_monthly_raw) !== null ? `<span class="popup-badge popup-badge-1">1 mois</span>` : "") +
+    (contractNum(ad.contract_3_month_raw) !== null ? `<span class="popup-badge popup-badge-3">3 mois</span>` : "") +
+    (contractNum(ad.contract_6_month_raw) !== null ? `<span class="popup-badge popup-badge-6">6 mois</span>` : "");
+
+  const priceHTML = thb
+    ? `<span class="popup-price-thb">${thb.toLocaleString("fr-FR")} &#x0E3F;</span>` +
+      `<span class="popup-price-unit">/ mois</span>` +
+      `<span class="popup-price-eur">&asymp; ${Math.round(thb / EUR_TO_THB).toLocaleString("fr-FR")} &euro;</span>`
+    : `<span class="popup-price-unit">Prix non communiqu&eacute;</span>`;
+
+  return `<div class="popup-card">` +
+    `<div class="popup-photos-slot">${popupPhotosHTML(ad, images)}</div>` +
+    `<div class="popup-body">` +
+      `<div>` +
+        `<div class="popup-price">${priceHTML}</div>` +
+        (locs.length ? `<div class="popup-loc">&#x1F4CD; ${locs.map(escapeHtml).join(" &middot; ")}</div>` : "") +
+        (badges ? `<div class="popup-badges">${badges}</div>` : "") +
+      `</div>` +
+      `<div class="popup-specs">` +
+        popupSpec("Deposit", ad.deposit) +
+        popupSpec("\u00c9lectricit\u00e9", ad.electric_price) +
+        popupSpec("Climatisation", hasAc ? "\u2713 Oui" : "Non", hasAc ? "yes" : "") +
+      `</div>` +
+      `<div><div class="popup-section-head">${escapeHtml(contractsSectionTitle(ad))}</div>` +
+      `<div class="popup-rooms">${renderContractsHTML(ad)}</div></div>` +
+      (shownChips.length ? `<div class="popup-amenities">` +
+        shownChips.map(c => `<span class="popup-chip">${escapeHtml(AMENITY_ICONS[c])}</span>`).join("") +
+        (extra > 0 ? `<span class="popup-chip popup-chip-more">+${extra}</span>` : "") +
+      `</div>` : "") +
+    `</div>` +
+    `<div class="popup-actions">` +
+      `<a href="payant.html?listing=${encodeURIComponent(ad.id)}" class="popup-btn">Voir l'annonce compl\u00e8te</a>` +
+    `</div>` +
+  `</div>`;
+}
+
+/** Remplace la vignette unique du popup par la galerie complete de l'annonce. */
+async function loadPopupPhotos(ad){
+  const marker = markersById[ad.id];
+  if (!marker) return;
+
+  const slotOf = () => {
+    const popup = marker.getPopup();
+    if (!popup || !popup.isOpen()) return null;
+    const el = popup.getElement();
+    return el ? el.querySelector(".popup-photos-slot") : null;
+  };
+
+  const paint = images => {
+    const slot = slotOf();
+    if (!slot) return;
+    slot.innerHTML = popupPhotosHTML(ad, images);
+    marker.getPopup().update();
+  };
+
+  if (detailCache[ad.id]) { paint(detailCache[ad.id]); return; }
+
+  // Skeleton seulement s'il n'y a rien a montrer en attendant.
+  if (!(ad.images || []).length) {
+    const slot = slotOf();
+    if (slot) slot.innerHTML = `<div class="popup-photos"><div class="popup-photos-skel"></div></div>`;
+  }
+
+  try {
+    const l = await fetch(`${API}/listings/${ad.id}`).then(r => r.json());
+    detailCache[ad.id] = l.images || [];
+  } catch (e) {
+    detailCache[ad.id] = ad.images || [];
+  }
+  paint(detailCache[ad.id]);
+}
+
 function buildMap(){
   leafletMap = L.map("leaflet-map", { zoomControl: false });
   L.control.zoom({ position: "topright" }).addTo(leafletMap);
@@ -325,20 +864,12 @@ function buildMap(){
   leafletMap.addLayer(clusterGroup);
 
   ads.forEach(ad => {
-    const price = priceLabel(ad);
-    const hasAc = (ad.amenities || []).includes("Air Conditioner");
-    const chips = amenityChips(ad);
     const marker = L.marker([ad.latitude, ad.longitude], { icon: pinIcon() })
-      .bindPopup(
-        `<div class="popup-price">${price ? escapeHtml(price) + " / mois" : "Prix non disponible"}</div>` +
-        `<div class="popup-info">Deposit: ${ad.deposit ? escapeHtml(ad.deposit) : "—"}</div>` +
-        `<div class="popup-info">Air Conditioner : ${hasAc ? "Oui" : "Non"}</div>` +
-        (chips.length ? `<div class="popup-amenities">${chips.map(c => `<span class="popup-chip">${escapeHtml(AMENITY_ICONS[c])}</span>`).join("")}</div>` : "") +
-        `<div class="popup-actions">` +
-        `<a href="${escapeHtml(ad.url)}" target="_blank" rel="noopener" class="popup-btn">Voir l'annonce complète</a>` +
-        (ad.phone ? `<a href="tel:${escapeHtml(ad.phone)}" class="popup-btn popup-btn-call">📞 Appeler</a>` : "") +
-        `</div>`
-      );
+      .bindPopup(popupHTML(ad), { maxWidth: 390, minWidth: 390, className: "popup-lg", autoPanPadding: [24, 24] });
+    // La liste ne renvoie qu'une vignette par annonce (_thumbnail_map cote
+    // API): la galerie complete n'est chargee qu'a l'ouverture du popup,
+    // pour ne pas tirer ~45 images par annonce au chargement de la carte.
+    marker.on("popupopen", () => loadPopupPhotos(ad));
     markersById[ad.id] = marker;
   });
 
@@ -505,6 +1036,303 @@ async function loadAds(){
   setupFormFilters();
   applyFilters();
 }
+
+// ── Modal (détail annonce, porté depuis index.html) ──
+
+const MIN_VALID_PRICE = 1000;
+function contractNum(raw) {
+  if (!raw || raw.trim() === "-" || raw.trim() === "") return null;
+  const nums = (raw.match(/[\d,]+/g) || [])
+    .map(s => parseInt(s.replace(/,/g, ""), 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  if (!nums.length) return null;
+
+  const low = nums[0];
+  const high = nums[nums.length - 1];
+  if (low >= MIN_VALID_PRICE) return low;
+  if (high >= MIN_VALID_PRICE) return high;
+  return null;
+}
+
+function contractVal(raw) {
+  const n = contractNum(raw);
+  if (n === null) return "—";
+
+  const eur = n / 38.28;
+
+  const thb = n.toLocaleString("fr-FR");
+  const euros = eur.toLocaleString("fr-FR", {
+    maximumFractionDigits: 0
+  });
+
+  return `${thb} ฿<br>${euros} €`;
+}
+
+function esc(s) {
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// ── Pagination ────────────────────────────────────────────────────────
+
+let lastFocusedEl = null;
+
+async function openModal(id) {
+  lastFocusedEl = document.activeElement;
+  document.getElementById("overlay").classList.add("open");
+  const body = document.getElementById("modal-body");
+  body.innerHTML = `<div class="state-box"><div class="spinner"></div></div>`;
+  body.focus();
+  try {
+    const l = await fetch(`${API}/listings/${id}`).then(r => r.json());
+    body.innerHTML = modalHTML(l);
+    currentGalleryImages = l.images || [];
+  } catch(e) {
+    body.innerHTML = `<div class="state-box">Erreur de chargement</div>`;
+  }
+}
+
+function openLightbox(i) {
+  currentLightboxIndex = i;
+  document.getElementById("lightbox-img").src = currentGalleryImages[i] || "";
+  document.getElementById("lightbox-overlay").classList.add("open");
+  const showNav = currentGalleryImages.length > 1;
+  document.getElementById("lightbox-prev").disabled = !showNav;
+  document.getElementById("lightbox-next").disabled = !showNav;
+}
+function closeLightbox(e) {
+  if (e && e.target !== document.getElementById("lightbox-overlay")) return;
+  document.getElementById("lightbox-overlay").classList.remove("open");
+  document.getElementById("lightbox-img").src = "";
+}
+function navigateLightbox(delta) {
+  if (!currentGalleryImages.length) return;
+  currentLightboxIndex = (currentLightboxIndex + delta + currentGalleryImages.length) % currentGalleryImages.length;
+  document.getElementById("lightbox-img").src = currentGalleryImages[currentLightboxIndex];
+}
+
+let lightboxTouchStartX = null;
+document.getElementById("lightbox-overlay").addEventListener("touchstart", e => {
+  lightboxTouchStartX = e.changedTouches[0].clientX;
+}, { passive: true });
+document.getElementById("lightbox-overlay").addEventListener("touchend", e => {
+  if (lightboxTouchStartX === null) return;
+  const delta = e.changedTouches[0].clientX - lightboxTouchStartX;
+  lightboxTouchStartX = null;
+  if (Math.abs(delta) < 40) return;
+  navigateLightbox(delta > 0 ? -1 : 1);
+}, { passive: true });
+
+function trapModalFocus(e) {
+  if (e.key !== "Tab") return;
+  const overlay = document.getElementById("overlay");
+  if (!overlay.classList.contains("open")) return;
+  const focusable = document.getElementById("modal-body")
+    .querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault(); last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault(); first.focus();
+  }
+}
+document.addEventListener("keydown", trapModalFocus);
+
+// La carte ne charge pas les caches de geocodage d'index.html : seules les
+// coordonnees propres de l'annonce servent (une annonce sans position
+// n'apparait de toute facon pas sur la carte).
+function mapPoint(l) {
+  if (l.latitude != null && l.longitude != null) {
+    return { lat: l.latitude, lon: l.longitude, precise: true };
+  }
+  return null;
+}
+
+function mapQuery(l) {
+  const pt = mapPoint(l);
+  if (pt) return `${pt.lat},${pt.lon}`;
+  const q = l.address || [l.subdistrict, l.district, l.province].filter(Boolean).join(", ");
+  return q ? `${q}, Thailand` : null;
+}
+
+function googleMapsUrl(l) {
+  const q = mapQuery(l);
+  if (!q) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+// Embed public sans clé API (endpoint historique `output=embed`) — pas
+// aussi précis/officiel que l'API Maps Embed payante, mais suffisant
+// pour situer un point sur une carte interactive intégrée à la modal.
+function googleMapsEmbedUrl(l) {
+  const q = mapQuery(l);
+  if (!q) return null;
+  const pt = mapPoint(l);
+  const zoom = pt && pt.precise ? 17 : (pt ? 15 : 13);
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=${zoom}&output=embed`;
+}
+
+const humanizeRoomType = s => s ? s.toLowerCase().replace(/_/g, " ").replace(/^./, c => c.toUpperCase()) : null;
+
+function roomTypeLabel(rt) {
+  const roomType = humanizeRoomType(rt.room_type);
+  return [
+    rt.name && rt.name !== "Unknown" ? rt.name : null,
+    roomType && roomType !== rt.name ? roomType : null,
+    rt.size_sqm ? `${rt.size_sqm} m²` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+function contractRooms(l) {
+  const rooms = (l.room_types || []).filter(rt =>
+    rt.monthly_min_thb != null || rt.monthly_max_thb != null ||
+    rt.contract_1_month_thb != null || rt.contract_3_month_thb != null || rt.contract_6_month_thb != null);
+  const available = rooms.filter(rt => !rt.status || rt.status.trim().toLowerCase() === "available");
+  return available.length ? available : rooms;
+}
+
+function contractsSectionTitle(l) {
+  const useRooms = contractRooms(l);
+  if (useRooms.length === 1) {
+    const label = roomTypeLabel(useRooms[0]);
+    if (label) return label;
+  }
+  return "Room Type";
+}
+
+function renderContractsHTML(l) {
+  const fmt = n => n == null ? null : `${n.toLocaleString("en-US")} THB/month`;
+  const useRooms = contractRooms(l);
+
+  if (useRooms.length) {
+    return useRooms.map(rt => {
+      const label = roomTypeLabel(rt);
+      const terms = [
+        ["1 mois", fmt(rt.contract_1_month_thb)],
+        ["3 mois", fmt(rt.contract_3_month_thb)],
+        ["6 mois", fmt(rt.contract_6_month_thb)],
+      ].filter(([, v]) => v != null);
+      if (!terms.length) return "";
+      const termsHTML = terms.map(([term, v]) => `
+        <div class="mc">
+          <div class="mc-label">${term}</div>
+          <div class="mc-val">${esc(v)}</div>
+        </div>`).join("");
+      if (useRooms.length <= 1) return termsHTML;
+      return `
+        <div class="mc-room-group">
+          ${label ? `<div class="mc-room-label">${esc(label)}</div>` : ""}
+          <div class="mc-room-terms">${termsHTML}</div>
+        </div>`;
+    }).join("");
+  }
+
+  const contracts = [["1 mois", l.contract_monthly_raw], ["3 mois", l.contract_3_month_raw], ["6 mois", l.contract_6_month_raw]]
+    .filter(([, raw]) => raw && raw !== "-");
+  if (!contracts.length) return `<div class="mc"><div class="mc-val na">Aucun contrat disponible</div></div>`;
+  return contracts.map(([label, raw]) => `
+        <div class="mc">
+          <div class="mc-label">${label}</div>
+          <div class="mc-val">${esc(raw)}</div>
+        </div>`).join("");
+}
+
+function modalHTML(l) {
+  const locs = [l.subdistrict, l.district, l.province].filter(Boolean);
+  const amenities = l.amenities || [];
+  const mapsUrl = googleMapsUrl(l);
+  const embedUrl = googleMapsEmbedUrl(l);
+  const pt = mapPoint(l);
+  const precisionLabel = !pt ? ""
+    : pt.precise ? "📌 Position précise"
+    : "🔵 Position approximative (centre du quartier — RentHub ne publie pas l'adresse exacte)";
+
+  return `
+    <div class="modal-top">
+      <button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
+    </div>
+    ${l.images && l.images.length ? `
+    <div class="modal-gallery">
+      ${l.images.map((u, i) => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onclick="openLightbox(${i})" onerror="this.parentElement.style.display='none'">${watermarkHTML()}</div>`).join("")}
+    </div>` : ""}
+    <div class="modal-tags">
+      ${locs.map(loc => `<span class="tag">${esc(loc)}</span>`).join("")}
+      ${l.has_monthly_contract === "true" && contractVal(l.contract_monthly_raw) !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}
+      ${contractVal(l.contract_3_month_raw) !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}
+      ${contractVal(l.contract_6_month_raw) !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}
+    </div>
+    ${mapsUrl ? `
+    <div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+        <a class="modal-link" style="padding:6px 12px;font-size:11px" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Google Maps ↗</a>
+      </div>
+      ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
+      ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
+    </div>` : ""}
+    <div>
+      <div class="section-head">${esc(contractsSectionTitle(l))}</div>
+      <div class="modal-contracts">
+        ${renderContractsHTML(l)}
+      </div>
+    </div>
+    ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `
+    <div>
+      <div class="section-head">Description</div>
+      <div class="modal-contracts">
+        <div class="mc"><div class="mc-label">Deposit</div><div class="mc-val${l.deposit ? "" : " na"}">${l.deposit ? esc(l.deposit) : "Non communiqué"}</div></div>
+        ${l.electric_price && l.electric_price !== "Please contact" ? `<div class="mc"><div class="mc-label">Electric price</div><div class="mc-val">${esc(l.electric_price)}</div></div>` : ""}
+        <div class="mc"><div class="mc-label">Air Conditioner</div><div class="mc-val${amenities.includes("Air Conditioner") ? "" : " na"}">${amenities.includes("Air Conditioner") ? "YES" : "NO"}</div></div>
+      </div>
+    </div>` : ""}
+    ${amenities.length ? `
+    <div>
+      <div class="section-head">Équipements</div>
+      <div class="modal-amenities">${amenities.map(a=>`<span class="amenity">${esc(AMENITY_ICONS[a] || a)}</span>`).join("")}</div>
+    </div>` : ""}
+    ${(()=>{const hasWa=hasRealWhatsapp(l.whatsapp);return l.phone||l.line_id||hasWa ? `
+    <div>
+      <div class="section-head">Contact</div>
+      <div class="modal-contracts">
+        ${l.phone?`<div class="mc"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></div>`:""}
+        ${l.line_id?(()=>{
+          // line_verified===false : identifiant deja confirme inexistant par
+          // scripts/verify_line_ids.py -- on route vers line.me/ti/p/~<id>
+          // pour eviter un 404 (voir Listing.line_verified). Sinon (valide ou
+          // jamais verifie), page.line.me/<id> reste le lien qui marche vraiment.
+          const slug = encodeURIComponent(String(l.line_id).replace(/^@/,""));
+          const href = l.line_verified===false ? `https://line.me/ti/p/~${slug}` : `https://page.line.me/${slug}`;
+          return `<a class="mc mc-line" href="${href}" target="_blank" rel="noopener"><div class="mc-label">LINE</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${LINE_ICON_SVG} ${esc(l.line_id)}</div></a>`;
+        })():""}
+        ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
+      </div>
+    </div>` : "";})()}
+    <a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>
+  `;
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById("overlay")) return;
+  document.getElementById("overlay").classList.remove("open");
+  if (lastFocusedEl) { lastFocusedEl.focus(); lastFocusedEl = null; }
+}
+document.addEventListener("keydown", e => {
+  const lightboxOpen = document.getElementById("lightbox-overlay").classList.contains("open");
+  if (lightboxOpen && e.key === "ArrowLeft") { navigateLightbox(-1); return; }
+  if (lightboxOpen && e.key === "ArrowRight") { navigateLightbox(1); return; }
+  if (e.key !== "Escape") return;
+  if (lightboxOpen) { closeLightbox(); return; }
+  closeModal();
+});
+
+// Pas de clic droit / glisser / selection sur les photos (popup de la carte,
+// galerie de la modale, lightbox). Le popup Leaflet est insere dynamiquement,
+// d'ou l'ecoute au niveau du document.
+["contextmenu", "dragstart", "selectstart", "copy"].forEach(eventName => {
+  document.addEventListener(eventName, event => {
+    if (event.target.closest(".popup-photos-wrap, .modal-gallery, .lightbox-overlay")) event.preventDefault();
+  });
+});
 
 loadAds();
 </script>
