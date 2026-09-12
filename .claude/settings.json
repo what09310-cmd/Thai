@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./venv/**)",
+      "Grep(./venv/**)",
+      "Glob(./venv/**)",
+      "Read(./renthub.db)",
+      "Read(./renthub.db.bak-*)",
+      "Read(./*.log)",
+      "Read(./logs/**)",
+      "Read(./.whatsapp-profile/**)",
+      "Grep(./.whatsapp-profile/**)",
+      "Glob(./.whatsapp-profile/**)",
+      "Read(./.scrapling/**)",
+      "Read(./.pytest_cache/**)",
+      "Read(./__pycache__/**)",
+      "Read(**/__pycache__/**)",
+      "Read(./.impeccable/hook.cache.json)"
+    ]
+  }
+}

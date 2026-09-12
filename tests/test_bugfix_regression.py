@@ -661,9 +661,13 @@ def test_since_hours_windows_are_bounded(client, path):
 
 
 def test_oversized_session_cookie_is_rejected_without_error(client):
-    """int() lève au-delà de 4300 chiffres: la charge doit être bornée avant."""
+    """int() lève au-delà de 4300 chiffres: la charge doit être bornée avant.
+
+    Route protegee et non "/": la racine est publique (page vitrine), donc
+    ne passe plus par le garde d'authentification quel que soit le cookie.
+    """
     client.cookies.set(SESSION_COOKIE_NAME, "9" * 5000 + ".deadbeef")
-    response = client.get("/", follow_redirects=False)
+    response = client.get("/premium.html", follow_redirects=False)
 
     assert response.status_code == 307
     assert response.headers["location"] == "/login"
@@ -908,9 +912,13 @@ def test_rental_request_rejects_oversized_fields(client):
 
 def test_logout_clears_the_session(client):
     """Sans /logout, la seule révocation possible était la rotation du
-    mot de passe du site."""
+    mot de passe du site.
+
+    Route protegee et non "/": la racine est publique (page vitrine), donc
+    y acceder ne prouve rien sur l'etat de la session.
+    """
     client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
-    assert client.get("/", follow_redirects=False).status_code == 200
+    assert client.get("/premium.html", follow_redirects=False).status_code == 200
 
     out = client.post("/logout", follow_redirects=False)
     assert out.status_code == 303
@@ -926,7 +934,7 @@ def test_logout_clears_the_session(client):
 
     # Et sans cookie, la page protegee redirige bien vers le login.
     client.cookies.clear()
-    assert client.get("/", follow_redirects=False).status_code in (302, 307)
+    assert client.get("/premium.html", follow_redirects=False).status_code in (302, 307)
 
 
 # ── Detection de changements: pistes d'audit ────────────────────────

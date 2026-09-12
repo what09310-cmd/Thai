@@ -34,3 +34,6 @@ renthub_listings.json
 
 # URL du tunnel Cloudflare ephemere, reecrite a chaque demarrage (renthub.ps1)
 tunnel_url.txt
+
+# Config Codex locale : contient des cles API (Composio, Firecrawl, Perplexity)
+.codex/

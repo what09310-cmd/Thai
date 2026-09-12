@@ -943,16 +943,28 @@
     border-radius: var(--r-pill); padding: 15px 34px;
     font-size: 15px; font-weight: 600; text-decoration: none;
   }
+  /* Bouton secondaire : meme pilule et meme couleur que .btn-cta */
+  .btn-ghost {
+    background: var(--accent); color: #fff;
+    border: none;
+  }
+  .hero-actions {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 12px; margin-top: 28px;
+  }
+  .hero-actions .btn-cta { margin-top: 0; }
 
   .hero-proof {
     display: flex; flex-wrap: wrap; justify-content: center;
     gap: 10px; margin-top: 28px;
   }
   .proof {
+    display: flex; flex-direction: column; align-items: center;
     background: rgba(255,255,255,.78);
-    border-radius: var(--r-pill); padding: 9px 18px;
+    border-radius: 16px; padding: 8px 18px;
     font-size: 13px; color: #4d473f;
   }
+  .proof-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
   .proof b { color: #14130f; font-variant-numeric: tabular-nums; font-weight: 700; }
 
   /* ── Bandeau defilant des meilleures affaires ── */
@@ -1061,7 +1073,7 @@
      La photo vient d'une vraie annonce de la base.
      ══════════════════════════════════════════════════════════════════ */
 
-  .how { background: var(--bg); padding: 74px 24px 86px; }
+  .how { background: var(--bg); padding: 16px 24px 72px; text-align: center; }
   .how-title {
     font-family: var(--display);
     font-size: clamp(28px, 4.4vw, 46px);
@@ -1069,10 +1081,20 @@
     text-align: center; color: #14130f;
     margin: 0 0 54px;
   }
+  .how-top-cta {
+    display: block;
+    margin: 0 0 22px;
+    padding: 22.5px 51px;
+    font-size: 22.5px;
+  }
+  .how-top-cta-wrap {
+    display: flex;
+    justify-content: center;
+  }
   .how-grid {
     max-width: 1040px; margin: 0 auto;
     display: grid; grid-template-columns: 1.05fr .95fr;
-    gap: 54px; align-items: start;
+    gap: 54px; align-items: start; text-align: left;
   }
 
   .how-steps { list-style: none; margin: 0; padding: 0; }
@@ -1142,7 +1164,7 @@
   .how-cta { margin-top: 0; }
 
   @media (max-width: 900px) {
-    .how { padding: 56px 20px 64px; }
+    .how { padding: 16px 20px 54px; }
     .how-grid { grid-template-columns: 1fr; gap: 40px; }
     .how-step-2 { margin-left: 14px; }
     .how-step-3 { margin-left: 6px; }
@@ -1155,7 +1177,7 @@
      donc la seconde copie prend la place de la premiere sans saut.
      ══════════════════════════════════════════════════════════════════ */
 
-  .wall { background: var(--bg); padding: 72px 0 88px; overflow: hidden; }
+  .wall { background: var(--bg); padding: 72px 0 32px; overflow: hidden; }
   .wall-title {
     font-family: var(--display);
     font-size: clamp(28px, 4.4vw, 46px);
@@ -1329,27 +1351,41 @@
   .site-footer {
     background: #fff;
     border-top: 1px solid var(--border);
-    padding: 30px 24px 34px;
+    padding: 30px 24px 26px;
+  }
+  .footer-row {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px 28px; margin-bottom: 22px;
   }
   .footer-links {
-    display: flex; flex-wrap: wrap; justify-content: center;
-    gap: 12px 28px; margin-bottom: 16px;
+    display: flex; flex-wrap: wrap;
+    gap: 12px 28px;
   }
-  .footer-links a {
+  .footer-links a, .footer-social a {
     color: #5e584f; text-decoration: none;
     font-size: 14px; font-weight: 500;
     transition: color .15s;
   }
-  .footer-links a:hover { color: var(--accent); }
+  .footer-links a:hover, .footer-social a:hover { color: var(--accent); }
+  .footer-social {
+    display: flex; flex-wrap: wrap;
+    gap: 12px 24px;
+  }
   .footer-legal {
     text-align: center; font-size: 13px; color: var(--dim);
     font-variant-numeric: tabular-nums;
+    margin-bottom: 14px;
+  }
+  .footer-bar {
+    width: 48px; height: 4px; margin: 0 auto;
+    border-radius: 999px; background: var(--border);
   }
 
   @media (max-width: 768px) {
     .cta-final { padding: 70px 20px 78px; }
     .cta-final::before, .cta-final::after { width: 340px; height: 340px; }
-    .footer-links { gap: 10px 20px; }
+    .footer-row { justify-content: center; text-align: center; }
+    .footer-links, .footer-social { justify-content: center; gap: 10px 20px; }
   }
 
   @media (max-width: 768px) {
@@ -1357,7 +1393,7 @@
     .faq-card summary { font-size: 15px; padding: 16px 18px; }
     .faq-answer { padding: 0 18px 18px; }
 
-    .wall { padding: 54px 0 64px; }
+    .wall { padding: 54px 0 32px; }
     .wcard { width: 225px; height: 255px; }
     .wcard-price b { font-size: 16px; }
     .wcard-loc { font-size: 15px; }
@@ -1393,12 +1429,15 @@
 
     <h1><span class="hero-line1">Trouver un Logement en Thaïlande</span><br><em>Au meilleur prix</em></h1>
 
-    <a class="btn-cta" href="/">Voir les annonces</a>
+    <div class="hero-actions">
+      <a class="btn-cta btn-ghost" href="/carte-thailande.html">Voir la carte</a>
+      <a class="btn-cta btn-ghost" href="/premium.html">Voir les annonces</a>
+    </div>
 
     <div class="hero-proof">
-      <div class="proof"><b id="hero-1m">—</b> contrats 1&nbsp;mois</div>
-      <div class="proof"><b id="hero-3m">—</b> à 3&nbsp;mois</div>
-      <div class="proof"><b id="hero-6m">—</b> à 6&nbsp;mois</div>
+      <div class="proof"><span class="proof-label">Contrat</span><span><b id="hero-1m">—</b> 1&nbsp;mois</span></div>
+      <div class="proof"><span class="proof-label">Contrat</span><span><b id="hero-3m">—</b> 3&nbsp;mois</span></div>
+      <div class="proof"><span class="proof-label">Contrat</span><span><b id="hero-6m">—</b> 6&nbsp;mois</span></div>
     </div>
 
     <!-- Skyline : plan lointain (vert) puis plan proche (violet). Chedis et
@@ -1455,6 +1494,9 @@
 
 <!-- ══ COMMENT ÇA MARCHE ══════════════════════════════════════════ -->
 <section class="how">
+  <div class="how-top-cta-wrap">
+    <a class="btn-cta btn-ghost how-top-cta" href="/payant.html">Version Payante</a>
+  </div>
   <h2 class="how-title">Comment ça marche</h2>
 
   <div class="how-grid">
@@ -1499,7 +1541,7 @@
     <div class="how-aside">
       <!-- Photo tiree d'une vraie annonce, remplie par renderHowPhoto() -->
       <div class="how-photo" id="how-photo"></div>
-      <a class="btn-cta how-cta" href="/">Voir les annonces</a>
+      <a class="btn-cta how-cta" href="/premium.html">Voir les annonces</a>
     </div>
   </div>
 </section>
@@ -1599,17 +1641,24 @@
 
 <!-- ══ PIED DE PAGE ═══════════════════════════════════════════════ -->
 <footer class="site-footer">
-  <nav class="footer-links" aria-label="Liens de bas de page">
-    <a href="/">Annonces</a>
-    <a href="carte-thailande.html">Carte</a>
-    <a href="payant.html">Tarifs</a>
-    <a href="premium.html">Premium</a>
-    <a href="vip.html">VIP</a>
-    <a href="#faq">Questions fréquentes</a>
-  </nav>
+  <div class="footer-row">
+    <nav class="footer-links" aria-label="Liens de bas de page">
+      <a href="payant.html">Tarifs</a>
+      <a href="#faq">FAQ</a>
+      <a href="mailto:contact@thaimonth.com">Contact</a>
+      <a href="#">À propos</a>
+      <a href="#">Conditions</a>
+      <a href="#">Confidentialité</a>
+    </nav>
+    <nav class="footer-social" aria-label="Réseaux sociaux">
+      <a href="#" target="_blank" rel="noopener">TikTok</a>
+      <a href="#" target="_blank" rel="noopener">Instagram</a>
+    </nav>
+  </div>
   <p class="footer-legal">
     © <span id="footer-year">2026</span> ThaiMonth. Tous droits réservés.
   </p>
+  <div class="footer-bar"></div>
 </footer>
 
 <!-- MODAL -->
@@ -1983,11 +2032,17 @@ function renderDeals() {
   const track = document.getElementById("deals-track");
   if (!track) return;
 
+  // Meme regle de prix que le mur (wallPrice) : n'exiger que le tarif
+  // 1 mois strict laissait 2 cartes sur les 12 de l'echantillon public,
+  // et la bande ne montrait que ces deux-la en boucle -- rien a voir en
+  // la faisant defiler. Le tarif 3 ou 6 mois reste un loyer mensuel ; la
+  // pilule affiche "/mois" sans preciser la duree (choix produit : un seul
+  // prix, pas de comparaison entre durees -- voir .deal-price).
   const pool = allData
     .filter(l => l.status !== "removed"
               && l.images && l.images.length
-              && contractNum(l.contract_monthly_raw) !== null)
-    .sort((a, b) => contractNum(a.contract_monthly_raw) - contractNum(b.contract_monthly_raw));
+              && wallPrice(l) !== null)
+    .sort((a, b) => wallPrice(a).amount - wallPrice(b).amount);
 
   // Un prix affiche n'apparait qu'une fois dans la bande : deux cartes a
   // "340 €" se lisent comme un doublon, meme si les villes different. On
@@ -1995,7 +2050,7 @@ function renderDeals() {
   const seen = new Set();
   const candidates = [];
   for (const l of pool) {
-    const key = eurLabel(contractNum(l.contract_monthly_raw));
+    const key = eurLabel(wallPrice(l).amount);
     if (seen.has(key)) continue;
     seen.add(key);
     candidates.push(l);
@@ -2059,11 +2114,31 @@ function setupDealsMarquee() {
   window.addEventListener("load", measure);
   scroller._measure = measure;
 
-  function wrap() {
+  // Ramene une position dans (0, lw] : la piste est doublee, donc x et
+  // x + lw affichent les memes pixels. Borne haute incluse et borne basse
+  // exclue, deliberement : a 0 le navigateur ne peut plus reculer et la
+  // position doit repartir de lw ; et si 0 comme lw etaient tous deux
+  // ramenes de l'autre cote, le saut 0 -> lw declenchait un evenement
+  // scroll qui relisait lw comme "trop loin", revenait a 0, et ainsi de
+  // suite sans fin -- la bande semblait bloquee des qu'on la tirait vers
+  // la droite a l'arrivee sur la page.
+  function loop(x) {
     if (lw <= 0) measure();
-    if (lw <= 0) return;
-    if (scroller.scrollLeft >= lw) scroller.scrollLeft -= lw;
-    else if (scroller.scrollLeft <= 0) scroller.scrollLeft += lw;
+    if (lw <= 0) return x;
+    x = ((x % lw) + lw) % lw;
+    return x === 0 ? lw : x;
+  }
+  // Deplace la bande de `delta` px en bouclant AVANT d'assigner : assigner
+  // une cible negative laissait le navigateur la borner a 0, et le
+  // depassement (le geste au-dela du bord) etait perdu.
+  function scrollBy(delta) {
+    scroller.scrollLeft = loop(scroller.scrollLeft + delta);
+  }
+  // Pour le defilement natif (tactile, trackpad) : on ne peut que corriger
+  // apres coup.
+  function wrap() {
+    const x = loop(scroller.scrollLeft);
+    if (x !== scroller.scrollLeft) scroller.scrollLeft = x;
   }
 
   let rafId = null, lastTime = null;
@@ -2072,8 +2147,7 @@ function setupDealsMarquee() {
     if (lastTime === null) lastTime = now;
     const dt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
-    if (!dragging) scroller.scrollLeft += SPEED * dt;
-    wrap();
+    if (!dragging) scrollBy(SPEED * dt);
     rafId = requestAnimationFrame(tick);
   }
   function startRAF() {
@@ -2125,8 +2199,7 @@ function setupDealsMarquee() {
       if (!dragging) return;
       const dx = ev.clientX - dragStartX;
       if (Math.abs(dx) > 4) hasDragged = true;
-      scroller.scrollLeft = dragStartScroll - dx;
-      wrap();
+      scroller.scrollLeft = loop(dragStartScroll - dx);
     }
     function mu() {
       endDrag();
@@ -2140,6 +2213,16 @@ function setupDealsMarquee() {
   // Le tactile et le trackpad font defiler scroller nativement (overflow-x:
   // auto) : on se contente d'y accrocher le bouclage.
   scroller.addEventListener("scroll", wrap, { passive: true });
+
+  // La molette verticale d'une souris, elle, fait defiler la page et pas
+  // la bande (un overflow-x seul ne la recoit pas) : on la redirige vers
+  // scrollLeft. Un geste deja horizontal (trackpad) est laisse au
+  // navigateur. deltaMode 1 = Firefox en "lignes", pas en pixels.
+  scroller.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    scrollBy(e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY);
+  }, { passive: false });
   scroller.addEventListener("touchstart", stopRAF, { passive: true });
   scroller.addEventListener("touchend", resume, { passive: true });
 
@@ -2187,6 +2270,67 @@ window.addEventListener("resize", () => {
   wallResizeTimer = setTimeout(renderWall, 200);
 });
 
+// wallCardHTML n'affiche que la ville et le prix (id/adresse restent
+// masques pour l'appelant anonyme) : deux annonces differentes qui
+// partagent ces deux champs -- contractNum() ne garde que le bas de la
+// fourchette, donc "15 000-19 500" et "15 000-20 700" s'affichent pareil --
+// sont donc indiscernables a l'ecran, meme si ce sont deux lignes
+// distinctes en base. Rare, mais quand ca tombe sur deux annonces voisines
+// du pool, on veut l'absorber avant que la rotation des lignes ne le colle
+// partout : voir spreadWallAdjacent() ci-dessous.
+function wallSignature(l) {
+  const p = wallPrice(l);
+  return `${cityLabel(l)}|${p ? p.amount : ""}`;
+}
+
+// Reordonne le pool pour qu'aucune paire voisine ne partage sa signature
+// (ville + prix affiche) -- y compris en anneau, la derniere case avec la
+// premiere. C'est deliberement fait une seule fois ici, avant la rotation
+// par ligne : chaque ligne de renderWall() est une rotation du meme
+// tableau, et une rotation ne change pas quelles cases se touchent -- si
+// l'anneau n'a de collision nulle part, aucune rotation ni repetition en
+// aval (buckets, copies, le doublement final) ne peut en introduire une.
+// Contrairement a renderDeals(), on ne retire aucune annonce : le pool est
+// deja limite a PUBLIC_DEMO_LIMIT et le reduire encore forcerait le mur a
+// boucler sur moins de 12 vignettes.
+function spreadWallAdjacent(items) {
+  const groups = new Map();
+  for (const l of items) {
+    const key = wallSignature(l);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(l);
+  }
+  if (groups.size <= 1) return items.slice();
+
+  const buckets = [...groups.values()];
+  const result = [];
+  let lastKey = null;
+  while (result.length < items.length) {
+    buckets.sort((a, b) => b.length - a.length);
+    const bucket = buckets.find(b => b.length && wallSignature(b[0]) !== lastKey)
+      || buckets.find(b => b.length);
+    const item = bucket.shift();
+    result.push(item);
+    lastKey = wallSignature(item);
+  }
+
+  // L'anneau se referme : la derniere case retrouve la premiere des que la
+  // ligne est repetee. Si elles collident encore, on cherche une carte a
+  // echanger avec la derniere qui casse le bouclage sans en recreer un
+  // juste avant -- au pire on la laisse telle quelle.
+  const last = result.length - 1;
+  if (last > 1 && wallSignature(result[0]) === wallSignature(result[last])) {
+    for (let k = 1; k < last; k++) {
+      if (wallSignature(result[k]) !== wallSignature(result[0])
+          && wallSignature(result[k]) !== wallSignature(result[last - 1])) {
+        [result[k], result[last]] = [result[last], result[k]];
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 function renderWall() {
   const rows = [
     document.getElementById("wall-1"),
@@ -2215,7 +2359,7 @@ function renderWall() {
   // identiques, glissees d'une colonne -- vu en diagonale ca ressemble a
   // une meme annonce repetee juste en dessous. Le decalage est maintenant
   // reparti sur toute la largeur du pool (un tiers, deux tiers).
-  const base = pool.slice(0, WALL_ROWS * WALL_PER_ROW);
+  const base = spreadWallAdjacent(pool.slice(0, WALL_ROWS * WALL_PER_ROW));
   const shift = Math.max(1, Math.round(base.length / WALL_ROWS));
   const buckets = [0, 1, 2].map(i => {
     const offset = (i * shift) % base.length;
@@ -2308,7 +2452,7 @@ function renderHowPhoto() {
 }
 
 function dealHTML(l) {
-  const n = contractNum(l.contract_monthly_raw);
+  const price = wallPrice(l);
   const ville = dealCityLabel(l);
   const img = `<img src="${esc(cityImage(l))}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.querySelector('.deal-fallback')?.removeAttribute('hidden');this.remove()">`;
 
@@ -2317,7 +2461,7 @@ function dealHTML(l) {
     <div class="deal-img">
       ${img}
       <div class="deal-fallback no-img" ${img ? "hidden" : ""}>\u{1F3E0}</div>
-      <span class="deal-price"><b>${eurLabel(n)} \u20ac</b><small>/mois</small></span>
+      <span class="deal-price"><b>${eurLabel(price ? price.amount : null)} \u20ac</b><small>/mois</small></span>
     </div>
     <div class="deal-body">
       <div class="deal-route">${esc(ville)}</div>
