@@ -9,7 +9,10 @@
  * bloc vide plutot que d'afficher un faux "Se connecter".
  */
 (function () {
-  var API = window.location.origin.startsWith("file:") ? "http://localhost:8000" : window.location.origin;
+  var RENDER_API = "https://thai-month.onrender.com";
+  var API = window.location.origin.startsWith("file:") ? "http://localhost:8000"
+          : window.location.hostname === "what09310-cmd.github.io" ? RENDER_API
+          : window.location.origin;
 
   var style = document.createElement("style");
   style.textContent = [
@@ -33,7 +36,7 @@
   function logoutForm() {
     var f = document.createElement("form");
     f.method = "post";
-    f.action = "/logout";
+    f.action = API + "/logout";
     f.style.display = "inline";
     var b = el("button", null, "Déconnexion");
     b.type = "submit";
@@ -45,7 +48,7 @@
     box.textContent = "";
     if (!me.authenticated) {
       var a = el("a", null, "Se connecter");
-      a.href = "/login";
+      a.href = API + "/login";
       box.appendChild(a);
       return;
     }
