@@ -26,7 +26,6 @@ from src.normalizers.amenities import derive_amenities
 from src.parser.detail_parser import (
     _clean_line_id,
     _extract_contacts,
-    _extract_contract_row_values,
     _has_listing_payload,
 )
 from src.tracker.change_detector import mark_removed_listings, upsert_listing
@@ -93,31 +92,6 @@ def _add_listings(session, count: int, updated_at: datetime | None = None) -> No
 
 
 # ── Parseur ─────────────────────────────────────────────────────────
-
-def test_contract_row_ignores_month_label():
-    """Le numéro de mois du libellé ne doit pas être lu comme un prix.
-
-    `parse_price_range("Contract 3 month 8,000 THB/Month")` capture le 3
-    comme premier nombre: le libellé doit être retiré avant l'extraction.
-    Ce test couvre aussi la régression Scrapling qui rendait la fonction
-    muette (`.text` d'un <tr> ne rend que son texte direct, soit "").
-    """
-    html = (
-        "<table>"
-        "<tr><td>Contract 1 month</td><td>Contract 3 month</td><td>Contract 6 month</td></tr>"
-        "<tr><td>Contract 1 month</td><td>8,500 THB/Month</td></tr>"
-        "<tr><td>Contract 3 month</td><td>8,000 THB/Month</td></tr>"
-        "<tr><td>Contract 6 month</td><td>7,500 THB/Month</td></tr>"
-        "</table>"
-    )
-    header_row = Selector(html).css("tr")[0]
-
-    assert _extract_contract_row_values(header_row) == {
-        "1": 8500,
-        "3": 8000,
-        "6": 7500,
-    }
-
 
 def test_line_id_placeholder_leaves_the_field_empty():
     """RentHub affiche "Unavailable" à la place du LINE ID quand l'annonce

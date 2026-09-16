@@ -4,7 +4,6 @@ Extrait: listing_no, description, amenities, room_types, images, contacts.
 """
 from __future__ import annotations
 
-import itertools
 import json
 import logging
 import re
@@ -15,14 +14,8 @@ from scrapling.parser import Selector
 
 from src.models.schemas import ListingDetail, RoomTypeSchema
 from src.normalizers.amenities import derive_amenities
-from src.normalizers.price import parse_price_range
 
 log = logging.getLogger(__name__)
-
-# Nombre maximum d'occurrences "lat"/"lng" appariees dans le repli regex de
-# _extract_coordinates. Au-dela, on paie un produit cartesien pour rien.
-_MAX_COORD_MATCHES = 200
-
 
 # Valeur par defaut du parametre `next_data` des extracteurs: "non fourni",
 # a distinguer de None qui signifie "la page n'a pas de JSON exploitable".
@@ -40,6 +33,13 @@ def parse_detail_page(html: str, url: str) -> Optional[ListingDetail]:
         # Lu une seule fois: ce JSON pese souvent plusieurs centaines de Ko
         # et cinq extracteurs le decodaient chacun de leur cote.
         next_data = _extract_next_data(soup)
+        if next_data is not None and not _has_listing_payload(next_data):
+            # Une annonce retiree ne renvoie ni 404 ni page vide: RentHub
+            # sert sa page d'accueil, dont le JSON n'a pas de cle `listing`.
+            # Rien a extraire ici -- les replis HTML y lisaient du bruit
+            # (un numero pris pour un telephone) -- et la page ne doit pas
+            # etre redemandee a chaque scan: meme traitement qu'un 404.
+            return ListingDetail(page_gone=True)
 
         source_id = _extract_listing_no(soup)
         description = _extract_description(soup)
@@ -50,7 +50,7 @@ def parse_detail_page(html: str, url: str) -> Optional[ListingDetail]:
         images = _extract_images(soup)
         phone, line_id, whatsapp, email = _extract_contacts(soup, next_data=next_data)
         deposit, advance, electric, water, service = _extract_fees(soup, next_data=next_data)
-        latitude, longitude = _extract_coordinates(soup, html, next_data=next_data)
+        latitude, longitude = _extract_coordinates(soup, next_data=next_data)
 
         return ListingDetail(
             source_id=source_id,
@@ -248,177 +248,14 @@ def _extract_room_types_from_next_data(next_data: Optional[dict]) -> Optional[li
 
 
 def _extract_room_types(soup: Selector, next_data=_NOT_GIVEN) -> list[RoomTypeSchema]:
+    """Types de chambre depuis `listing.rooms` du JSON __NEXT_DATA__.
+
+    Le tableau "Room Type" affiche est rendu cote client depuis ce JSON,
+    pas depuis un <table> statique: les anciens replis HTML/texte ne
+    produisaient que des chambres "Unknown" au prix approximatif, et ne
+    se declenchaient que sur des pages qui ne sont pas des annonces.
     """
-    Extrait le tableau des types de chambre.
-
-    Structure HTML: tableau avec colonnes:
-    Room Type | Size | Monthly Rental | Daily Rental | Short Contract | Status
-    + sous-tableau: Contract 1 month / Contract 3 month / Contract 6 month
-    """
-    from_next_data = _extract_room_types_from_next_data(_next_data_or_extract(soup, next_data))
-    if from_next_data is not None:
-        return from_next_data
-
-    rooms = []
-
-    # Chercher la section "Room Type"
-    section = soup.find_by_regex(r"^Room Type$", case_sensitive=False)
-    if not section:
-        section = soup.find_by_regex(r"Room Type", case_sensitive=False)
-
-    if not section:
-        return rooms
-
-    # Chercher le tableau parent
-    container = section.parent
-    for _ in range(5):
-        if container is None:
-            break
-        if container.tag == "table":
-            break
-        container = container.parent
-
-    if container is None or getattr(container, "tag", None) != "table":
-        # Essayer de trouver un tableau plus haut
-        container = soup.find("table")
-
-    if not container:
-        # Fallback: extraire depuis texte structuré
-        return _extract_room_types_from_text(soup)
-
-    rows = container.css("tr")
-    current_room: Optional[dict] = None
-
-    for row in rows:
-        cells = row.css("td, th")
-        if not cells:
-            continue
-
-        cell_texts = [c.text.strip() if c.text else "" for c in cells]
-
-        # Détecter une ligne de nom de chambre (ex: "STANDARD ROOM", "Studio", ...)
-        if len(cell_texts) >= 3 and cell_texts[0] and not re.search(
-            r"Contract|Room Type|Size|Monthly|Daily|Status", cell_texts[0], re.I
-        ):
-            if current_room:
-                rooms.append(_dict_to_room_schema(current_room))
-
-            price_min, price_max = parse_price_range(
-                cell_texts[2] if len(cell_texts) > 2 else None
-            )
-            current_room = {
-                "name": cell_texts[0],
-                "room_type": cell_texts[1] if len(cell_texts) > 1 else None,
-                "size_sqm": _parse_sqm(cell_texts[1] if len(cell_texts) > 1 else None),
-                "monthly_min": price_min,
-                "monthly_max": price_max,
-                "daily_thb": None,
-                "contract_1_month": None,
-                "contract_3_month": None,
-                "contract_6_month": None,
-                "status": cell_texts[-1] if cell_texts else None,
-            }
-
-        # Ligne "Contract 1 month / Contract 3 month / Contract 6 month"
-        elif current_room and re.search(r"Contract\s+1\s+month", cell_texts[0], re.I):
-            # Récupérer les 3 valeurs de contrat en cherchant les textes suivants
-            contract_vals = _extract_contract_row_values(row)
-            if contract_vals:
-                current_room["contract_1_month"] = contract_vals.get("1")
-                current_room["contract_3_month"] = contract_vals.get("3")
-                current_room["contract_6_month"] = contract_vals.get("6")
-
-    if current_room:
-        rooms.append(_dict_to_room_schema(current_room))
-
-    return rooms
-
-
-# "Contract 3 month" / "3 month": le numero de mois doit etre retire du
-# texte avant d'en extraire un prix, sinon parse_price_range() le capture
-# comme premier nombre et le stocke comme montant du contrat.
-_CONTRACT_LABEL_RE = re.compile(r"(?:contract\s*)?\b\d+\s*months?\b", re.I)
-
-
-def _extract_contract_row_values(row: Selector) -> dict:
-    """
-    Extrait les valeurs de contrat depuis une ligne avec
-    "Contract 1 month / Contract 3 month / Contract 6 month"
-    """
-    result = {}
-    # Chercher les labels et leurs valeurs dans les lignes suivantes
-    parent_table = row.find_ancestor(lambda e: e.tag == "table")
-    if not parent_table:
-        return result
-
-    rows = parent_table.css("tr")
-    idx = next((i for i, r in enumerate(rows) if id(r._root) == id(row._root)), -1)
-    if idx < 0:
-        return result
-
-    # Les 3 lignes suivantes contiennent les valeurs
-    for next_row in rows[idx + 1: idx + 4]:
-        # `.text` ne rend que le texte direct du noeud: sur un <tr>, dont
-        # tout le contenu vit dans des <td>, il rend systematiquement "".
-        text = next_row.get_all_text(separator=" ", strip=True)
-        for month_num, pattern in [("1", r"1\s*month"), ("3", r"3\s*month"), ("6", r"6\s*month")]:
-            if re.search(pattern, text, re.I):
-                mn, mx = parse_price_range(_CONTRACT_LABEL_RE.sub(" ", text))
-                if mn:
-                    result[month_num] = mn
-
-    return result
-
-
-def _extract_room_types_from_text(soup: Selector) -> list[RoomTypeSchema]:
-    """Fallback: extraire les types de chambre depuis le texte brut."""
-    rooms = []
-    text = soup.get_all_text(separator="\n")
-
-    # Chercher les blocs "Contract 1 month / Contract 3 month / Contract 6 month"
-    # qui précèdent des montants
-    pattern = re.compile(
-        r"Contract 1 month\s+Contract 3 month\s+Contract 6 month\s+"
-        r"([\d,]+(?:\s*-\s*[\d,]+)?\s*THB/Month|-)\s+"
-        r"([\d,]+(?:\s*-\s*[\d,]+)?\s*THB/Month|-)\s+"
-        r"([\d,]+(?:\s*-\s*[\d,]+)?\s*THB/Month|-)",
-        re.I | re.S
-    )
-
-    for m in pattern.finditer(text):
-        room = RoomTypeSchema(
-            name="Unknown",
-            contract_1_month_thb=parse_price_range(m.group(1))[0],
-            contract_3_month_thb=parse_price_range(m.group(2))[0],
-            contract_6_month_thb=parse_price_range(m.group(3))[0],
-        )
-        rooms.append(room)
-
-    return rooms
-
-
-def _dict_to_room_schema(d: dict) -> RoomTypeSchema:
-    return RoomTypeSchema(
-        name=d.get("name", ""),
-        room_type=d.get("room_type"),
-        size_sqm=d.get("size_sqm"),
-        monthly_min_thb=d.get("monthly_min"),
-        monthly_max_thb=d.get("monthly_max"),
-        contract_1_month_thb=d.get("contract_1_month"),
-        contract_3_month_thb=d.get("contract_3_month"),
-        contract_6_month_thb=d.get("contract_6_month"),
-        daily_thb=d.get("daily_thb"),
-        status=d.get("status"),
-    )
-
-
-def _parse_sqm(text: Optional[str]) -> Optional[float]:
-    if not text:
-        return None
-    m = re.search(r"([\d.]+)\s*sq\.?\s*m", text, re.I)
-    if m:
-        return float(m.group(1))
-    return None
+    return _extract_room_types_from_next_data(_next_data_or_extract(soup, next_data)) or []
 
 
 def _extract_images(soup: Selector) -> list[str]:
@@ -568,15 +405,12 @@ def _extract_contacts(
             whatsapp = None
         return phone, line_id, whatsapp, email
 
-    # Fallback : anciennes heuristiques texte/liens, pour les pages sans
-    # __NEXT_DATA__ exploitable.
+    # Fallback pour les pages sans __NEXT_DATA__ exploitable: uniquement
+    # des liens explicites (line.me, wa.me, mailto) et le libelle "Line ID".
+    # Pas de telephone: RentHub masque le numero affiche ("08x-xxx-xxxx") et
+    # chercher 9 a 10 chiffres dans le texte remontait n'importe quoi.
     text = soup.get_all_text(separator="\n")
-
-    # Phone (format thaïlandais, souvent masqué)
     phone = None
-    m = re.search(r"(\d{2,3}-?\d{3,4}-?\d{3,4}xxx?|\d{9,10})", text)
-    if m:
-        phone = m.group(1)
 
     # Line ID
     line_id = None
@@ -756,19 +590,19 @@ def _extract_fees(
 
 def _extract_coordinates(
     soup: Selector,
-    html: str,
     next_data=_NOT_GIVEN,
 ) -> tuple[Optional[float], Optional[float]]:
     """
     Extrait latitude/longitude depuis une page RentHub.
 
-    Recherche dans :
     0. __NEXT_DATA__ (`listing.location`), la source reelle du site
-    1. JSON-LD
-    2. attributs HTML
-    3. JavaScript
-    4. URLs Google Maps
-    5. URLs avec coordonnées
+    1. JSON-LD, en repli
+
+    Les anciens replis (attributs HTML, regex sur tout le HTML, URLs Google
+    Maps, paires de nombres) ne servaient que sur des pages sans JSON --
+    c'est-a-dire des pages qui ne sont pas des annonces -- et y trouvaient
+    des coordonnees fantaisistes dans un produit cartesien de 200 x 200
+    correspondances.
     """
 
     def valid(lat, lon):
@@ -872,208 +706,5 @@ def _extract_coordinates(
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
-    # =========================================================
-    # 2. ATTRIBUTS HTML
-    # =========================================================
-
-    for tag in soup.css(
-        "[data-latitude], [data-lat], [latitude],"
-        " [data-longitude], [data-lng], [data-lon], [longitude]"
-    ):
-
-        attrs = tag.attrib
-
-        lat = (
-            attrs.get("data-latitude")
-            or attrs.get("data-lat")
-            or attrs.get("latitude")
-        )
-
-        lon = (
-            attrs.get("data-longitude")
-            or attrs.get("data-lng")
-            or attrs.get("data-lon")
-            or attrs.get("longitude")
-        )
-
-        result = valid(lat, lon)
-
-        if result:
-            log.info("Coordonnées trouvées dans HTML: %s", result)
-            return result
-
-    # =========================================================
-    # 3. GOOGLE MAPS / GOOGLE MAPS EMBED
-    # =========================================================
-
-    # Exemple :
-    # https://www.google.com/maps?q=13.7563,100.5018
-    # https://maps.google.com/?q=13.7563,100.5018
-
-    google_patterns = [
-
-        r'[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
-
-        r'@(-?\d+\.\d+),\s*(-?\d+\.\d+)',
-
-        r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)',
-
-        r'query=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
-
-    ]
-
-    for pattern in google_patterns:
-
-        for match in re.finditer(pattern, html, re.I):
-
-            result = valid(
-                match.group(1),
-                match.group(2)
-            )
-
-            if result:
-                log.info(
-                    "Coordonnées trouvées dans Google Maps: %s",
-                    result
-                )
-                return result
-
-    # =========================================================
-    # 4. JAVASCRIPT
-    # =========================================================
-
-    patterns = [
-
-        # latitude: 13.123, longitude: 100.123
-        (
-            r'["\']?(?:latitude)["\']?\s*[:=]\s*["\']?'
-            r'(-?\d+(?:\.\d+)?)',
-            r'["\']?(?:longitude)["\']?\s*[:=]\s*["\']?'
-            r'(-?\d+(?:\.\d+)?)'
-        ),
-
-        # lat: 13.123, lng: 100.123
-        (
-            r'["\']?(?:lat)["\']?\s*[:=]\s*["\']?'
-            r'(-?\d+(?:\.\d+)?)',
-            r'["\']?(?:lng|lon)["\']?\s*[:=]\s*["\']?'
-            r'(-?\d+(?:\.\d+)?)'
-        ),
-
-        # latitude / longitude avec espaces
-        (
-            r'latitude\s*[:=]\s*["\']?(-?\d+(?:\.\d+)?)',
-            r'longitude\s*[:=]\s*["\']?(-?\d+(?:\.\d+)?)'
-        ),
-
-    ]
-
-    for lat_pattern, lon_pattern in patterns:
-
-        # Plafond: ces motifs matchent chaque "lat"/"lng" du HTML, JSON
-        # embarque compris. Sans borne, le produit cartesien ci-dessous
-        # explose sur une page qui en contient des milliers, pour un gain
-        # nul — la bonne paire est toujours parmi les premieres.
-        lat_matches = list(
-            itertools.islice(re.finditer(lat_pattern, html, re.I), _MAX_COORD_MATCHES)
-        )
-
-        lon_matches = list(
-            itertools.islice(re.finditer(lon_pattern, html, re.I), _MAX_COORD_MATCHES)
-        )
-
-        for lat_match in lat_matches:
-
-            for lon_match in lon_matches:
-
-                # Évite d'associer deux coordonnées trop éloignées
-                distance = abs(
-                    lat_match.start() - lon_match.start()
-                )
-
-                if distance > 10000:
-                    continue
-
-                result = valid(
-                    lat_match.group(1),
-                    lon_match.group(1)
-                )
-
-                if result:
-                    log.info(
-                        "Coordonnées trouvées dans JavaScript: %s",
-                        result
-                    )
-                    return result
-
-    # =========================================================
-    # 5. TABLEAUX / OBJETS JAVASCRIPT
-    # =========================================================
-
-    pair_patterns = [
-
-        # [13.7563, 100.5018]
-        r'\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]',
-
-        # (13.7563, 100.5018)
-        r'\(\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\)',
-
-        # "13.7563,100.5018"
-        r'["\'](-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)["\']',
-
-    ]
-
-    for pattern in pair_patterns:
-
-        for match in re.finditer(pattern, html):
-
-            result = valid(
-                match.group(1),
-                match.group(2)
-            )
-
-            if result:
-                log.info(
-                    "Coordonnées trouvées dans une paire: %s",
-                    result
-                )
-                return result
-
-    # =========================================================
-    # 6. RECHERCHE GLOBALE
-    # =========================================================
-
-    lat_values = re.findall(
-        r'(?:latitude|lat)\s*[:=]\s*["\']?'
-        r'(-?\d+(?:\.\d+)?)',
-        html,
-        re.I
-    )[:_MAX_COORD_MATCHES]
-
-    lon_values = re.findall(
-        r'(?:longitude|lng|lon)\s*[:=]\s*["\']?'
-        r'(-?\d+(?:\.\d+)?)',
-        html,
-        re.I
-    )[:_MAX_COORD_MATCHES]
-
-    for lat in lat_values:
-
-        for lon in lon_values:
-
-            result = valid(lat, lon)
-
-            if result:
-                log.info(
-                    "Coordonnées trouvées globalement: %s",
-                    result
-                )
-                return result
-
-    # =========================================================
-    # AUCUNE COORDONNÉE
-    # =========================================================
-
     log.debug("Aucune coordonnée trouvée sur la page RentHub.")
-
     return None, None

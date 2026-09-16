@@ -17,6 +17,7 @@ from scrapling.parser import Selector
 from src.filters.contract import has_monthly_contract
 from src.models.schemas import ListingRaw
 from src.normalizers.price import parse_price_range
+from src.provinces import THAI_PROVINCES
 
 log = logging.getLogger(__name__)
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
@@ -514,40 +515,37 @@ def _extract_date(text: str) -> Optional[datetime]:
         return None
 
 
-PROVINCES_LIST = [
-    "Bangkok", "Chiang Mai", "Phuket", "Chonburi", "Pathumthani",
-    "Nonthaburi", "Samut Prakarn", "Rayong", "Khon Kaen",
-    "Nakhon Ratchasima", "Nakhon Pathom", "Prachaubkirikhan",
-    "Songkhla", "Krabi", "Phra Nakhon Sri Ayutthaya", "Samut Sakhon",
-    "Samut Songkram", "Chachoengsao", "Prachinburi", "Saraburi",
-    "Lopburi", "Suphanburi", "Nakhon Nayok", "Ratchburi",
-    "Petchburi", "Kanchanaburi", "Udon Thani", "Ubon Ratchathani",
-    "Chaiyaphum", "Nakhon Sri Thammarat", "Yala", "Trang",
-    "Pattani", "Ranong", "Chiang Rai", "Lamphang", "Phitsanulok",
-    "Maha Sarakham", "Si Sa Ket", "Tak", "Phetchabun",
-    "Singburi", "Chainat", "Uthai Thani", "Buri Ram",
-    "Mukdahan", "Amnat Charoen",
-]
+# Noms de provinces tels que RentHub les affiche dans les adresses ("Samut
+# Prakarn", "Pathumthani"...), derives des slugs de THAI_PROVINCES -- la
+# seule liste du projet -- et essayes du plus long au plus court pour que
+# "Nakhon Sri Thammarat" gagne sur "Nan". Correspondance sur mot entier:
+# "Nan" ne doit pas se trouver dans "Nana", ni "Tak" dans "Taksin".
+PROVINCES_LIST = sorted(
+    (slug.replace("-", " ").title() for slug in THAI_PROVINCES.values()),
+    key=len,
+    reverse=True,
+)
+_PROVINCE_RES = [(name, re.compile(r"\b" + re.escape(name) + r"\b", re.I)) for name in PROVINCES_LIST]
 
 
 def _find_address(lines: list[str], name: str) -> Optional[str]:
     for line in lines:
-        if line == name:
+        if line == name or len(line) >= 150:
             continue
-        for prov in PROVINCES_LIST:
-            if prov.lower() in line.lower() and len(line) < 150:
-                if not re.search(r"THB|month|day|Contract|Filter|Sort|Browse", line, re.I):
-                    return line
+        if re.search(r"THB|month|day|Contract|Filter|Sort|Browse", line, re.I):
+            continue
+        if any(pattern.search(line) for _, pattern in _PROVINCE_RES):
+            return line
     return None
 
 
 def _parse_location(address: Optional[str]) -> tuple[Optional[str], Optional[str], Optional[str]]:
     if not address:
         return None, None, None
-    for prov in PROVINCES_LIST:
-        if prov.lower() in address.lower():
-            idx = address.lower().index(prov.lower())
-            before = address[:idx].strip()
+    for prov, pattern in _PROVINCE_RES:
+        m = pattern.search(address)
+        if m:
+            before = address[:m.start()].strip()
             parts = before.split()
             district = parts[-1] if parts else None
             subdistrict = " ".join(parts[:-1]) if len(parts) > 1 else None

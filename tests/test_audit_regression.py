@@ -385,3 +385,18 @@ def test_a_zero_coordinate_is_not_mistaken_for_a_missing_one(session):
     session.commit()
     session.refresh(db_listing)
     assert (db_listing.latitude, db_listing.longitude) == (0.0, 0.0)
+
+
+def test_home_page_served_for_a_delisted_listing_counts_as_gone():
+    """RentHub sert sa page d'accueil (JSON sans `listing`) pour une annonce
+    retirée: c'est une page disparue, pas une fiche à gratter au regex."""
+    from src.parser.detail_parser import parse_detail_page
+
+    home = (
+        '<html><body><script id="__NEXT_DATA__" type="application/json">'
+        '{"props": {"pageProps": {"featured": []}}}</script>'
+        "<p>Call 0812345678 now</p></body></html>"
+    )
+    detail = parse_detail_page(home, "https://www.renthub.in.th/en/gone")
+    assert detail is not None and detail.page_gone
+    assert detail.phone is None and detail.has_structured_data is False

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 import bcrypt
 from sqlalchemy.orm import Session as SASession
 
+from src.api.rate_limit import SlidingWindowCounter
 from src.config import settings
 from src.database.models import User
 
@@ -41,50 +42,24 @@ PASSWORD_MAX_BYTES = 72
 
 # — Rate limiting sur /login —
 # Un seul couple identifiant/mot de passe partagé: sans throttling, il est
-# brute-forçable à la vitesse du réseau. Compteur en mémoire (process
-# unique), suffisant pour ce déploiement à un seul worker.
+# brute-forçable à la vitesse du réseau. Même compteur à fenêtre glissante
+# que le plafond de requêtes (src/api/rate_limit.py), un process unique.
 _LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60
 _LOGIN_ATTEMPT_MAX = 5
-# Plafond du nombre d'IP suivies simultanement. Le compteur n'etait purge
-# que pour une IP qui revenait: en faisant tourner l'adresse source, on
-# faisait croitre ce dictionnaire sans limite.
-_TRACKED_CLIENTS_MAX = 10_000
 
-_failed_attempts: dict[str, list[float]] = {}
-
-
-def _prune_all(now: float) -> None:
-    """Retire toutes les entrees expirees, pas seulement celle qu'on consulte."""
-    cutoff = now - _LOGIN_ATTEMPT_WINDOW_SECONDS
-    for key in [k for k, v in _failed_attempts.items() if not v or v[-1] < cutoff]:
-        _failed_attempts.pop(key, None)
-
-
-def _prune(client_key: str, now: float) -> list[float]:
-    cutoff = now - _LOGIN_ATTEMPT_WINDOW_SECONDS
-    attempts = [t for t in _failed_attempts.get(client_key, []) if t >= cutoff]
-    if attempts:
-        _failed_attempts[client_key] = attempts
-    else:
-        _failed_attempts.pop(client_key, None)
-    return attempts
+_failed_attempts = SlidingWindowCounter(_LOGIN_ATTEMPT_WINDOW_SECONDS)
 
 
 def is_login_rate_limited(client_key: str) -> bool:
-    return len(_prune(client_key, time.time())) >= _LOGIN_ATTEMPT_MAX
+    return _failed_attempts.count(client_key) >= _LOGIN_ATTEMPT_MAX
 
 
 def register_failed_login(client_key: str) -> None:
-    now = time.time()
-    attempts = _prune(client_key, now)
-    attempts.append(now)
-    _failed_attempts[client_key] = attempts
-    if len(_failed_attempts) > _TRACKED_CLIENTS_MAX:
-        _prune_all(now)
+    _failed_attempts.add(client_key)
 
 
 def register_successful_login(client_key: str) -> None:
-    _failed_attempts.pop(client_key, None)
+    _failed_attempts.forget(client_key)
 
 
 def _signing_key() -> bytes:

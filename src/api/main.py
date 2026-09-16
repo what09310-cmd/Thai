@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import logging
 import math
 import posixpath
@@ -69,6 +68,7 @@ from src.api.auth import (
 )
 from src.config import DEFAULT_SECRET_KEY, DEFAULT_SITE_PASSWORD, settings
 from src.database.models import Listing, ListingHistory, ListingImage, ScanLog, User
+from src.database.serialize import listing_to_dict
 from src.database.session import SessionLocal, init_db
 
 log = logging.getLogger(__name__)
@@ -754,12 +754,7 @@ def _listing_to_response(
     images: Optional[list[str]] = None,
     premium: bool = False,
 ) -> dict:
-    d = {}
-    for col in Listing.__table__.columns:
-        val = getattr(listing, col.name)
-        d[col.name] = val
-    d["amenities"] = json.loads(listing.amenities) if listing.amenities else []
-    d["room_types"] = json.loads(listing.room_types) if listing.room_types else []
+    d = listing_to_dict(listing)
     if images is None:
         ordered = sorted((i for i in listing.images if not i.excluded), key=lambda i: i.position)
         images = [img.image_url for img in ordered]

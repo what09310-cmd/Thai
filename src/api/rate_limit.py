@@ -1,10 +1,10 @@
-"""Plafond de requetes par adresse IP sur les routes de donnees.
+"""Compteurs a fenetre glissante par adresse IP: plafond de requetes sur les
+routes de donnees, et (via src/api/auth.py) echecs de connexion sur /login.
 
-Meme approche que le compteur de `/login` (src/api/auth.py): un dict en
-memoire de processus, suffisant pour ce deploiement a un seul worker et
-sans dependance supplementaire. Un backend partage (Redis) ne deviendrait
-necessaire qu'avec plusieurs workers, ou chaque processus tiendrait son
-propre compte et multiplierait le plafond d'autant.
+Un dict en memoire de processus, suffisant pour ce deploiement a un seul
+worker et sans dependance supplementaire. Un backend partage (Redis) ne
+deviendrait necessaire qu'avec plusieurs workers, ou chaque processus
+tiendrait son propre compte et multiplierait le plafond d'autant.
 
 Ce qu'il protege: `/listings*` et `/stats` sont publics, donc bornes mais
 lisibles sans compte. Les bornes limitent ce qu'une requete rend, pas
@@ -23,18 +23,52 @@ ANONYMOUS_MAX_PER_MINUTE = 60
 # l'affichage des cartes.
 AUTHENTICATED_MAX_PER_MINUTE = 300
 
-# Meme raison que dans auth.py: le compteur d'une IP n'etait purge que
-# lorsqu'elle revenait. En faisant tourner l'adresse source, on faisait
-# croitre ce dictionnaire sans limite.
-_TRACKED_CLIENTS_MAX = 10_000
 
-_hits: dict[str, list[float]] = {}
+class SlidingWindowCounter:
+    """Horodatages par cle, oublies au-dela de `window_seconds`.
+
+    Le compteur d'une cle n'est purge que lorsqu'elle revient: en faisant
+    tourner l'adresse source, on ferait croitre le dict sans limite, d'ou
+    la purge globale au-dela de `tracked_max` cles.
+    """
+
+    def __init__(self, window_seconds: float, tracked_max: int = 10_000) -> None:
+        self.window_seconds = window_seconds
+        self.tracked_max = tracked_max
+        self._events: dict[str, list[float]] = {}
+
+    def recent(self, key: str, now: float | None = None) -> list[float]:
+        """Horodatages encore dans la fenetre (et purge de la cle)."""
+        now = time.time() if now is None else now
+        cutoff = now - self.window_seconds
+        events = [t for t in self._events.get(key, []) if t >= cutoff]
+        if events:
+            self._events[key] = events
+        else:
+            self._events.pop(key, None)
+        return events
+
+    def add(self, key: str, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        events = self.recent(key, now)
+        events.append(now)
+        self._events[key] = events
+        if len(self._events) > self.tracked_max:
+            cutoff = now - self.window_seconds
+            for stale in [k for k, v in self._events.items() if not v or v[-1] < cutoff]:
+                self._events.pop(stale, None)
+
+    def count(self, key: str) -> int:
+        return len(self.recent(key))
+
+    def forget(self, key: str) -> None:
+        self._events.pop(key, None)
+
+    def clear(self) -> None:
+        self._events.clear()
 
 
-def _prune_all(now: float) -> None:
-    cutoff = now - WINDOW_SECONDS
-    for key in [k for k, v in _hits.items() if not v or v[-1] < cutoff]:
-        _hits.pop(key, None)
+_hits = SlidingWindowCounter(WINDOW_SECONDS)
 
 
 def register_hit(client_key: str, max_per_minute: int) -> int | None:
@@ -45,19 +79,12 @@ def register_hit(client_key: str, max_per_minute: int) -> int | None:
     fenetre et reste bloque bien au-dela d'une minute.
     """
     now = time.time()
-    cutoff = now - WINDOW_SECONDS
-    attempts = [t for t in _hits.get(client_key, []) if t >= cutoff]
-
-    if len(attempts) >= max_per_minute:
-        _hits[client_key] = attempts
+    recent = _hits.recent(client_key, now)
+    if len(recent) >= max_per_minute:
         # Arrondi a la seconde superieure: un `Retry-After: 0` invite a
         # revenir immediatement, pour un nouveau 429.
-        return max(1, int(attempts[0] + WINDOW_SECONDS - now) + 1)
-
-    attempts.append(now)
-    _hits[client_key] = attempts
-    if len(_hits) > _TRACKED_CLIENTS_MAX:
-        _prune_all(now)
+        return max(1, int(recent[0] + WINDOW_SECONDS - now) + 1)
+    _hits.add(client_key, now)
     return None
 
 

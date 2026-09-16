@@ -4,12 +4,14 @@ from __future__ import annotations
 import csv
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 from sqlalchemy.orm import Session
 
 from src.database.models import Listing
+from src.database.serialize import listing_to_dict
 
 log = logging.getLogger(__name__)
 
@@ -43,48 +45,18 @@ def export_listings(
         raise ValueError(f"Format inconnu: {format}")
 
 
+# Colonnes de suivi interne, sans interet dans un export.
+_INTERNAL = ("content_hash", "missing_scan_count", "source")
+
+
 def _listing_to_dict(listing: Listing) -> dict:
-    return {
-        "id": listing.id,
-        "source_id": listing.source_id,
-        "name": listing.name,
-        "url": listing.url,
-        "address": listing.address,
-        "subdistrict": listing.subdistrict,
-        "district": listing.district,
-        "province": listing.province,
-        "latitude": listing.latitude,
-        "longitude": listing.longitude,
-        "price_monthly_raw": listing.price_monthly_raw,
-        "price_monthly_min": listing.price_monthly_min,
-        "price_monthly_max": listing.price_monthly_max,
-        "daily_price_raw": listing.daily_price_raw,
-        "daily_price_min": listing.daily_price_min,
-        "daily_price_max": listing.daily_price_max,
-        "contract_monthly_raw": listing.contract_monthly_raw,
-        "contract_monthly_min": listing.contract_monthly_min,
-        "contract_monthly_max": listing.contract_monthly_max,
-        "contract_3_month_raw": listing.contract_3_month_raw,
-        "contract_3_month_min": listing.contract_3_month_min,
-        "contract_3_month_max": listing.contract_3_month_max,
-        "contract_6_month_raw": listing.contract_6_month_raw,
-        "contract_6_month_min": listing.contract_6_month_min,
-        "contract_6_month_max": listing.contract_6_month_max,
-        "has_monthly_contract": listing.has_monthly_contract,
-        "description": listing.description,
-        "amenities": json.loads(listing.amenities) if listing.amenities else [],
-        "room_types": json.loads(listing.room_types) if listing.room_types else [],
-        "phone": listing.phone,
-        "line_id": listing.line_id,
-        "whatsapp": listing.whatsapp,
-        "is_verified": listing.is_verified,
-        "has_promotion": listing.has_promotion,
-        "status": listing.status,
-        "source_updated_at": listing.source_updated_at.isoformat() if listing.source_updated_at else None,
-        "first_seen_at": listing.first_seen_at.isoformat() if listing.first_seen_at else None,
-        "last_seen_at": listing.last_seen_at.isoformat() if listing.last_seen_at else None,
-        "last_scraped_at": listing.last_scraped_at.isoformat() if listing.last_scraped_at else None,
-    }
+    d = listing_to_dict(listing)
+    for name in _INTERNAL:
+        d.pop(name, None)
+    for name, value in d.items():
+        if isinstance(value, datetime):
+            d[name] = value.isoformat()
+    return d
 
 
 def _export_csv(listings: list[Listing], output_dir: Path) -> Path:

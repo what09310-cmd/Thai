@@ -3,11 +3,20 @@ afficher pour une annonce, à partir de ses champs structurés."""
 from __future__ import annotations
 
 import json
+from typing import Protocol
 
-from src.database.models import Listing
+
+class _HasFees(Protocol):
+    """Ce que build_contact_description lit: une ligne `Listing`, ou tout
+    objet portant ces trois attributs (le normaliseur ne dépend pas de
+    l'ORM)."""
+
+    deposit: str | None
+    electric_price: str | None
+    amenities: str | None  # liste JSON
 
 
-def build_contact_description(listing: Listing) -> str:
+def build_contact_description(listing: _HasFees) -> str:
     """Construit la description au format dépôt/électricité/AC."""
     amenities = json.loads(listing.amenities) if listing.amenities else []
     has_ac = "Air Conditioner" in amenities

@@ -72,6 +72,15 @@ CONTRACT_FIELDS = (
     "contract_6_month_raw", "contract_6_month_min", "contract_6_month_max",
 )
 
+# Champs recopies tels quels du ListingFull scrape vers une ligne neuve:
+# toute colonne de `listings` portee sous le meme nom par ListingFull, sauf
+# celles qui demandent une conversion (JSON, fuseau) ou une valeur imposee
+# a la creation. Une colonne ajoutee des deux cotes est copiee d'office.
+_NOT_COPIED = {"amenities", "room_types", "source_updated_at", "status", "missing_scan_count"}
+COPIED_FIELDS = tuple(
+    sorted((set(Listing.__table__.columns.keys()) & set(ListingFull.model_fields)) - _NOT_COPIED)
+)
+
 # Champs de prix spécifiquement trackés
 PRICE_FIELDS = [
     "price_monthly_min", "price_monthly_max",
@@ -342,47 +351,11 @@ def _create_listing(
 ) -> Listing:
     db_listing = Listing(
         source="renthub",
-        source_id=listing.source_id,
-        slug=listing.slug,
-        name=listing.name,
-        url=listing.url,
-        address=listing.address,
-        subdistrict=listing.subdistrict,
-        district=listing.district,
-        province=listing.province,
-        latitude=listing.latitude,
-        longitude=listing.longitude,
-        price_monthly_raw=listing.price_monthly_raw,
-        price_monthly_min=listing.price_monthly_min,
-        price_monthly_max=listing.price_monthly_max,
-        daily_price_raw=listing.daily_price_raw,
-        daily_price_min=listing.daily_price_min,
-        daily_price_max=listing.daily_price_max,
-        contract_monthly_raw=listing.contract_monthly_raw,
-        contract_monthly_min=listing.contract_monthly_min,
-        contract_monthly_max=listing.contract_monthly_max,
-        contract_3_month_raw=listing.contract_3_month_raw,
-        contract_3_month_min=listing.contract_3_month_min,
-        contract_3_month_max=listing.contract_3_month_max,
-        contract_6_month_raw=listing.contract_6_month_raw,
-        contract_6_month_min=listing.contract_6_month_min,
-        contract_6_month_max=listing.contract_6_month_max,
-        has_monthly_contract=listing.has_monthly_contract,
+        **{field: getattr(listing, field) for field in COPIED_FIELDS},
         amenities=json.dumps(listing.amenities) if listing.amenities else None,
         room_types=json.dumps(
             [r.model_dump() for r in listing.room_types]
         ) if listing.room_types else None,
-        deposit=listing.deposit,
-        advance_payment=listing.advance_payment,
-        electric_price=listing.electric_price,
-        water_price=listing.water_price,
-        service_fee=listing.service_fee,
-        phone=listing.phone,
-        line_id=listing.line_id,
-        whatsapp=listing.whatsapp,
-        email=listing.email,
-        is_verified=listing.is_verified,
-        has_promotion=listing.has_promotion,
         status="active",
         missing_scan_count=0,
         source_updated_at=_to_utc(listing.source_updated_at),
