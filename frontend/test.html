@@ -89,146 +89,14 @@
     width: auto;
     display: block;
   }
-  .hstat {
-    font-variant-numeric: tabular-nums;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .hstat b { color: var(--text); }
 
   /* ── Barre de villes ── */
-  .city-bar {
-    padding: 14px 28px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    background: var(--surface);
-  }
-  .btn-new24h.active { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 700; }
 
   /* ── Layout ── */
-  .shell {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    min-height: calc(100vh - 101px);
-  }
 
   /* ── Sidebar ── */
-  .sidebar {
-    border-right: 1px solid var(--border);
-    padding: 24px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
-    position: sticky;
-    top: 101px;
-    height: calc(100vh - 101px);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  .filter-section { display: flex; flex-direction: column; gap: 9px; }
-
-  .filter-label {
-    font-size: 11px;
-    font-family: var(--mono);
-    letter-spacing: .15em;
-    text-transform: uppercase;
-    color: var(--dim);
-  }
-
-  .filter-input {
-    width: 100%;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-pill);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 8px 10px;
-    outline: none;
-    transition: border-color .15s;
-  }
-
-  .slider-wrap { display: flex; flex-direction: column; gap: 4px; }
-  .slider-wrap input[type=range] { width: 100%; accent-color: var(--accent); }
-
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 0;
-  }
-  .toggle-row span { font-size: 12px; color: var(--text); }
-
-  .toggle { position: relative; width: 34px; height: 18px; }
-  .toggle input { opacity: 0; width: 0; height: 0; }
-  .toggle-track {
-    position: absolute; inset: 0;
-    background: #cfc9bf;
-    border-radius: 18px;
-    cursor: pointer;
-    transition: background .2s;
-  }
-  .toggle-track::before {
-    content: "";
-    position: absolute;
-    width: 12px; height: 12px;
-    left: 3px; top: 3px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform .2s;
-  }
-  .toggle input:checked + .toggle-track { background: var(--green); }
-  .toggle input:checked + .toggle-track::before { transform: translateX(16px); }
-  .toggle input:focus-visible + .toggle-track { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .toggle-blue input:checked + .toggle-track { background: var(--blue); }
-  .toggle-purple input:checked + .toggle-track { background: var(--purple); }
-
-  .btn-reset {
-    width: 100%;
-    padding: 9px;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: var(--r-pill);
-    color: var(--muted);
-    font-size: 12px;
-    font-family: var(--mono);
-    cursor: pointer;
-    transition: all .15s;
-    margin-top: 4px;
-  }
-  .btn-reset:hover { border-color: var(--text); color: var(--text); }
-
-  .btn-premium {
-    width: 100%;
-    padding: 10px;
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: var(--r-pill);
-    color: var(--accent-ink);
-    font-size: 12px;
-    font-weight: 700;
-    font-family: var(--sans);
-    text-decoration: none;
-    text-align: center;
-    display: block;
-    cursor: pointer;
-    transition: opacity .15s;
-  }
-  .btn-premium:hover { opacity: .85; }
 
   /* ── Grille ── */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-  }
   .modal-gallery-item {
     position: relative;
     flex-shrink: 0;
@@ -271,18 +139,6 @@
     text-align: center;
     min-width: 0;
   }
-  .cc-val {
-    font-variant-numeric: tabular-nums;
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1.3;
-    overflow-wrap: break-word;
-    max-width: 100%;
-  }
-  .cc-val.na { color: var(--muted); font-weight: 400; font-size: 11px; }
-  .pager button.on { border-color: var(--accent); color: var(--accent); }
 
   /* ── Modal ── */
   .overlay {
@@ -336,15 +192,6 @@
     font-size: 13px; font-weight: 700;
     font-family: var(--mono); color: var(--accent);
   }
-  @media (max-width: 768px) {
-    .shell { grid-template-columns: 1fr; }
-    .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-    .grid { grid-template-columns: 1fr; }
-    .hstat { display: none; }
-  }
-  .region-fab.active { background: var(--blue); color: #fff; }
-  .region-menu.open { display: flex; }
-  .region-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 
   /* ══════════════════════════════════════════════════════════════════
      HERO — langage visuel triips : ciel pastel, navbar en pilule,
@@ -475,7 +322,7 @@
   }
   .hero-badge b { font-variant-numeric: tabular-nums; color: #14130f; }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px){
     .hero-badge { gap: 10px; padding: 9px 19px; font-size: 14px; }
     .hero-badge i { width: 9px; height: 9px; }
   }
@@ -489,13 +336,8 @@
   }
   .hero h1 em { font-style: normal; color: var(--accent); }
   .hero-line1 { white-space: nowrap; }
-  @media (max-width: 640px) {
+  @media (max-width: 640px){
     .hero-line1 { white-space: normal; }
-  }
-
-  .hero-sub {
-    margin: 18px auto 0; max-width: 540px;
-    font-size: 16px; line-height: 1.55; color: #5e584f;
   }
 
   .btn-cta {
@@ -613,9 +455,8 @@
     font-size: 27px; font-weight: 700; line-height: 1.15;
     letter-spacing: -.6px; color: var(--accent);
   }
-  .deal-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px){
     .pillnav { padding-left: 16px; }
     .hero-inner { padding-top: 40px; }
     .hero-skyline { height: 116px; }
@@ -624,7 +465,7 @@
     .deal-price b { font-size: 21px; }
     .deal-route { font-size: 21px; }
   }
-  @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce){
     .deal:hover { transform: none; }
   }
 
@@ -724,7 +565,7 @@
   }
   .how-cta { margin-top: 0; }
 
-  @media (max-width: 900px) {
+  @media (max-width: 900px){
     .how { padding: 16px 20px 54px; }
     .how-grid { grid-template-columns: 1fr; gap: 40px; }
     .how-step-2 { margin-left: 14px; }
@@ -803,11 +644,6 @@
     padding: 16px 18px 18px; color: #fff;
   }
   .wcard-loc { font-size: 19px; font-weight: 700; line-height: 1.2; letter-spacing: -.3px; }
-  .wcard-name {
-    font-size: 11px; line-height: 1.35; opacity: .86; margin-top: 3px;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
   .wcard-terms { display: flex; gap: 6px; margin-top: 11px; }
   .wcard-term {
     background: rgba(255,255,255,.24);
@@ -865,7 +701,7 @@
   .faq-answer p { margin: 0; }
   .faq-answer p + p { margin-top: 10px; }
 
-  @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce){
     .faq-chevron { transition: none; }
   }
 
@@ -942,14 +778,14 @@
     border-radius: 999px; background: var(--border);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px){
     .cta-final { padding: 70px 20px 78px; }
     .cta-final::before, .cta-final::after { width: 340px; height: 340px; }
     .footer-row { justify-content: center; text-align: center; }
     .footer-links, .footer-social { justify-content: center; gap: 10px 20px; }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 768px){
     .faq { padding-bottom: 68px; }
     .faq-card summary { font-size: 15px; padding: 16px 18px; }
     .faq-answer { padding: 0 18px 18px; }
@@ -959,7 +795,7 @@
     .wcard-price b { font-size: 16px; }
     .wcard-loc { font-size: 15px; }
   }
-  @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce){
     .wall-track { animation: none; }
     .wcard:hover { transform: none; }
   }

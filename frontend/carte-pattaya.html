@@ -58,91 +58,9 @@
 <script src="/static/js/common.js"></script>
 <script src="/static/js/map.js"></script>
 <script>
-
-function pinIcon(){
-  return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [14, 14] });
-}
-
-function buildMap(){
-  leafletMap = L.map("leaflet-map");
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
-    maxZoom: 19,
-  }).addTo(leafletMap);
-
-  const bounds = L.latLngBounds(ads.map(a => [a.latitude, a.longitude]));
-  leafletMap.fitBounds(bounds, { padding: [30, 30] });
-
-  ads.forEach(ad => {
-    const price = priceLabel(ad);
-    const marker = L.marker([ad.latitude, ad.longitude], { icon: pinIcon() })
-      .bindPopup(
-        `<div class="popup-price">${price ? escapeHtml(price) + " / mois" : "Prix non disponible"}</div>` +
-        `<a href="/payant.html?listing=${ad.id}" class="popup-btn">Voir l'annonce complète</a>`
-      );
-    markersById[ad.id] = marker;
-  });
-}
-
-function applyFilters(){
-  const priceActive = priceMin > 0 || priceMax < priceBoundsMax;
-  const filtered = ads.filter(a => {
-    if (monthlyOnly && a.has_monthly_contract !== "true") return false;
-    if (priceActive) {
-      const p = priceValue(a);
-      if (p == null || p < priceMin || p > priceMax) return false;
-    }
-    return true;
-  });
-  const ids = new Set(filtered.map(a => a.id));
-  Object.entries(markersById).forEach(([id, marker]) => {
-    const shouldShow = ids.has(Number(id));
-    const onMap = leafletMap.hasLayer(marker);
-    if (shouldShow && !onMap) marker.addTo(leafletMap);
-    if (!shouldShow && onMap) leafletMap.removeLayer(marker);
-  });
-}
-
-async function loadAds(){
-  const limit = 200;
-  let offset = 0;
-  const data = [];
-
-  try {
-    while (true) {
-      const r = await fetch(`${API}/listings?district=Bang Lamung&status=active&limit=${limit}&offset=${offset}`);
-      if (!r.ok) throw new Error(r.status);
-      const batch = await r.json();
-      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
-      data.push(...batch);
-      if (batch.length < limit) break;
-      offset += limit;
-    }
-  } catch (e) {
-    document.getElementById("leaflet-map").innerHTML =
-      `<div class="empty">Impossible de charger les annonces pour le moment.<br><br>Le serveur met parfois une minute à démarrer : recharge la page dans quelques instants.</div>`;
-    return;
-  }
-
-  ads = data.filter(a => Number.isFinite(a.latitude) && Number.isFinite(a.longitude));
-
-  if (!ads.length) {
-    document.getElementById("leaflet-map").innerHTML = `<div class="empty">Aucune annonce géolocalisée pour Pattaya.</div>`;
-    return;
-  }
-
-  buildMap();
-  setupPriceFilter();
-  applyFilters();
-
-  document.getElementById("monthlyToggle").addEventListener("click", (e) => {
-    monthlyOnly = !monthlyOnly;
-    e.target.classList.toggle("active", monthlyOnly);
-    applyFilters();
-  });
-}
-
-loadAds();
+// Parametres de cette ville, lus par /static/js/city-map.js.
+const CITY = { name: "Pattaya", query: "district=Bang Lamung", cluster: false, pinSize: 14, pageLimit: 200 };
 </script>
+<script src="/static/js/city-map.js"></script>
 </body>
 </html>
