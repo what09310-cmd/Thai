@@ -1,0 +1,7 @@
+# Fins de ligne normalisees en LF dans le depot et la copie de travail
+# (arrete les avertissements "LF will be replaced by CRLF" sous Windows).
+* text=auto eol=lf
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary

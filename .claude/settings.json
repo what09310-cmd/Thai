@@ -15,7 +15,21 @@
       "Read(./.pytest_cache/**)",
       "Read(./__pycache__/**)",
       "Read(**/__pycache__/**)",
-      "Read(./.impeccable/hook.cache.json)"
+      "Read(./.impeccable/hook.cache.json)",
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.local.*)",
+      "Read(./.env.render)",
+      "Read(./.env.render.*)",
+      "Read(./.env.production)",
+      "Read(./.env.*.bak)",
+      "Grep(./.env)",
+      "Grep(./.env.local*)",
+      "Grep(./.env.render*)",
+      "Read(./.codex/**)",
+      "Grep(./.codex/**)",
+      "Glob(./.codex/**)",
+      "Read(./frontend/img/**)"
     ]
   }
 }

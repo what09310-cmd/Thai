@@ -1,37 +1,50 @@
 """
-Migre les données de SQLite local vers Postgres Render.
-Usage: python scripts/migrate_sqlite_to_postgres.py
+Migre les données de SQLite local vers Postgres (Render).
+
+Usage:
+    POSTGRES_URL=postgresql://user:pass@host/db python scripts/migrate_sqlite_to_postgres.py
+
+L'URL Postgres vient de l'environnement, jamais du code: la version
+precedente la portait en dur, mot de passe compris, dans un depot public
+(commit c696be9) -- ce mot de passe a du etre revoque. SQLITE_URL permet de
+pointer une autre base source (defaut: renthub.db a la racine du depot).
+
+Vide chaque table Postgres avant d'y recopier la table SQLite: c'est une
+migration initiale, pas une synchronisation.
 """
 import os
 import sys
 from pathlib import Path
 
-# Charge SQLite
-os.environ["DATABASE_URL"] = "sqlite:///renthub.db"
-
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-sqlite_engine = create_engine("sqlite:///renthub.db", connect_args={"check_same_thread": False})
-SqliteSession = sessionmaker(bind=sqlite_engine)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.database.models import Base, Listing, ListingImage, ListingHistory, ScanLog, User
 
-POSTGRES_URL = "postgresql://thaimonth_db_user:itGVxKYqUHAmNS0Ubwbt7RB7UXLqPBTl@dpg-daimj1lg1s2s73futnp0-a.oregon-postgres.render.com/thaimonth_db"
+POSTGRES_URL = os.environ.get("POSTGRES_URL")
+if not POSTGRES_URL or not POSTGRES_URL.startswith("postgresql"):
+    raise SystemExit(
+        "POSTGRES_URL manquante ou invalide dans l'environnement "
+        "(attendu: postgresql://user:pass@host/db)."
+    )
+SQLITE_URL = os.environ.get("SQLITE_URL", "sqlite:///renthub.db")
+
+sqlite_engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False})
+SqliteSession = sessionmaker(bind=sqlite_engine)
 pg_engine = create_engine(POSTGRES_URL, pool_pre_ping=True)
 PgSession = sessionmaker(bind=pg_engine)
-
-# Importe les modèles et init la base Postgres
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.database.models import Base, Listing, ListingImage, ListingHistory, Province, ScanLog
 
 print("Initialisation des tables Postgres...")
 Base.metadata.create_all(bind=pg_engine)
 
+# Ordre impose par les cles etrangeres (images et historique referencent listings).
 tables = [
-    ("Province", Province),
     ("Listing", Listing),
     ("ListingImage", ListingImage),
     ("ListingHistory", ListingHistory),
     ("ScanLog", ScanLog),
+    ("User", User),
 ]
 
 CHUNK_SIZE = 1000
@@ -42,7 +55,6 @@ with SqliteSession() as sqlite_sess, PgSession() as pg_sess:
         print(f"{name}: {len(rows)} lignes à migrer...")
         if not rows:
             continue
-        # Vide la table Postgres d'abord
         pg_sess.query(Model).delete()
         columns = [c.name for c in Model.__table__.columns]
         for i in range(0, len(rows), CHUNK_SIZE):
@@ -51,6 +63,6 @@ with SqliteSession() as sqlite_sess, PgSession() as pg_sess:
             pg_sess.execute(Model.__table__.insert(), values)
             print(f"  ... {min(i + CHUNK_SIZE, len(rows))}/{len(rows)}")
         pg_sess.commit()
-        print(f"  [OK]{name} migré et commité")
+        print(f"  [OK] {name} migré et commité")
 
-print("\n[OK]Migration terminée !")
+print("\n[OK] Migration terminée !")
