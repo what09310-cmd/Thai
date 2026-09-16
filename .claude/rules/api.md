@@ -5,6 +5,8 @@ paths:
 
 ## API
 
+Four modules: `main.py` (app, middleware registration, data routes, static pages), `security.py` (CSP + headers, `AuthMiddleware` gate on `PROTECTED_PATHS`, `RateLimitMiddleware`, `_client_key`/`_forwarded_https`, session helpers), `auth_routes.py` (login/register pages, Google OAuth, `/me`, `/logout` on an `APIRouter`), `deps.py` (`get_db`); `auth.py` and `rate_limit.py` hold the token and counter logic.
+
 `src/api/main.py`: FastAPI app serving both the JSON API (`/listings`, `/listings/{id}`, `/stats`, `/health`) and the static frontend (mounted at `/static`, plus `/` = index.html, `/test` = test.html and a whitelist route `/{page}.html` for the other pages, `_PAGES`). The routes no page ever called (`/listings/new|updated|price-changed|monthly`, `/history/{id}`, `/provinces`, `POST /rental-requests`) were removed in the 2026-09 audit: a public route is attack surface, don't add one without a consumer. Responses are gzipped; `/static` assets get a one-day `Cache-Control`, shared JS/CSS five minutes. `/stats` caches both its shapes for 60 s (`reset_stats_cache()` in tests). `AuthMiddleware` gates only `PROTECTED_PATHS` (a dict: `/` = `index.html` for any signed-in account, `/vip.html` for premium only) behind a signed session cookie (`src/api/auth.py`); everything else — other pages, API routes, assets — is public. A signed-in non-premium account asking for a premium page is redirected to `/premium.html` (the offer), not to `/login`.
 
 ## Accounts

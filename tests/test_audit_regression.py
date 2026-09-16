@@ -15,10 +15,10 @@ from sqlalchemy.exc import IntegrityError
 from starlette.requests import Request
 
 import src.api.auth as auth_module
-import src.api.main as main_module
+import src.api.auth_routes as auth_routes_module
 from src.api.auth import SESSION_COOKIE_NAME, create_session_token, get_or_create_google_user
-from src.api.main import _client_key, _forwarded_https
 from src.api.rate_limit import ANONYMOUS_MAX_PER_MINUTE
+from src.api.security import _client_key, _forwarded_https
 from src.config import settings
 from src.database.models import Listing, ListingHistory, User
 from src.models.schemas import ListingFull, ListingRaw
@@ -161,7 +161,7 @@ def test_concurrent_registration_of_the_same_email_is_a_409_not_a_500(client, se
     session.add(User(email="dup@example.com", password_hash="x"))
     session.commit()
     # Simule la fenêtre de course: l'autre inscription n'est pas encore visible.
-    monkeypatch.setattr(main_module, "get_user_by_email", lambda db, email: None)
+    monkeypatch.setattr(auth_routes_module, "get_user_by_email", lambda db, email: None)
 
     resp = client.post("/register", data={"username": "dup@example.com", "password": "long-enough"})
 
