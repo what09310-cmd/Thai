@@ -18,16 +18,19 @@ la main, et couvre les cas suivants, dans l'ordre:
    dedoublonnage de listing_images (listing_id, image_url), que l'ancien
    calcul de position avait inscrit en double (15 paires dans renthub.db);
 4. index retires du modele (ix_listings_source_id, ix_history_change_type);
-5. donnees: scan_logs restes en "running" depuis plus de 12 h (interrompus
+5. Postgres seulement: sequences SERIAL en retard sur MAX(id) (derive apres
+   un import a id explicites) -> resynchronisees, sinon le prochain INSERT
+   revient sur un id deja pris (UniqueViolation);
+6. donnees: scan_logs restes en "running" depuis plus de 12 h (interrompus
    avant que _mark_scan_failed n'existe) -> "failed"; content_hash recalcule apres un changement de
    HASH_FIELDS, sans quoi le scan suivant ecrit un UPDATED par annonce;
-6. avec --drop-orphans: tables sans modele (locations, provinces,
+7. avec --drop-orphans: tables sans modele (locations, provinces,
    rental_requests) et colonnes absentes du modele (listings.city,
    listings.published_at, listing_images.local_path -- jamais renseignees),
    vestiges de fonctionnalites retirees.
 
 Sauvegarder la base avant (voir .claude/rules/scripts.md): les etapes 3
-et 6 suppriment des lignes.
+et 7 suppriment des lignes.
 """
 from __future__ import annotations
 
@@ -135,6 +138,39 @@ def drop_obsolete_indexes(conn, dry_run: bool) -> None:
                     conn.execute(text(f"DROP INDEX {name}"))
 
 
+def fix_sequences(conn, dry_run: bool) -> None:
+    """Postgres seulement: resynchronise chaque sequence SERIAL sur MAX(id).
+
+    Derive apres un import qui a insere des id explicites (copie depuis
+    SQLite, restauration partielle) sans passer par nextval(): la sequence
+    reste en retard et le prochain INSERT choisit un id deja pris
+    (UniqueViolation sur la contrainte de cle primaire).
+    """
+    if engine.url.get_backend_name() != "postgresql":
+        return
+    inspector = inspect(conn)
+    for table in Base.metadata.sorted_tables:
+        if table.name not in inspector.get_table_names():
+            continue
+        pk_cols = [c for c in table.primary_key.columns if c.name == "id"]
+        if not pk_cols:
+            continue
+        seq = conn.execute(text("SELECT pg_get_serial_sequence(:t, 'id')"), {"t": table.name}).scalar()
+        if not seq:
+            continue
+        max_id = conn.execute(text(f"SELECT MAX(id) FROM {table.name}")).scalar()
+        next_val, is_called = conn.execute(
+            text("SELECT last_value, is_called FROM " + seq)
+        ).first()
+        expected = (max_id or 0) + 1
+        current = next_val + 1 if is_called else next_val
+        if current >= expected:
+            continue
+        _log(dry_run, f"sequence {seq}: {current} -> {expected}")
+        if not dry_run:
+            conn.execute(text("SELECT setval(:seq, :val, false)"), {"seq": seq, "val": expected})
+
+
 def fix_data(conn, dry_run: bool) -> None:
     session = Session(bind=conn)
     # Un scan complet dure au plus quelques heures: au-dela de STUCK_AFTER,
@@ -203,6 +239,7 @@ def main() -> int:
         dedupe_listing_images(conn, args.dry_run)
         add_missing_indexes(conn, args.dry_run)
         drop_obsolete_indexes(conn, args.dry_run)
+        fix_sequences(conn, args.dry_run)
         fix_data(conn, args.dry_run)
         if args.drop_orphans:
             drop_orphans(conn, args.dry_run)
