@@ -64,13 +64,18 @@
     border-radius: 10px;
   }
 
+  /* La bande de ciel fixe de common.css (body::before, 135px, z-index 80)
+     masque ce qui passe sous une navbar fixe ; ici la navbar defile avec la
+     page, la bande ne ferait que recouvrir la navbar et le haut des cartes. */
+  body::before { display: none; }
+
+  /* Pas de position: fixed : la pilule chevauchait exactement la jointure
+     des deux cartes du hero (meme centrage horizontal, largeur comparable)
+     et masquait une partie de l'annonce des qu'on defilait un peu. En
+     flux normal, elle defile avec la page et ne recouvre plus rien. */
   .pillnav {
-    position: fixed;
-    top: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
     width: min(780px, calc(100% - 28px));
+    margin: 18px auto 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -79,14 +84,6 @@
     background: #1d3c10;
     border-radius: var(--r-pill);
     box-shadow: 0 10px 28px rgba(29,60,16,.22);
-    transition: top 0.2s ease, width 0.2s ease, padding 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .pillnav.is-scrolled {
-    top: 10px;
-    width: min(760px, calc(100% - 22px));
-    padding: 8px 8px 8px 18px;
-    box-shadow: 0 8px 20px rgba(29,60,16,.18);
   }
 
   .pillnav-brand {
@@ -117,7 +114,7 @@
     position: relative;
     width: min(1180px, calc(100% - 28px));
     margin: 0 auto;
-    padding: 142px 0 72px;
+    padding: 40px 0 72px;
     min-height: 100vh;
     background: linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.10) 100%);
   }
@@ -126,68 +123,113 @@
 
   .hero {
     display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-columns: minmax(0, 760px) minmax(0, 380px);
+    justify-content: center;
     gap: 28px;
-    align-items: center;
+    align-items: stretch;
   }
 
-  .eyebrow {
-    margin-bottom: 10px;
-    color: var(--accent);
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-
-  .page-title {
-    margin: 0;
-    max-width: 760px;
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: clamp(32px, 4.6vw, 46px);
-    font-weight: 600;
-    letter-spacing: -1.2px;
-    line-height: 1.13;
-    text-align: left;
-  }
-
-  .page-sub {
-    margin-top: 18px;
-    max-width: 620px;
-    color: var(--muted);
-    font-size: 1.02rem;
-    line-height: 1.6;
-  }
-
-  .conversion-proof {
+  .side-card {
+    width: 100%;
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 26px;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 18px 20px;
+    border: 0;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(20,19,15,.06);
   }
 
-  .conversion-proof-item {
+  .card-comparison { position: relative; gap: 14px; }
+
+  .badge-discount {
+    position: absolute;
+    top: 14px;
+    right: 14px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
+    padding: 5px 11px;
     border-radius: var(--r-pill);
-    background: rgba(255,255,255,0.82);
-    border: 1px solid var(--border);
-    box-shadow: 0 8px 22px rgba(23,27,34,0.04);
-    font-size: 0.82rem;
-    color: var(--muted);
-  }
-
-  .conversion-proof-item span {
-    color: var(--accent);
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 0.78rem;
     font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 
-  .conversion-proof-item strong {
-    color: var(--text);
+  .card-comparison-label {
+    padding-right: 80px;
+    font-size: 0.76rem;
     font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .price-anchor { display: flex; flex-direction: column; gap: 2px; }
+
+  .amount-strike {
+    color: #ef4444;
+    font-size: 1.05rem;
+    font-weight: 700;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+  }
+
+  .amount-strike-note {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .amount-highlight {
+    margin-top: 8px;
+    color: #16a34a;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    line-height: 1.1;
+  }
+
+  .amount-highlight-note {
+    color: var(--text);
+    font-size: 0.83rem;
+    font-weight: 700;
+  }
+
+  .savings-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 12px; /* the amount wraps under the label when the card is too narrow */
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+  }
+
+  .savings-banner-label {
+    color: var(--text);
+    font-size: 0.83rem;
+    font-weight: 700;
+  }
+
+  .savings-banner-amount {
+    color: #16a34a;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    white-space: nowrap;
+  }
+
+  .data-proof {
+    margin: 12px 0 0;
+    font-size: 0.725rem;
+    color: #9ca3af;
+    line-height: 1.3;
   }
 
   .listing-teaser {
@@ -197,9 +239,9 @@
     gap: 12px;
     padding: 18px 18px 20px;
     border: 0;
-    border-radius: 24px;
+    border-radius: 16px;
     background: #fff;
-    box-shadow: 0 10px 30px rgba(20,19,15,.08);
+    box-shadow: 0 4px 16px rgba(20,19,15,.06);
   }
 
   .listing-teaser-price {
@@ -276,14 +318,6 @@
     letter-spacing: -1px;
   }
 
-  .pricing-caption {
-    max-width: 520px;
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.5;
-    text-align: right;
-  }
-
   .subscription-selector {
     width: 100%;
     overflow: hidden;
@@ -354,16 +388,8 @@
     gap: 10px;
   }
 
-  .plan-option-title strong {
-    color: var(--text);
-    font-size: 1rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
   .plan-option-title span {
-    color: var(--muted);
+    color: var(--text);
     font-size: 1.15rem;
     font-weight: 800;
   }
@@ -495,25 +521,17 @@
       flex-direction: column;
       align-items: flex-start;
     }
-
-    .pricing-caption {
-      text-align: left;
-    }
   }
 
   @media (max-width: 640px) {
     .pillnav {
-      top: 12px;
+      margin-top: 12px;
       padding: 8px 10px 8px 14px;
     }
 
     .main {
       width: min(100% - 18px, 1180px);
-      padding-top: 100px;
-    }
-
-    .page-title {
-      font-size: 2.35rem;
+      padding-top: 24px;
     }
 
     .plan-option {
@@ -541,24 +559,12 @@
 <body>
 
 <nav class="pillnav" aria-label="Navigation principale">
-  <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
+  <a class="pillnav-brand" href="/test"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
   <a class="pillnav-cta" href="/carte-thailande.html">Voir la carte</a>
 </nav>
 
 <main class="main">
   <div class="hero">
-    <div>
-      <p class="eyebrow">Recherche immobilière en Thaïlande</p>
-      <h1 class="page-title">Trouvez votre logement idéal sans perdre des semaines.</h1>
-      <p class="page-sub">Restez alerté avant les autres, consultez les annonces vérifiées et avancez avec un accompagnement clair, rapide et fiable.</p>
-
-      <div class="conversion-proof" aria-label="Les avantages du service">
-        <div class="conversion-proof-item"><span>01</span><strong>Vous filtrez</strong></div>
-        <div class="conversion-proof-item"><span>02</span><strong>Nous suivons</strong></div>
-        <div class="conversion-proof-item"><span>03</span><strong>Vous profitez</strong></div>
-      </div>
-    </div>
-
     <div class="listing-teaser" id="listing-teaser" style="display:none" aria-live="polite">
       <div class="listing-teaser-price" id="lt-price"></div>
       <div class="listing-teaser-loc" id="lt-loc"></div>
@@ -569,23 +575,37 @@
       <div class="listing-teaser-chips" id="lt-chips"></div>
       <div class="listing-teaser-hint">Contact et disponibilité en temps réel avec les offres ci-dessous.</div>
     </div>
+
+    <div class="side-card card-comparison" id="side-card" style="display:none" aria-live="polite">
+      <span class="badge-discount" id="sc-badge">-71 %</span>
+      <div class="card-comparison-label">Le même logement</div>
+      <div class="price-anchor">
+        <div class="amount-strike" id="sc-ota-price"></div>
+        <div class="amount-strike-note">sur Airbnb / Booking <span id="sc-ota-night"></span></div>
+        <div class="amount-highlight" id="sc-local-price"></div>
+        <div class="amount-highlight-note">avec ThaiMonth, en direct du propriétaire</div>
+      </div>
+      <div class="savings-banner">
+        <span class="savings-banner-label">Vous économisez</span>
+        <span class="savings-banner-amount" id="sc-savings"></span>
+      </div>
+      <p class="data-proof" id="sc-proof-text">* Estimation indicative basée sur un tarif moyen OTA (tarif local × 3,5).</p>
+    </div>
   </div>
 
   <div class="pricing-block">
     <div class="section-header">
-      <div class="kicker">Choisissez votre accompagnement</div>
-      <p class="pricing-caption">Ne laissez pas partir une bonne opportunité. Suivez les annonces qui correspondent à votre budget, votre zone et vos critères en temps réel.</p>
+      <div class="kicker">Choisissez votre abonnement</div>
     </div>
 
     <div class="subscription-selector" aria-label="Sélection de l'abonnement">
-      <div class="selector-header">Choisissez votre abonnement</div>
+      <div class="selector-header">Abonnement</div>
 
       <div class="plan-option-list">
         <label class="plan-option is-selected">
-          <input type="radio" name="subscription-plan" value="Formule 1 Flex — 19,99 € / mois, sans engagement" checked>
+          <input type="radio" name="subscription-plan" value="Flex — 19,99 € / mois, sans engagement" checked>
           <div class="plan-option-main">
             <div class="plan-option-title">
-              <strong>Formule 1</strong>
               <span>Flex</span>
             </div>
             <div class="plan-option-text">Pour tester la veille en direct et rester réactif sans engagement.</div>
@@ -597,32 +617,30 @@
         </label>
 
         <label class="plan-option">
-          <input type="radio" name="subscription-plan" value="Formule 2 Essentiel — 6,67 € / mois, engagement 24 semaines">
+          <input type="radio" name="subscription-plan" value="Essentiel — 6,67 € / mois, engagement 6 mois">
           <div class="plan-option-main">
             <div class="plan-option-title">
-              <strong>Formule 2</strong>
               <span>Essentiel</span>
             </div>
             <div class="plan-option-text">Le bon équilibre pour une recherche active et mieux organisée.</div>
           </div>
           <div class="plan-option-aside">
             <div class="plan-option-price"><strong>6,67 €</strong><small>/mois</small></div>
-            <div class="plan-option-term">Engagement 24 semaines</div>
+            <div class="plan-option-term">Engagement 6 mois</div>
           </div>
         </label>
 
         <label class="plan-option">
-          <input type="radio" name="subscription-plan" value="Formule 3 Sérénité — 3,85 € / mois, engagement 52 semaines">
+          <input type="radio" name="subscription-plan" value="Sérénité — 3,85 € / mois, engagement 1 an">
           <div class="plan-option-main">
             <div class="plan-option-title">
-              <strong>Formule 3</strong>
               <span>Sérénité</span>
             </div>
             <div class="plan-option-text">La formule la plus complète pour chercher sur plusieurs mois avec calme.</div>
           </div>
           <div class="plan-option-aside">
             <div class="plan-option-price"><strong>3,85 €</strong><small>/mois</small></div>
-            <div class="plan-option-term">Engagement 52 semaines</div>
+            <div class="plan-option-term">Engagement 1 an</div>
           </div>
         </label>
       </div>
@@ -644,15 +662,6 @@
 
 <script src="/static/js/common.js"></script>
 <script>
-
-const nav = document.querySelector(".pillnav");
-const toggleNavState = () => {
-  if (!nav) return;
-  nav.classList.toggle("is-scrolled", window.scrollY > 18);
-};
-
-window.addEventListener("scroll", toggleNavState, { passive: true });
-toggleNavState();
 
 const LISTING_AMENITY_ICONS = {
   "Air Conditioner": "❄️ Air Conditioner",
@@ -685,6 +694,44 @@ const LISTING_AMENITY_ICONS = {
   "EV Charger": "🔌 EV Charger",
 };
 
+// Short-term platforms (Airbnb, Booking) list the same flat at roughly this
+// multiple of the local monthly rent; every figure in the comparison card
+// derives from it so the badge, prices and proof text never disagree.
+// Roadmap: once the scraper collects real OTA medians per district, replace
+// this constant by the listing's district median and let the proof line say
+// "Basé sur X annonces analysées à <district>" — until then the wording stays
+// a generic estimate on purpose.
+const OTA_MULTIPLIER = 3.5;
+const NIGHTS_PER_MONTH = 30;
+
+// Thousands separated by a regular no-break space: toLocaleString("fr-FR")
+// emits U+202F, which many fonts render as nothing ("13650"), and a plain
+// space would let "13 650 ฿" wrap in the middle of the number.
+function baht(amount) {
+  return `${Math.round(Number(amount)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ฿`;
+}
+
+function renderComparison(localPrice) {
+  const set = (id, text) => { document.getElementById(id).textContent = text; };
+
+  const local = localPrice ? Number(localPrice) : null;
+  const ota = local ? Math.round(local * OTA_MULTIPLIER) : null;
+  const otaNight = ota ? Math.round(ota / NIGHTS_PER_MONTH) : null;
+  const savings = ota ? ota - local : null;
+  const discountPct = Math.round((1 - 1 / OTA_MULTIPLIER) * 100);
+
+  set("sc-badge", `-${discountPct} %`);
+  set("sc-ota-price", ota ? `${baht(ota)} / mois` : "Prix non communiqué");
+  set("sc-ota-night", otaNight ? `(~${baht(otaNight)} / nuit)` : "");
+  set("sc-local-price", local ? `${baht(local)} / mois` : "—");
+  set("sc-savings", savings ? `${baht(savings)} / mois` : "—");
+
+  // Fixed multiplier, not a per-city measurement: the wording stays a generic
+  // estimate and states the formula inline (readable on touch, no tooltip).
+  set("sc-proof-text",
+    `* Estimation indicative basée sur un tarif moyen OTA (tarif local × ${OTA_MULTIPLIER.toLocaleString("fr-FR")}).`);
+}
+
 async function loadListingTeaser() {
   const id = new URLSearchParams(window.location.search).get("listing");
   if (!id) return;
@@ -696,8 +743,10 @@ async function loadListingTeaser() {
 
     const price = l.contract_monthly_min ?? l.price_monthly_min;
     document.getElementById("lt-price").textContent = price
-      ? `${Number(price).toLocaleString("fr-FR")} ฿ / mois`
+      ? `${baht(price)} / mois`
       : "Prix non communiqué";
+
+    renderComparison(price);
 
     const loc = [l.district, l.province].filter(Boolean).join(", ");
     document.getElementById("lt-loc").textContent = loc;
@@ -713,6 +762,7 @@ async function loadListingTeaser() {
       .join("");
 
     document.getElementById("listing-teaser").style.display = "flex";
+    document.getElementById("side-card").style.display = "flex";
   } catch (e) {
     // Annonce non disponible : on n'affiche simplement pas le bloc.
   }
