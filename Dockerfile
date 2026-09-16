@@ -1,7 +1,6 @@
-# Python 3.12 et non 3.13+/3.14: les versions epinglees dans
-# requirements.txt (pandas 2.2.2, lxml 5.2.2, psycopg2-binary 2.9.9)
-# publient des roues manylinux pour cp312, pas au-dela — sans elles la
-# construction bascule sur une compilation depuis les sources.
+# Python 3.12: la meme version que runtime.txt (Render) et que le workflow
+# GitHub Actions, pour que les trois environnements executent le meme
+# interpreteur que celui ou les tests ont tourne.
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -11,9 +10,11 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Les dependances d'abord, dans leur propre couche: le cache de build n'est
-# invalide que quand requirements.txt change, pas a chaque edition du code.
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# invalide que quand les requirements changent, pas a chaque edition du
+# code. Une seule image sert l'API et le scraper (docker-compose): ni les
+# outils ponctuels ni les tests n'y sont installes.
+COPY requirements-api.txt requirements-scraper.txt ./
+RUN pip install --no-cache-dir -r requirements-api.txt -r requirements-scraper.txt
 
 COPY src/ ./src/
 COPY scripts/ ./scripts/

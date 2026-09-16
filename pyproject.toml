@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Les tests async portent tous leur marqueur @pytest.mark.asyncio: mode
+# strict explicite, pour que pytest-asyncio 1.x ne change pas de defaut
+# sous nos pieds.
+asyncio_mode = "strict"
+filterwarnings = [
+    # lxml avertit a chaque parse que `strip_cdata` ne fait rien: bruit.
+    "ignore:The 'strip_cdata' option:DeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+extend-exclude = ["venv", "frontend", "tests/fixtures"]
+
+[tool.ruff.lint]
+# F = pyflakes (imports/variables inutilises, noms indefinis), E/W = style
+# de base, I = ordre des imports, B = pieges courants (bugbear).
+select = ["F", "E", "W", "I", "B"]
+ignore = [
+    "E501",  # longueur de ligne: docstrings et commentaires longs assumes
+    "E402",  # les scripts font sys.path.insert avant leurs imports src.*
+    "B008",  # Depends()/Query() en valeur par defaut: idiome FastAPI
+    "B904",  # raise ... from: pas de chaine d'exceptions imposee ici
+    "E741",  # `l` comme nom de variable de comprehension: usage etabli ici
+    "E702",  # plusieurs instructions par ligne dans quelques tests compacts
+    "B905",  # zip(strict=): les scripts d'images tournent aussi en 3.9
+]

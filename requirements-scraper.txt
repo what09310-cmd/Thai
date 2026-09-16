@@ -1,0 +1,12 @@
+# Scan (scripts/run_scraper.py, scripts/scheduler.py, GitHub Actions
+# "Daily scan", services "scraper"/"scheduler" de docker-compose).
+httpx[http2]==0.28.1
+scrapling==0.4.15
+tenacity==9.1.4
+pydantic==2.13.4
+pydantic-settings==2.15.0
+SQLAlchemy==2.0.52
+psycopg2-binary==2.9.13
+rich==15.0.0
+click==8.4.2
+APScheduler==3.11.3

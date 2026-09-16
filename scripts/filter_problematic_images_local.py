@@ -46,8 +46,8 @@ import pytesseract
 from PIL import Image
 from sqlalchemy import select
 
-from src.database.session import get_session
 from src.database.models import ListingImage
+from src.database.session import get_session
 
 # Sur Windows, Tesseract n'est generalement pas sur le PATH : on essaie
 # l'emplacement d'installation par defaut si `pytesseract` ne le trouve pas.
@@ -169,7 +169,6 @@ def _cluster_watermarks(rows: list) -> set:
     rows: liste de (image_id, corner_hashes dict).
     Retourne l'ensemble des image_id ayant un coin partage par >= MIN_CLUSTER_SIZE photos.
     """
-    buckets: dict = defaultdict(list)  # (corner_name, hash_repr) approx -> [image_id]
     flagged: set = set()
 
     per_corner: dict = defaultdict(list)  # corner_name -> [(image_id, hash)]
@@ -177,7 +176,7 @@ def _cluster_watermarks(rows: list) -> set:
         for corner, h in hashes.items():
             per_corner[corner].append((image_id, h))
 
-    for corner, items in per_corner.items():
+    for items in per_corner.values():
         n = len(items)
         for i in range(n):
             id_i, hash_i = items[i]
@@ -249,7 +248,7 @@ def _process_listing(http_client: httpx.Client, listing_id: int, workers: int) -
     )
 
     results = []
-    for image_id, (has_qr, has_text, hashes, fetch_error) in analyzed.items():
+    for image_id, (has_qr, has_text, _hashes, fetch_error) in analyzed.items():
         if fetch_error:
             results.append((image_id, False, "fetch_error"))
             continue

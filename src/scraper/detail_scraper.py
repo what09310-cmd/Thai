@@ -6,9 +6,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from src.scraper.http_client import ScraperClient
-from src.parser.detail_parser import parse_detail_page
 from src.models.schemas import ListingDetail
+from src.parser.detail_parser import parse_detail_page
+from src.scraper.http_client import ScraperClient
 
 log = logging.getLogger(__name__)
 

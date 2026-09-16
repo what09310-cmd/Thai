@@ -12,8 +12,9 @@ import json
 import re
 from pathlib import Path
 
-import src.parser.list_parser as list_parser
 from scrapling.parser import Selector
+
+import src.parser.list_parser as list_parser
 from src.parser.detail_parser import parse_detail_page
 from src.parser.list_parser import parse_listing_page
 

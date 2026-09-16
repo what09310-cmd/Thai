@@ -5,8 +5,8 @@ Structure réelle: <li class="css-18heyf0"> contenant chaque annonce.
 from __future__ import annotations
 
 import json
-import re
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -14,9 +14,9 @@ from zoneinfo import ZoneInfo
 
 from scrapling.parser import Selector
 
+from src.filters.contract import has_monthly_contract
 from src.models.schemas import ListingRaw
 from src.normalizers.price import parse_price_range
-from src.filters.contract import has_monthly_contract
 
 log = logging.getLogger(__name__)
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")

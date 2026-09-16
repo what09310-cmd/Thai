@@ -26,15 +26,15 @@ from rich.logging import RichHandler
 from rich.table import Table
 
 from src.config import settings
-from src.database.session import init_db, get_session, check_connection
 from src.database.models import Listing, ScanLog
+from src.database.session import check_connection, get_session, init_db
+from src.filters.contract import has_short_term_contract
 from src.models.schemas import ListingDetail, ListingFull, ListingRaw
-from src.scraper.list_scraper import scrape_all_listings, scrape_all_location_listings
 from src.scraper.detail_scraper import scrape_details_batch
 from src.scraper.http_client import ScraperClient
-from src.tracker.change_detector import upsert_listing, mark_removed_listings
+from src.scraper.list_scraper import scrape_all_listings, scrape_all_location_listings
+from src.tracker.change_detector import mark_removed_listings, upsert_listing
 from src.tracker.exporter import export_listings
-from src.filters.contract import has_short_term_contract
 
 console = Console()
 

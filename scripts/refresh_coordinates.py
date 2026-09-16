@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from src.database.session import get_session
 from src.database.models import Listing
+from src.database.session import get_session
 from src.scraper.detail_scraper import scrape_details_batch
 
 BATCH_SIZE = 20

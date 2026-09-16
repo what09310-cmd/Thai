@@ -21,11 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.database.session import get_session
 from src.database.models import Listing
-from src.scraper.http_client import ScraperClient
-from src.parser.detail_parser import parse_detail_page
+from src.database.session import get_session
 from src.normalizers.contact_description import build_contact_description
+from src.parser.detail_parser import parse_detail_page
+from src.scraper.http_client import ScraperClient
 from src.tracker.change_detector import apply_detail_fields
 
 

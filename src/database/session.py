@@ -1,7 +1,9 @@
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Generator
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+
 from src.config import settings
 from src.database.models import Base
 

@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from typing import Optional
+
+from pydantic_settings import BaseSettings
 
 # Valeurs publiees dans le depot (.env.example). L'API refuse de demarrer
 # tant qu'elles n'ont pas ete remplacees: la cle HMAC etant connue de

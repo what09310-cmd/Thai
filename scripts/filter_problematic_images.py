@@ -37,8 +37,8 @@ from PIL import Image
 from sqlalchemy import select
 
 from src.config import settings
-from src.database.session import get_session
 from src.database.models import ListingImage
+from src.database.session import get_session
 
 MODEL = "claude-haiku-4-5-20251001"
 MAX_DIMENSION = 768

@@ -11,15 +11,15 @@ import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
-from urllib.parse import urlparse
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
 from src.config import settings

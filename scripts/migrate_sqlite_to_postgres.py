@@ -20,7 +20,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.database.models import Base, Listing, ListingImage, ListingHistory, ScanLog, User
+from src.database.models import Base, Listing, ListingHistory, ListingImage, ScanLog, User
 
 POSTGRES_URL = os.environ.get("POSTGRES_URL")
 if not POSTGRES_URL or not POSTGRES_URL.startswith("postgresql"):

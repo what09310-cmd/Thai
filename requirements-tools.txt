@@ -1,0 +1,12 @@
+# Scripts de maintenance ponctuels, a installer a la demande:
+#   scripts/filter_problematic_images.py        -> anthropic, Pillow
+#   scripts/filter_problematic_images_local.py  -> opencv, ImageHash, pytesseract, numpy, Pillow
+#   scripts/verify_whatsapp_numbers.py          -> playwright (+ `playwright install chromium`)
+#   scripts/verify_line_ids.py                  -> httpx (deja dans -scraper)
+anthropic==0.34.2
+pillow==12.3.0
+playwright==1.62.0
+opencv-python-headless==5.0.0.93
+ImageHash==4.3.2
+pytesseract==0.3.13
+numpy==2.5.2

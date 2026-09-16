@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import src.api.auth as auth_module
+from scripts.run_scraper import select_detail_urls
 from src.api.auth import SESSION_COOKIE_NAME, check_credentials, create_session_token
 from src.api.main import app, get_db
 from src.config import settings
@@ -29,7 +30,6 @@ from src.parser.detail_parser import (
     _has_listing_payload,
 )
 from src.tracker.change_detector import mark_removed_listings, upsert_listing
-from scripts.run_scraper import select_detail_urls
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -724,8 +724,8 @@ def test_stats_counts_listings_not_history_rows(session, client):
 # retenant que les scans "completed", l'échec restait invisible.
 
 def test_interrupted_scan_is_marked_failed(session, monkeypatch):
-    from src.database.models import ScanLog
     import scripts.run_scraper as runner
+    from src.database.models import ScanLog
 
     scan_log = ScanLog(started_at=NOW, status="running")
     session.add(scan_log)

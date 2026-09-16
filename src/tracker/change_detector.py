@@ -12,10 +12,10 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from src.config import settings
 from src.database.models import Listing, ListingHistory, ListingImage
 from src.models.schemas import ListingFull
 from src.normalizers.contact_description import build_contact_description
-from src.config import settings
 
 log = logging.getLogger(__name__)
 

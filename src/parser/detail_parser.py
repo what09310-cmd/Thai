@@ -4,18 +4,18 @@ Extrait: listing_no, description, amenities, room_types, images, contacts.
 """
 from __future__ import annotations
 
-import re
+import itertools
 import json
 import logging
-import itertools
+import re
 from typing import Optional
 from urllib.parse import unquote
 
 from scrapling.parser import Selector
 
 from src.models.schemas import ListingDetail, RoomTypeSchema
-from src.normalizers.price import parse_price_range
 from src.normalizers.amenities import derive_amenities
+from src.normalizers.price import parse_price_range
 
 log = logging.getLogger(__name__)
 

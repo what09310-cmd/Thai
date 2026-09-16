@@ -92,7 +92,8 @@ def test_anonymous_gps_is_fuzzed_deterministically(client, session):
     du meme cote pour une annonce donnee (sinon on retrouve le vrai point
     en moyennant quelques rechargements)."""
     import math
-    from src.api.main import FUZZ_MIN_M, FUZZ_MAX_M
+
+    from src.api.main import FUZZ_MAX_M, FUZZ_MIN_M
 
     _add_listings(session, 1)
     anon = client.get("/listings").json()[0]

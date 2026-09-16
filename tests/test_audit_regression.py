@@ -348,8 +348,8 @@ def test_a_rollback_forgets_the_uncommitted_counters(session, monkeypatch):
 def test_a_vanished_detail_page_is_not_an_error_and_is_not_refetched(session):
     import asyncio
 
-    from src.scraper.detail_scraper import scrape_detail
     from src.models.schemas import ListingDetail
+    from src.scraper.detail_scraper import scrape_detail
 
     class GoneClient:
         async def get(self, url):

@@ -1,7 +1,6 @@
 import re
 from typing import Optional, Tuple
 
-
 _PRICE_RE = re.compile(r"[\d,]+")
 
 

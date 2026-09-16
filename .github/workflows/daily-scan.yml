@@ -17,7 +17,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        # Seul le scraper: requirements.txt complet installait aussi playwright,
+        # opencv, anthropic... (~450 MB) a chaque nuit.
+        run: pip install -r requirements-scraper.txt
 
       - name: Run scan
         env:
