@@ -54,12 +54,11 @@ function contractVal(raw) {
 
   const eur = n / 38.28;
 
-  const thb = n.toLocaleString("fr-FR");
   const euros = eur.toLocaleString("fr-FR", {
     maximumFractionDigits: 0
   });
 
-  return `${thb} ฿<br>${euros} €`;
+  return `${euros} €`;
 }
 
 let lastFocusedEl = null;
@@ -160,7 +159,7 @@ function contractsSectionTitle(l) {
 }
 
 function renderContractsHTML(l) {
-  const fmt = n => n == null ? null : `${n.toLocaleString("en-US")} THB/month`;
+  const fmt = n => n == null ? null : `${Math.round(n / EUR_TO_THB).toLocaleString("fr-FR")} €/mois`;
   const useRooms = contractRooms(l);
 
   if (useRooms.length) {

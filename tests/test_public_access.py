@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from src.api.auth import SESSION_COOKIE_NAME, create_session_token
-from src.database.models import Listing
+from src.database.models import Listing, UserSearchPreference
 
 
 def _add_listings(session, count: int) -> None:
@@ -191,3 +191,31 @@ def test_authenticated_clients_get_a_larger_budget(client, session):
         for _ in range(ANONYMOUS_MAX_PER_MINUTE + 5)
     }
     assert statuses == {200}
+
+
+def test_questionnaire_accepts_qualification_payload(client, session):
+    """Le tunnel de qualification /789 envoie un payload compact mais
+    persistable en base, avec un identifiant de session et un user_id."""
+    response = client.post(
+        "/api/questionnaire",
+        json={
+            "location": "Bangkok",
+            "neighborhood": "Sukhumvit",
+            "budget": "20_000 – 30_000 ฿",
+            "contract_duration": "6 months",
+            "timestamp": "2026-09-16T12:00:00Z",
+            "session_token": "session-789",
+            "user_id": 42,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "ok"
+
+    row = session.query(UserSearchPreference).one()
+    assert row.location == "Bangkok"
+    assert row.neighborhood == "Sukhumvit"
+    assert row.budget == "20_000 – 30_000 ฿"
+    assert row.contract_duration == "6 months"
+    assert row.session_token == "session-789"
+    assert row.user_id == 42

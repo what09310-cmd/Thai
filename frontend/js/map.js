@@ -14,6 +14,12 @@ let selectedDuration = "";
 
 let onlyNew = false;
 
+// Bascule du bloc d'actions du popup vers deux boutons verrouilles (une
+// recherche issue de /789 vers /resultats), au lieu de l'unique "Voir
+// l'annonce complete" existant sur vip.html/carte-thailande.html. false par
+// defaut: aucun changement pour les pages qui ne la definissent pas.
+let SHOW_LOCK_BUTTONS = false;
+
 const selectedAmenities = new Set();
 
 const markersById = {};
@@ -33,7 +39,7 @@ function priceValue(ad){
 
 function priceLabel(ad){
   const n = priceValue(ad);
-  return n ? n.toLocaleString("fr-FR") + " ฿" : "";
+  return n ? Math.round(n / EUR_TO_THB).toLocaleString("fr-FR") + " €" : "";
 }
 
 function amenityChips(ad){
@@ -175,8 +181,8 @@ function setupPriceFilter(){
 }
 
 function updatePriceUI(){
-  document.getElementById("priceMinLabel").textContent = priceMin.toLocaleString("fr-FR") + " ฿";
-  document.getElementById("priceMaxLabel").textContent = priceMax.toLocaleString("fr-FR") + " ฿";
+  document.getElementById("priceMinLabel").textContent = Math.round(priceMin / EUR_TO_THB).toLocaleString("fr-FR") + " €";
+  document.getElementById("priceMaxLabel").textContent = Math.round(priceMax / EUR_TO_THB).toLocaleString("fr-FR") + " €";
   const fill = document.getElementById("rangeFill");
   if (priceBoundsMax > 0) {
     fill.style.left = (priceMin / priceBoundsMax * 100) + "%";

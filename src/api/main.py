@@ -6,6 +6,7 @@ Endpoints de donnees (publics, plafonnes en debit):
   GET /listings/{id}     fiche complete
   GET /stats             compteurs du hero (forme reduite sans compte premium)
   GET /health
+  POST /api/questionnaire  reponses au tunnel de qualification servi sur /789
 
 Comptes (src/api/auth_routes.py): GET/POST /login, GET/POST /register,
 /auth/google[/callback], POST /logout, GET /me. Middlewares et gate par
@@ -33,7 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, distinct, func
 from sqlalchemy.orm import Session as SASession
 from starlette.middleware.sessions import SessionMiddleware
@@ -45,9 +46,16 @@ from src.api.security import (
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
     _is_premium,
+    _session,
 )
 from src.config import DEFAULT_SECRET_KEY, DEFAULT_SITE_PASSWORD, settings
-from src.database.models import Listing, ListingHistory, ListingImage, ScanLog
+from src.database.models import (
+    Listing,
+    ListingHistory,
+    ListingImage,
+    ScanLog,
+    UserSearchPreference,
+)
 from src.database.serialize import listing_to_dict
 from src.database.session import init_db
 
@@ -180,6 +188,25 @@ class PublicStatsResponse(BaseModel):
     monthly_contract_count: int
     three_month_contract_count: int
     six_month_contract_count: int
+
+
+class SearchPreferenceSubmission(BaseModel):
+    """Payload du tunnel de qualification /789.
+
+    `location`/`budget`/`contract_duration` reprennent les libelles des
+    choix affiches par le tunnel (pas de liste blanche cote API: le
+    frontend est la seule source de ces libelles). `user_id`/`timestamp`
+    sont optionnels et fournis par le frontend quand il les connait deja;
+    a defaut le serveur retombe sur la session et l'horodatage courant.
+    """
+
+    session_token: str = Field(max_length=100)
+    location: str = Field(max_length=100)
+    neighborhood: Optional[str] = Field(default=None, max_length=200)
+    budget: str = Field(max_length=50)
+    contract_duration: str = Field(max_length=50)
+    user_id: Optional[int] = None
+    timestamp: Optional[str] = None
 
 
 # — Helpers —
@@ -514,6 +541,27 @@ def get_stats(request: Request, db: SASession = Depends(get_db)):
     return full
 
 
+@app.post("/api/questionnaire", status_code=201)
+def submit_questionnaire(
+    submission: SearchPreferenceSubmission,
+    request: Request,
+    db: SASession = Depends(get_db),
+):
+    info = _session(request)
+    user_id = submission.user_id if submission.user_id is not None else (info.user_id if info else None)
+    row = UserSearchPreference(
+        user_id=user_id,
+        session_token=submission.session_token,
+        location=submission.location,
+        neighborhood=submission.neighborhood,
+        budget=submission.budget,
+        contract_duration=submission.contract_duration,
+    )
+    db.add(row)
+    db.commit()
+    return {"status": "ok"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -525,9 +573,10 @@ def health():
 _FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
 
 # Pages servies sur leur route courte ("/payant.html" en plus de
-# "/static/payant.html"), en plus de "/" (index.html) et "/test"
-# (test.html, la vitrine). Liste blanche explicite: tout autre nom rend
-# 404 sans jamais toucher le disque.
+# "/static/payant.html"), en plus de "/123" (index.html, le tableau de
+# bord) et "/" = "/test" (test.html, la vitrine, servie aux deux
+# adresses). Liste blanche explicite: tout autre nom rend 404 sans
+# jamais toucher le disque.
 _PAGES = (
     "premium.html", "carte-thailande.html", "carte-bangkok.html",
     "carte-pattaya.html", "carte-phuket.html", "payant.html", "vip.html",
@@ -536,13 +585,22 @@ _PAGES = (
 if _FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="static")
 
-    @app.get("/")
+    @app.get("/123")
     def serve_frontend():
         return FileResponse(str(_FRONTEND_DIR / "index.html"))
 
+    @app.get("/")
     @app.get("/test")
     def serve_test():
         return FileResponse(str(_FRONTEND_DIR / "test.html"))
+
+    @app.get("/789")
+    def serve_qualification_tunnel():
+        return FileResponse(str(_FRONTEND_DIR / "789.html"))
+
+    @app.get("/resultats")
+    def serve_qualification_results():
+        return FileResponse(str(_FRONTEND_DIR / "resultats.html"))
 
     @app.get("/{page}.html")
     def serve_page(page: str):

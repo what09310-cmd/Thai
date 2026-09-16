@@ -1,5 +1,6 @@
-// thai-map.js -- Carte Thailande (vip, carte-thailande): pins, chargement, filtres budget/duree/equipements.
-// Partage par: vip, carte-thailande.
+// thai-map.js -- Carte Thailande (vip, carte-thailande, resultats): pins, chargement,
+// filtres budget/duree/equipements, popup riche + modale (photos, specs, contact).
+// Partage par: vip, carte-thailande, resultats.
 // Script classique (pas de module): tout ce qui est declare ici est global.
 
 function pinIcon(){
@@ -40,10 +41,16 @@ async function loadAds(){
   const limit = 500;
   let offset = 0;
   const data = [];
+  // /resultats (tunnel /789) declare LOCATION_QUERY ("province=Bangkok" ou
+  // "district=Bang Lamung") avant d'appeler loadAds(): meme principe que
+  // CITY.query dans city-map.js, applique ici en plus du filtre budget/duree
+  // deja client. vip.html/carte-thailande.html ne la definissent pas: carte
+  // nationale inchangee.
+  const locationQuery = typeof LOCATION_QUERY !== "undefined" && LOCATION_QUERY ? `${LOCATION_QUERY}&` : "";
 
   try {
     while (true) {
-      const r = await fetch(`${API}/listings?status=active&limit=${limit}&offset=${offset}`);
+      const r = await fetch(`${API}/listings?${locationQuery}status=active&limit=${limit}&offset=${offset}`);
       if (!r.ok) throw new Error(r.status);
       const batch = await r.json();
       if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
@@ -68,3 +75,283 @@ async function loadAds(){
   setupFormFilters();
   applyFilters();
 }
+
+// ── Popup riche + modale (extrait de carte-thailande.html: /resultats,
+// derriere le tunnel /789, reutilise exactement ce que vip.html/
+// carte-thailande.html affichent deja, sans deuxieme implementation Leaflet).
+
+const APPROX_RADIUS_M = 350;
+
+const POPUP_MAX_CHIPS = 6;
+
+const detailCache = {};
+
+function popupSpec(label, value, cls){
+  const has = value != null && value !== "" && value !== "-" && value !== "Please contact";
+  return `<div class="popup-spec">` +
+    `<span class="popup-spec-label">${escapeHtml(label)}</span>` +
+    `<span class="popup-spec-val${has ? (cls ? " " + cls : "") : " na"}">${has ? escapeHtml(value) : "Non communiqu&eacute;"}</span>` +
+    `</div>`;
+}
+
+function popupPhotosHTML(ad, images){
+  const list = (images && images.length) ? images : (ad.images || []);
+  if (!list.length) return `<div class="popup-photos is-empty"></div>`;
+  const shown = list.slice(0, 10);
+  return `<div class="popup-photos-wrap">` +
+    `<div class="popup-photos">` +
+    shown.map((u, i) => `<div class="popup-photo">` +
+      `<img src="${escapeHtml(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" ` +
+      `onerror="this.parentElement.style.display='none'">` +
+      watermarkHTML() +
+      `</div>`).join("") +
+    `</div>` +
+    (shown.length > 1 ? `<div class="popup-photos-count">&#x1F4F7; ${shown.length}</div>` : "") +
+    `</div>`;
+}
+
+// Un visiteur non premium recoit deja `url: null` depuis l'API
+// (main.py::_listing_to_response) -- jamais de logique de masquage ici,
+// seulement l'affichage qui en decoule. SHOW_LOCK_BUTTONS (map.js) ne
+// change que la mise en page du bloc, pas la donnee.
+function popupActionsHTML(ad){
+  const locked = ad.url == null;
+  if (SHOW_LOCK_BUTTONS && locked) {
+    return `<div class="popup-actions popup-actions-stacked">` +
+      `<a href="/payant.html" class="popup-btn popup-btn-lock">🔒 Voir le contact du propriétaire</a>` +
+      `<a href="/payant.html" class="popup-btn popup-btn-lock">🔒 Voir l'annonce d'origine</a>` +
+      `</div>`;
+  }
+  return `<div class="popup-actions">` +
+    `<a href="payant.html?listing=${encodeURIComponent(ad.id)}" class="popup-btn">Voir l'annonce complète</a>` +
+    `</div>`;
+}
+
+function popupHTML(ad, images){
+  const thb = priceValue(ad);
+  const amenities = ad.amenities || [];
+  const hasAc = amenities.includes("Air Conditioner");
+  const chips = amenityChips(ad);
+  const shownChips = chips.slice(0, POPUP_MAX_CHIPS);
+  const extra = chips.length - shownChips.length;
+  const locs = [ad.subdistrict, ad.district, ad.province].filter(Boolean);
+  const badges =
+    (ad.has_monthly_contract === "true" && contractNum(ad.contract_monthly_raw) !== null ? `<span class="popup-badge popup-badge-1">1 mois</span>` : "") +
+    (contractNum(ad.contract_3_month_raw) !== null ? `<span class="popup-badge popup-badge-3">3 mois</span>` : "") +
+    (contractNum(ad.contract_6_month_raw) !== null ? `<span class="popup-badge popup-badge-6">6 mois</span>` : "");
+
+  const priceHTML = thb
+    ? `<span class="popup-price-eur">${Math.round(thb / EUR_TO_THB).toLocaleString("fr-FR")} &euro;</span>` +
+      `<span class="popup-price-unit">/ mois</span>`
+    : `<span class="popup-price-unit">Prix non communiqu&eacute;</span>`;
+
+  return `<div class="popup-card">` +
+    `<div class="popup-photos-slot">${popupPhotosHTML(ad, images)}</div>` +
+    `<div class="popup-body">` +
+      `<div>` +
+        `<div class="popup-price">${priceHTML}</div>` +
+        (locs.length ? `<div class="popup-loc">&#x1F4CD; ${locs.map(escapeHtml).join(" &middot; ")}</div>` : "") +
+        (badges ? `<div class="popup-badges">${badges}</div>` : "") +
+      `</div>` +
+      `<div class="popup-specs">` +
+        popupSpec("Deposit", ad.deposit) +
+        popupSpec("Électricité", ad.electric_price) +
+        popupSpec("Climatisation", hasAc ? "✓ Oui" : "Non", hasAc ? "yes" : "") +
+      `</div>` +
+      `<div><div class="popup-section-head">${escapeHtml(contractsSectionTitle(ad))}</div>` +
+      `<div class="popup-rooms">${renderContractsHTML(ad)}</div></div>` +
+      (shownChips.length ? `<div class="popup-amenities">` +
+        shownChips.map(c => `<span class="popup-chip">${escapeHtml(AMENITY_ICONS[c])}</span>`).join("") +
+        (extra > 0 ? `<span class="popup-chip popup-chip-more">+${extra}</span>` : "") +
+      `</div>` : "") +
+    `</div>` +
+    popupActionsHTML(ad) +
+  `</div>`;
+}
+
+/** Remplace la vignette unique du popup par la galerie complete de l'annonce. */
+async function loadPopupPhotos(ad){
+  const marker = markersById[ad.id];
+  if (!marker) return;
+
+  const slotOf = () => {
+    const popup = marker.getPopup();
+    if (!popup || !popup.isOpen()) return null;
+    const el = popup.getElement();
+    return el ? el.querySelector(".popup-photos-slot") : null;
+  };
+
+  const paint = images => {
+    const slot = slotOf();
+    if (!slot) return;
+    slot.innerHTML = popupPhotosHTML(ad, images);
+    marker.getPopup().update();
+  };
+
+  if (detailCache[ad.id]) { paint(detailCache[ad.id]); return; }
+
+  // Skeleton seulement s'il n'y a rien a montrer en attendant.
+  if (!(ad.images || []).length) {
+    const slot = slotOf();
+    if (slot) slot.innerHTML = `<div class="popup-photos"><div class="popup-photos-skel"></div></div>`;
+  }
+
+  try {
+    const l = await fetch(`${API}/listings/${ad.id}`).then(r => r.json());
+    detailCache[ad.id] = l.images || [];
+  } catch (e) {
+    detailCache[ad.id] = ad.images || [];
+  }
+  paint(detailCache[ad.id]);
+}
+
+function buildMap(){
+  leafletMap = L.map("leaflet-map", { zoomControl: false });
+  L.control.zoom({ position: "topright" }).addTo(leafletMap);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  }).addTo(leafletMap);
+
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 50 });
+  leafletMap.addLayer(clusterGroup);
+
+  ads.forEach(ad => {
+    // Visiteur non connecte: l'API decale la position et le signale par
+    // location_approx (main.py::_approximate_position). Comme Airbnb, on
+    // dessine alors une zone plutot qu'un point; le rayon doit rester
+    // >= FUZZ_MAX_M cote API pour que la vraie position soit dedans.
+    const marker = ad.location_approx
+      ? L.circle([ad.latitude, ad.longitude], {
+          radius: APPROX_RADIUS_M, color: "var(--accent)", weight: 2,
+          fillColor: "var(--accent)", fillOpacity: .18,
+        })
+      : L.marker([ad.latitude, ad.longitude], { icon: pinIcon() });
+    marker
+      .bindPopup(popupHTML(ad), { maxWidth: 390, minWidth: 390, className: "popup-lg", autoPanPadding: [24, 24] });
+    // La liste ne renvoie qu'une vignette par annonce (_thumbnail_map cote
+    // API): la galerie complete n'est chargee qu'a l'ouverture du popup,
+    // pour ne pas tirer ~45 images par annonce au chargement de la carte.
+    marker.on("popupopen", () => loadPopupPhotos(ad));
+    markersById[ad.id] = marker;
+  });
+
+  const bounds = L.latLngBounds(ads.map(a => [a.latitude, a.longitude]));
+  leafletMap.fitBounds(bounds, { padding: [30, 30] });
+}
+
+// La carte ne charge pas les caches de geocodage d'index.html : seules les
+// coordonnees propres de l'annonce servent (une annonce sans position
+// n'apparait de toute facon pas sur la carte).
+function mapPoint(l) {
+  if (l.latitude != null && l.longitude != null) {
+    return { lat: l.latitude, lon: l.longitude, precise: !l.location_approx };
+  }
+  return null;
+}
+
+async function openModal(id) {
+  lastFocusedEl = document.activeElement;
+  document.getElementById("overlay").classList.add("open");
+  const body = document.getElementById("modal-body");
+  body.innerHTML = `<div class="state-box"><div class="spinner"></div></div>`;
+  body.focus();
+  try {
+    const l = await fetch(`${API}/listings/${id}`).then(r => r.json());
+    body.innerHTML = modalHTML(l);
+    currentGalleryImages = l.images || [];
+  } catch(e) {
+    body.innerHTML = `<div class="state-box">Erreur de chargement</div>`;
+  }
+}
+
+function modalHTML(l) {
+  const locs = [l.subdistrict, l.district, l.province].filter(Boolean);
+  const amenities = l.amenities || [];
+  const mapsUrl = googleMapsUrl(l);
+  const embedUrl = googleMapsEmbedUrl(l);
+  const pt = mapPoint(l);
+  const precisionLabel = !pt ? ""
+    : pt.precise ? "📌 Position précise"
+    : l.location_approx ? "🔵 Position approximative (zone de ~350 m — connectez-vous pour la position exacte)"
+    : "🔵 Position approximative (centre du quartier — RentHub ne publie pas l'adresse exacte)";
+
+  return `
+    <div class="modal-top">
+      <button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
+    </div>
+    ${l.images && l.images.length ? `
+    <div class="modal-gallery">
+      ${l.images.map((u, i) => `<div class="modal-gallery-item"><img src="${esc(u)}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onclick="openLightbox(${i})" onerror="this.parentElement.style.display='none'">${watermarkHTML()}</div>`).join("")}
+    </div>` : ""}
+    <div class="modal-tags">
+      ${locs.map(loc => `<span class="tag">${esc(loc)}</span>`).join("")}
+      ${l.has_monthly_contract === "true" && contractVal(l.contract_monthly_raw) !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}
+      ${contractVal(l.contract_3_month_raw) !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}
+      ${contractVal(l.contract_6_month_raw) !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}
+    </div>
+    ${mapsUrl ? `
+    <div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+        <a class="modal-link" style="padding:6px 12px;font-size:11px" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Google Maps ↗</a>
+      </div>
+      ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
+      ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
+    </div>` : ""}
+    <div>
+      <div class="section-head">${esc(contractsSectionTitle(l))}</div>
+      <div class="modal-contracts">
+        ${renderContractsHTML(l)}
+      </div>
+    </div>
+    ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `
+    <div>
+      <div class="section-head">Description</div>
+      <div class="modal-contracts">
+        <div class="mc"><div class="mc-label">Deposit</div><div class="mc-val${l.deposit ? "" : " na"}">${l.deposit ? esc(l.deposit) : "Non communiqué"}</div></div>
+        ${l.electric_price && l.electric_price !== "Please contact" ? `<div class="mc"><div class="mc-label">Electric price</div><div class="mc-val">${esc(l.electric_price)}</div></div>` : ""}
+        <div class="mc"><div class="mc-label">Air Conditioner</div><div class="mc-val${amenities.includes("Air Conditioner") ? "" : " na"}">${amenities.includes("Air Conditioner") ? "YES" : "NO"}</div></div>
+      </div>
+    </div>` : ""}
+    ${amenities.length ? `
+    <div>
+      <div class="section-head">Équipements</div>
+      <div class="modal-amenities">${amenities.map(a=>`<span class="amenity">${esc(AMENITY_ICONS[a] || a)}</span>`).join("")}</div>
+    </div>` : ""}
+    ${(()=>{const hasWa=hasRealWhatsapp(l.whatsapp);return l.phone||l.line_id||hasWa ? `
+    <div>
+      <div class="section-head">Contact</div>
+      <div class="modal-contracts">
+        ${l.phone?`<div class="mc"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></div>`:""}
+        ${l.line_id?(()=>{
+          // line_verified===false : identifiant deja confirme inexistant par
+          // scripts/verify_line_ids.py -- on route vers line.me/ti/p/~<id>
+          // pour eviter un 404 (voir Listing.line_verified). Sinon (valide ou
+          // jamais verifie), page.line.me/<id> reste le lien qui marche vraiment.
+          const slug = encodeURIComponent(String(l.line_id).replace(/^@/,""));
+          const href = l.line_verified===false ? `https://line.me/ti/p/~${slug}` : `https://page.line.me/${slug}`;
+          return `<a class="mc mc-line" href="${href}" target="_blank" rel="noopener"><div class="mc-label">LINE</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${LINE_ICON_SVG} ${esc(l.line_id)}</div></a>`;
+        })():""}
+        ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
+      </div>
+    </div>` : "";})()}
+    ${l.url
+      ? `<a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>`
+      : `<a class="modal-link" href="/payant.html">🔒 Débloquer l'annonce d'origine</a>`}
+  `;
+}
+
+// L'ecoute clavier Echap/fleches + trapModalFocus + le swipe tactile du
+// lightbox restent inline, page par page (comme index.html/premium.html/
+// test.html): vip.html charge ce fichier mais n'a pas de #overlay/
+// #lightbox-overlay dans son DOM, et trapModalFocus/closeModal y planteraient
+// au premier keydown si on les enregistrait ici sans condition.
+
+// Pas de clic droit / glisser / selection sur les photos (popup de la carte,
+// galerie de la modale, lightbox). Le popup Leaflet est insere dynamiquement,
+// d'ou l'ecoute au niveau du document.
+["contextmenu", "dragstart", "selectstart", "copy"].forEach(eventName => {
+  document.addEventListener(eventName, event => {
+    if (event.target.closest(".popup-photos-wrap, .modal-gallery, .lightbox-overlay")) event.preventDefault();
+  });
+});

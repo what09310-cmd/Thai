@@ -169,14 +169,14 @@
 <body>
 
 <header>
-  <a class="logo" href="/" aria-label="ThaiMonth">
+  <a class="logo" href="/123" aria-label="ThaiMonth">
     <span class="logo-thai">Thai</span><span class="logo-month">Month</span>
   </a>
   <a class="header-map" href="/vip.html">Voir la carte</a>
 </header>
 
 <!-- FILTRES VILLE + QUARTIER -->
-<div class="city-bar location-filters">
+<div class="city-bar">
   <div class="hstat city-total"><span>Logement</span><b id="h-total">—</b></div>
   <div class="location-filter" id="featured-cities">
     <label class="city-label" for="featured-city-select">⭐ Grandes villes :</label>
@@ -224,7 +224,7 @@
     </div>
 
     <div class="filter-section">
-      <label class="filter-label" for="f-slider">Prix mensuel max (THB)</label>
+      <label class="filter-label" for="f-slider">Prix mensuel max (EUR)</label>
       <div class="slider-wrap">
         <input type="range" id="f-slider" min="0" max="1000" step="1" value="1000">
         <div class="slider-info">
@@ -233,10 +233,10 @@
         </div>
       </div>
       <div class="price-grid" style="margin-top:8px">
-        <label class="visually-hidden" for="f-min">Prix minimum en bahts</label>
-        <input class="filter-input" type="number" id="f-min" placeholder="Min ฿" step="500">
-        <label class="visually-hidden" for="f-max">Prix maximum en bahts</label>
-        <input class="filter-input" type="number" id="f-max" placeholder="Max ฿" step="500">
+        <label class="visually-hidden" for="f-min">Prix minimum en euros</label>
+        <input class="filter-input" type="number" id="f-min" placeholder="Min €" step="10">
+        <label class="visually-hidden" for="f-max">Prix maximum en euros</label>
+        <input class="filter-input" type="number" id="f-max" placeholder="Max €" step="10">
       </div>
     </div>
 
@@ -344,6 +344,22 @@
 <script src="/static/js/geo.js"></script>
 <script src="/static/js/modal.js"></script>
 <script src="/static/js/catalog.js"></script>
+<script>window._coreApplyFilters = applyFilters;</script>
+<script>
+const EUR_TO_THB = 38.28;
+
+function applyFilters() {
+  const minEl = document.getElementById("f-min");
+  const maxEl = document.getElementById("f-max");
+  const minEur = minEl.value;
+  const maxEur = maxEl.value;
+  minEl.value = minEur === "" ? "" : Math.round(minEur * EUR_TO_THB);
+  maxEl.value = maxEur === "" ? "" : Math.round(maxEur * EUR_TO_THB);
+  window._coreApplyFilters();
+  minEl.value = minEur;
+  maxEl.value = maxEur;
+}
+</script>
 <script>
 // La barre de villes passe sur deux lignes sous ~1550px : on publie sa
 // hauteur reelle pour que la sidebar sticky se cale juste en dessous.
@@ -374,8 +390,9 @@ document.addEventListener("click", (e) => {
 document.getElementById("f-slider").addEventListener("input", function() {
   const pos = parseInt(this.value);
   const price = sliderPosToPrice(pos);
-  document.getElementById("slider-val").textContent = pos >= SLIDER_RES ? "Tous les prix" : `≤ ${price.toLocaleString("fr-FR")} ฿`;
-  document.getElementById("f-max").value = pos < SLIDER_RES ? price : "";
+  const priceEur = Math.round(price / EUR_TO_THB);
+  document.getElementById("slider-val").textContent = pos >= SLIDER_RES ? "Tous les prix" : `≤ ${priceEur.toLocaleString("fr-FR")} €`;
+  document.getElementById("f-max").value = pos < SLIDER_RES ? priceEur : "";
   updateContractSectionVisibility();
   applyFilters();
 });

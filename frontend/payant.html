@@ -46,7 +46,8 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
-    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 
   body {
@@ -54,7 +55,8 @@
     color: var(--text);
     font-family: var(--sans);
     font-size: 14px;
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 
   a { color: inherit; text-decoration: none; }
@@ -76,13 +78,14 @@
      et masquait une partie de l'annonce des qu'on defilait un peu. En
      flux normal, elle defile avec la page et ne recouvre plus rien. */
   .pillnav {
+    flex: 0 0 auto;
     width: min(780px, calc(100% - 28px));
-    margin: 18px auto 0;
+    margin: clamp(4px, 1vh, 14px) auto 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 18px;
-    padding: 9px 10px 9px 22px;
+    padding: 7px 10px 7px 22px;
     background: #1d3c10;
     border-radius: var(--r-pill);
     box-shadow: 0 10px 28px rgba(29,60,16,.22);
@@ -116,34 +119,43 @@
     position: relative;
     width: min(1180px, calc(100% - 28px));
     margin: 0 auto;
-    padding: 40px 0 72px;
-    min-height: 100vh;
+    padding: clamp(6px, 1.2vh, 18px) 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.10) 100%);
   }
 
   .main > * { position: relative; z-index: 1; }
 
   .hero {
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: 44vh;
     display: grid;
     grid-template-columns: minmax(0, 760px) minmax(0, 380px);
     justify-content: center;
-    gap: 28px;
+    gap: clamp(10px, 1.8vh, 28px);
     align-items: stretch;
   }
 
   .side-card {
     width: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 18px 20px;
+    gap: clamp(6px, 1.2vh, 12px);
+    padding: clamp(10px, 1.8vh, 18px) 18px clamp(12px, 2vh, 20px);
     border: 0;
     border-radius: 16px;
     background: #fff;
     box-shadow: 0 4px 16px rgba(20,19,15,.06);
+    overflow: hidden;
   }
 
-  .card-comparison { position: relative; gap: 14px; }
+  .card-comparison { position: relative; gap: clamp(6px, 1.4vh, 14px); }
 
   .badge-discount {
     position: absolute;
@@ -207,7 +219,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 4px 12px; /* the amount wraps under the label when the card is too narrow */
-    padding: 12px 14px;
+    padding: clamp(6px, 1.2vh, 12px) 14px;
     border-radius: 14px;
     background: #f0fdf4;
     border: 1px solid #bbf7d0;
@@ -236,13 +248,49 @@
 
   .reassurance-list {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 14px;
     list-style: none;
     padding: 0;
-    margin: 16px 0;
-    font-size: 0.85rem;
+    margin: clamp(4px, 1vh, 12px) 0;
+    font-size: 0.8rem;
     color: #374151;
+  }
+
+  /* A listing teaser pulls a lot of the page's vertical budget already;
+     the trust bar/closing note repeat reassurance the side-card already
+     gives, so they're the first thing dropped to keep the plan picker
+     readable without a scrollbar. */
+  body.has-listing-teaser .trust-bar,
+  body.has-listing-teaser .conversion-note,
+  body.has-listing-teaser .plan-option-text,
+  body.has-listing-teaser .reassurance-list,
+  body.has-listing-teaser .data-proof {
+    display: none;
+  }
+
+  /* With the description gone, each plan row is just a title + price band —
+     shrink both so they clear the row's own overflow:hidden edge instead of
+     being clipped mid-glyph when the hero above has already spent most of
+     the viewport's height. */
+  body.has-listing-teaser .plan-option {
+    padding-top: clamp(2px, 0.6vh, 8px);
+    padding-bottom: clamp(2px, 0.6vh, 8px);
+  }
+  body.has-listing-teaser .plan-option-title span {
+    font-size: clamp(13px, 2.1vh, 18px);
+  }
+  body.has-listing-teaser .plan-option-price strong {
+    font-size: clamp(15px, 2.6vh, 22px);
+  }
+  body.has-listing-teaser .plan-option-price small,
+  body.has-listing-teaser .plan-option-term {
+    font-size: clamp(9px, 1.2vh, 12px);
+  }
+  body.has-listing-teaser .plan-option input[type="radio"] {
+    width: 16px;
+    height: 16px;
   }
 
   .side-card-cta {
@@ -250,7 +298,7 @@
     align-items: center;
     justify-content: center;
     margin-top: auto;
-    padding: 14px 18px;
+    padding: clamp(8px, 1.6vh, 14px) 18px;
     border-radius: 12px;
     background: linear-gradient(135deg, var(--accent), #5f7cf9);
     color: var(--accent-ink);
@@ -269,22 +317,24 @@
 
   .listing-teaser {
     width: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 18px 20px;
+    gap: clamp(6px, 1.2vh, 12px);
+    padding: clamp(10px, 1.8vh, 18px) 18px clamp(12px, 2vh, 20px);
     border: 0;
     border-radius: 16px;
     background: #fff;
     box-shadow: 0 4px 16px rgba(20,19,15,.06);
+    overflow: hidden;
   }
 
-  .card-media { display: flex; flex-direction: column; }
+  .card-media { display: flex; flex-direction: column; min-height: 0; }
 
   .main-image-wrapper {
     position: relative;
-    max-height: 240px;
-    margin-bottom: 12px;
+    max-height: clamp(60px, 12vh, 170px);
+    margin-bottom: clamp(4px, 0.8vh, 10px);
     border-radius: 12px;
     overflow: hidden;
     background: var(--bg);
@@ -294,7 +344,7 @@
   .main-img {
     width: 100%;
     height: 100%;
-    max-height: 240px;
+    max-height: clamp(60px, 12vh, 170px);
     object-fit: cover;
     border-radius: 12px;
     display: block;
@@ -316,12 +366,12 @@
   .gallery-thumbnails {
     display: flex;
     gap: 8px;
-    margin-top: 8px;
+    margin-top: clamp(4px, 0.8vh, 8px);
   }
 
   .thumb {
-    width: 56px;
-    height: 42px;
+    width: 44px;
+    height: 32px;
     object-fit: cover;
     border-radius: 8px;
     cursor: pointer;
@@ -354,8 +404,8 @@
   .listing-teaser-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px 18px;
-    padding: 12px 0;
+    gap: 6px 18px;
+    padding: clamp(6px, 1vh, 12px) 0;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
     color: var(--text);
@@ -365,12 +415,14 @@
 
   .listing-teaser-chips {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: hidden;
     gap: 8px;
   }
 
   .listing-teaser-chip {
     display: inline-flex;
+    flex-shrink: 0;
     padding: 7px 10px;
     border-radius: var(--r-pill);
     background: var(--bg);
@@ -389,12 +441,17 @@
 
   .pricing-block {
     scroll-margin-top: 84px;
-    margin-top: 42px;
-    padding: 30px 28px 28px;
+    margin-top: clamp(10px, 2vh, 42px);
+    padding: clamp(12px, 2.4vh, 30px) 28px clamp(12px, 2.2vh, 28px);
     border: 1px solid var(--border);
     border-radius: 28px;
     background: rgba(255,255,255,0.72);
     box-shadow: 0 12px 32px rgba(17,24,39,0.05);
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .section-header {
@@ -402,12 +459,13 @@
     justify-content: space-between;
     gap: 16px;
     align-items: end;
-    margin-bottom: 22px;
+    margin-bottom: clamp(8px, 1.6vh, 22px);
+    flex: 0 0 auto;
   }
 
   .kicker {
     color: var(--text);
-    font-size: clamp(28px, 4.4vw, 46px);
+    font-size: clamp(20px, 3.2vh, 46px);
     font-weight: 700;
     line-height: 1.1;
     letter-spacing: -1px;
@@ -415,6 +473,10 @@
 
   .subscription-selector {
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 20px;
@@ -423,7 +485,8 @@
   }
 
   .selector-header {
-    padding: 16px 20px;
+    flex: 0 0 auto;
+    padding: clamp(8px, 1.4vh, 16px) 20px;
     border-bottom: 1px solid var(--border);
     background: rgba(255,255,255,0.78);
     color: var(--muted);
@@ -434,21 +497,27 @@
   }
 
   .plan-option-list {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .plan-option {
+    flex: 1 1 0;
+    min-height: 0;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 18px;
     align-items: center;
-    padding: 18px 20px;
+    padding: clamp(4px, 1.6vh, 18px) 20px;
     border-bottom: 1px solid var(--border);
     cursor: pointer;
     transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
     background: transparent;
     border-radius: 14px;
+    overflow: hidden;
   }
 
   .plan-option:last-child { border-bottom: none; }
@@ -473,7 +542,10 @@
   .plan-option-main {
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: 6px;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .plan-option-title {
@@ -492,7 +564,7 @@
   .plan-option-text {
     color: var(--muted);
     font-size: 0.85rem;
-    line-height: 1.5;
+    line-height: 1.4;
   }
 
   .plan-option-price {
@@ -534,8 +606,9 @@
   }
 
   .selector-actions {
-    padding: 18px 20px 20px;
+    padding: clamp(8px, 1.6vh, 18px) 20px clamp(10px, 1.8vh, 20px);
     background: rgba(79,70,229,0.02);
+    flex: 0 0 auto;
   }
 
   .plan-submit-btn {
@@ -544,7 +617,7 @@
     border-radius: 12px;
     background: linear-gradient(135deg, var(--accent), #5f7cf9);
     color: var(--accent-ink);
-    padding: 16px 18px;
+    padding: clamp(10px, 1.8vh, 16px) 18px;
     font-size: 1rem;
     font-weight: 800;
     cursor: pointer;
@@ -561,10 +634,11 @@
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 16px 26px;
-    margin-top: 30px;
-    padding-top: 18px;
+    gap: 10px 26px;
+    margin-top: clamp(8px, 1.8vh, 30px);
+    padding-top: clamp(8px, 1.4vh, 18px);
     border-top: 1px solid var(--border);
+    flex: 0 0 auto;
   }
 
   .trust-item {
@@ -588,15 +662,16 @@
   }
 
   .conversion-note {
-    margin-top: 24px;
-    padding: 16px 18px;
+    margin-top: clamp(8px, 1.6vh, 24px);
+    padding: clamp(8px, 1.4vh, 16px) 18px;
     border: 1px solid var(--border);
     border-radius: 18px;
     background: rgba(255,255,255,0.72);
     color: var(--muted);
     text-align: center;
     font-size: 0.88rem;
-    line-height: 1.6;
+    line-height: 1.4;
+    flex: 0 0 auto;
   }
 
   .conversion-note strong {
@@ -604,12 +679,21 @@
   }
 
   @media (max-width: 880px) {
+    /* Stacked hero (two full cards + pricing block) can't fit one screen
+       height on a phone no matter how compact — fall back to a normal
+       scrolling page here instead of silently clipping content. */
+    html, body { height: auto; overflow: visible; }
+
+    .main { min-height: 100vh; overflow: visible; }
+
     .hero {
       grid-template-columns: 1fr;
+      max-height: none;
     }
 
     .pricing-block {
       padding: 24px 18px 20px;
+      overflow: visible;
     }
 
     .section-header {
@@ -654,7 +738,7 @@
 <body>
 
 <nav class="pillnav" aria-label="Navigation principale">
-  <a class="pillnav-brand" href="/test"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
+  <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
   <a class="pillnav-cta" href="/carte-thailande.html">Voir la carte</a>
 </nav>
 
@@ -816,7 +900,7 @@ const NIGHTS_PER_MONTH = 30;
 // emits U+202F, which many fonts render as nothing ("13650"), and a plain
 // space would let "13 650 ฿" wrap in the middle of the number.
 function baht(amount) {
-  return `${Math.round(Number(amount)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ฿`;
+  return `${Math.round(Number(amount) / EUR_TO_THB).toLocaleString("fr-FR")} €`;
 }
 
 function renderComparison(localPrice) {
@@ -899,13 +983,17 @@ async function loadListingTeaser() {
     document.getElementById("lt-deposit").textContent = `Deposit: ${l.deposit || "—"}`;
     document.getElementById("lt-ac").textContent = `Air Conditioner : ${hasAc ? "Oui" : "Non"}`;
 
-    const chips = amenities.filter(a => a !== "Air Conditioner");
+    // The chip row is one line, no wrap (the card's whole point is to fit the
+    // viewport without scrolling): cap it so a long amenity list can't push a
+    // partially clipped chip past the edge.
+    const chips = amenities.filter(a => a !== "Air Conditioner").slice(0, 5);
     document.getElementById("lt-chips").innerHTML = chips
       .map(a => `<span class="listing-teaser-chip">${LISTING_AMENITY_ICONS[a] || esc(a)}</span>`)
       .join("");
 
     document.getElementById("listing-teaser").style.display = "flex";
     document.getElementById("side-card").style.display = "flex";
+    document.body.classList.add("has-listing-teaser");
   } catch (e) {
     // Annonce non disponible : on n'affiche simplement pas le bloc.
   }

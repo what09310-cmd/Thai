@@ -204,6 +204,27 @@ class ScanLog(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
 
 
+class UserSearchPreference(Base):
+    """Reponses au tunnel de qualification servi sur /789 (localisation, budget, duree)."""
+    __tablename__ = "user_search_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    session_token: Mapped[str] = mapped_column(String(100), nullable=False)
+    location: Mapped[str] = mapped_column(String(100), nullable=False)
+    neighborhood: Mapped[Optional[str]] = mapped_column(String(200))
+    budget: Mapped[str] = mapped_column(String(50), nullable=False)
+    contract_duration: Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_user_search_preferences_created_at", "created_at"),
+        Index("ix_user_search_preferences_session_token", "session_token"),
+    )
+
+
 class User(Base):
     """Compte utilisateur (email + mot de passe, ou Google).
 

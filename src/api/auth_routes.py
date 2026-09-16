@@ -121,7 +121,7 @@ if _google_configured():
     )
 
 
-def _login_response(token: str, url: str = "/") -> RedirectResponse:
+def _login_response(token: str, url: str = "/123") -> RedirectResponse:
     response = RedirectResponse(url=url, status_code=303)
     response.set_cookie(
         SESSION_COOKIE_NAME,

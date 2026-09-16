@@ -83,7 +83,7 @@ _CODE_MAX_AGE = 5 * 60
 # le niveau requis: True = compte premium (ou admin), False = n'importe
 # quel compte connecte.
 PROTECTED_PATHS = {
-    "/": False,
+    "/123": False,
     "/index.html": False,
     "/vip.html": True,
 }
@@ -101,6 +101,7 @@ _STATIC_PREFIX = "/static/"
 _RATE_LIMITED_PREFIXES = (
     "/listings",
     "/stats",
+    "/api/questionnaire",
 )
 
 

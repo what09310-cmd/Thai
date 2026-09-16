@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ThaiMonth — Carte Thaïlande</title>
-<meta property="og:title" content="ThaiMonth — Carte Thaïlande">
-<meta property="og:description" content="Toutes les annonces actives géolocalisées en Thaïlande">
+<title>ThaiMonth — Vos résultats</title>
+<meta property="og:title" content="ThaiMonth — Vos résultats">
+<meta property="og:description" content="Les logements qui correspondent à votre recherche, sur la carte.">
 <meta property="og:image" content="/static/logo.png">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -48,6 +48,18 @@
     --sky-3:    #cde8f4;
   }
 
+  /* "Votre recherche": premiere section des .controls (map.css), propre a
+     cette page -- rappelle les criteres du tunnel /789 et permet d'y
+     retourner. Le budget/la duree choisis n'y filtrent pas la carte (voir
+     le commentaire pres de LOCATION_QUERY) : la ville, elle, est deja
+     appliquee cote serveur. */
+  .search-summary { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+  .search-summary strong { color: var(--accent); }
+  .edit-search-link {
+    display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700;
+    color: var(--accent); text-decoration: none;
+  }
+  .edit-search-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -56,13 +68,18 @@
   <a class="logo" href="/" aria-label="ThaiMonth">
     <span class="logo-thai">Thai</span><span class="logo-month">Month</span>
   </a>
-  <a class="header-list" href="/premium.html">Voir les annonces</a>
+  <a class="header-list" href="/payant.html">Débloquer les contacts</a>
 </header>
 
 <main>
   <section id="map">
     <div id="leaflet-map"></div>
     <div class="controls">
+      <div class="filter-section">
+        <div class="filter-label">Votre recherche</div>
+        <div class="search-summary" id="search-summary">—</div>
+        <a class="edit-search-link" href="/789">Modifier ma recherche</a>
+      </div>
       <div class="filter-section">
         <div class="filter-label">Résultats</div>
         <div class="budget-values"><span id="result-count">— annonces</span></div>
@@ -128,35 +145,70 @@
 <script src="/static/js/map.js"></script>
 <script src="/static/js/thai-map.js"></script>
 <script>
+  // Chaque ville du tunnel /789 correspond au filtre serveur /listings deja
+  // utilise par les cartes publiques (carte-bangkok/pattaya/phuket.html):
+  // province pour Bangkok/Phuket/Chiang Mai, district pour Pattaya (dont la
+  // province reelle, Chonburi, n'est pas celle affichee au visiteur).
+  // "other" (5e choix du tunnel) ne correspond a aucune province precise:
+  // pas de filtre, la carte reste nationale.
+  const LOCATION_FIELD = {
+    bangkok: ["province", "Bangkok"],
+    phuket: ["province", "Phuket"],
+    chiang_mai: ["province", "Chiang Mai"],
+    pattaya: ["district", "Bang Lamung"],
+  };
 
-// popupHTML/modalHTML/buildMap/mapPoint/openModal vivent maintenant dans
-// thai-map.js (partages avec /resultats, le tunnel /789): cette page ne
-// garde que ce qui doit rester par page (ecoute clavier/tactile, qui
-// suppose #overlay/#lightbox-overlay presents -- vip.html ne les a pas).
+  const LOCATION_LABELS = {
+    bangkok: "Bangkok", pattaya: "Pattaya", phuket: "Phuket",
+    chiang_mai: "Chiang Mai", other: "Toute la Thaïlande",
+  };
+  const BUDGET_LABELS = {
+    under_10k: "Moins de 260 €", "10k_20k": "260 – 520 €",
+    "20k_30k": "520 – 780 €", "30k_plus": "780 €+",
+  };
+  const DURATION_LABELS = {
+    "1_month": "1 mois", "3_months": "3 mois",
+    "6_months": "6 mois", "12_months_plus": "12 mois+",
+  };
 
-document.getElementById("lightbox-overlay").addEventListener("touchstart", e => {
-  lightboxTouchStartX = e.changedTouches[0].clientX;
-}, { passive: true });
-document.getElementById("lightbox-overlay").addEventListener("touchend", e => {
-  if (lightboxTouchStartX === null) return;
-  const delta = e.changedTouches[0].clientX - lightboxTouchStartX;
-  lightboxTouchStartX = null;
-  if (Math.abs(delta) < 40) return;
-  navigateLightbox(delta > 0 ? -1 : 1);
-}, { passive: true });
+  function readCriteria() {
+    try {
+      const raw = sessionStorage.getItem("tm_search_criteria");
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  }
 
-document.addEventListener("keydown", trapModalFocus);
+  const criteria = readCriteria();
+  if (!criteria) {
+    window.location.href = "/789";
+  } else {
+    // Lu par thai-map.js::loadAds() (typeof LOCATION_QUERY !== "undefined"):
+    // memes filtres province/district que city-map.js, appliques ici en plus
+    // du filtre budget/duree deja existant sur cette carte. Le budget/la
+    // duree du tunnel restent seulement informatifs (unites incompatibles
+    // avec le slider EUR existant, voir le compte-rendu d'analyse) --
+    // l'utilisateur peut affiner lui-meme avec les controles ci-dessous.
+    const field = LOCATION_FIELD[criteria.location];
+    // `var`, pas `const`: doit rester lisible via `typeof LOCATION_QUERY`
+    // dans thai-map.js sans jamais avoir ete declaree sur vip.html/
+    // carte-thailande.html -- une simple affectation suffirait aussi, mais
+    // `var` documente que c'est une variable globale volontaire.
+    var LOCATION_QUERY = field ? `${field[0]}=${encodeURIComponent(field[1])}` : "";
 
-document.addEventListener("keydown", e => {
-  const lightboxOpen = document.getElementById("lightbox-overlay").classList.contains("open");
-  if (lightboxOpen && e.key === "ArrowLeft") { navigateLightbox(-1); return; }
-  if (lightboxOpen && e.key === "ArrowRight") { navigateLightbox(1); return; }
-  if (e.key !== "Escape") return;
-  if (lightboxOpen) { closeLightbox(); return; }
-  closeModal();
-});
+    // SHOW_LOCK_BUTTONS est deja declaree avec `let` dans map.js (charge
+    // avant ce script): une simple affectation modifie ce `let` partage,
+    // la re-declarer ici avec `let`/`const` lancerait "already declared".
+    SHOW_LOCK_BUTTONS = true;
 
-loadAds();
+    document.getElementById("search-summary").innerHTML =
+      `<strong>${esc(LOCATION_LABELS[criteria.location] || "—")}</strong>` +
+      (criteria.budget_label ? ` · ${esc(criteria.budget_label)}` : "") +
+      (criteria.duration_label ? ` · ${esc(criteria.duration_label)}` : "");
+
+    loadAds();
+  }
 </script>
 </body>
 </html>

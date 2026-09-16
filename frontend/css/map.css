@@ -1,5 +1,5 @@
 /* map.css -- Carte Thailande / VIP: filtres budget-duree, popups.
-   Partage par: vip, carte-thailande. */
+   Partage par: vip, carte-thailande, resultats. */
 
 html,body{height:100%}
 
@@ -143,3 +143,236 @@ main{ height:100vh }
       max-height:calc(100% - 86px);overflow-y:auto
     }
   }
+
+/* ---------------------------------------------------------------------
+   Popup riche + modale (extrait de carte-thailande.html): partage avec
+   /resultats (tunnel /789, js/thai-map.js::popupHTML/modalHTML). Les
+   classes popup-lg/popup-*/modal-gallery-item/badge/overlay/lightbox-*/
+   modal-close/mc-val ci-dessous etaient dans le <style> de la page; vip.html
+   les charge aussi mais ne les utilise pas (buildMap y est redefini sans
+   popup riche), sans effet visuel puisque ces classes n'apparaissent pas
+   dans son HTML. */
+  /* Popup "fiche": la carte occupe toute la bulle, la photo vient a fond
+     perdu, d'ou la marge nulle et l'overflow masque. */
+  .popup-lg .leaflet-popup-content-wrapper{ padding:0;overflow:hidden;border-radius:var(--r-card) }
+  .popup-lg .leaflet-popup-content{ margin:0;width:390px !important;line-height:1.45 }
+  .popup-lg .leaflet-popup-close-button{
+    color:#fff !important;background:rgba(20,19,15,.45);backdrop-filter:blur(4px);
+    border-radius:50%;width:26px !important;height:26px !important;
+    line-height:24px !important;top:10px !important;right:10px !important;
+    font-size:16px !important;z-index:5;transition:background .15s
+  }
+  .popup-lg .leaflet-popup-close-button:hover{ background:rgba(20,19,15,.7) }
+
+  .popup-card{ display:flex;flex-direction:column;max-height:82vh }
+
+  /* Photos */
+  .popup-photos-wrap{ position:relative }
+  .popup-photos{
+    display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+    background:var(--border);scrollbar-width:none
+  }
+  .popup-photos::-webkit-scrollbar{ display:none }
+  .popup-photos.is-empty{ display:none }
+  .popup-photo{ position:relative;flex:0 0 100%;height:200px;scroll-snap-align:center }
+  .popup-photo img{
+    height:200px;width:100%;object-fit:cover;display:block;background:var(--border);
+    transform:scaleX(-1);cursor:default;pointer-events:none;
+    -webkit-user-drag:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none
+  }
+  /* Filigrane texte "ThaiMonth" (memes couleurs que le logo de l'en-tete):
+     motif repete sur toute la photo + pastille pleine en bas a droite. */
+  .wm-tile{
+    position:absolute;inset:-40%;display:flex;flex-wrap:wrap;gap:6px 10px;
+    align-content:space-around;justify-content:space-around;
+    transform:rotate(-18deg);pointer-events:none;user-select:none;opacity:.9
+  }
+  .wm-tile span{
+    font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.4px;
+    white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.7),0 0 8px rgba(0,0,0,.35)
+  }
+  .wm-thai{ color:var(--brand-lime) }
+  .wm-month{ color:var(--brand-gold) }
+  .wm-badge{
+    position:absolute;right:10px;bottom:10px;pointer-events:none;user-select:none;
+    background:#1d3c10;border-radius:var(--r-pill);padding:6px 13px;
+    font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.4px;
+    line-height:1;box-shadow:0 3px 10px rgba(20,19,15,.35)
+  }
+  .modal-gallery-item .wm-tile span{ font-size:17px }
+  .modal-gallery-item .wm-badge{ font-size:18px;padding:8px 16px;right:12px;bottom:12px }
+  .popup-photos-count{
+    position:absolute;left:10px;bottom:10px;z-index:3;pointer-events:none;
+    background:rgba(20,19,15,.6);backdrop-filter:blur(4px);color:#fff;
+    border-radius:var(--r-pill);padding:3px 9px;
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em
+  }
+  .popup-photos-skel{
+    height:200px;width:100%;flex:0 0 100%;
+    background:linear-gradient(90deg,var(--border) 25%,var(--bg) 50%,var(--border) 75%);
+    background-size:200% 100%;animation:popup-skel 1.2s linear infinite
+  }
+  @keyframes popup-skel{ from{background-position:200% 0} to{background-position:-200% 0} }
+
+  /* Corps scrollable */
+  .popup-body{ padding:14px 16px 4px;overflow-y:auto;display:flex;flex-direction:column;gap:12px }
+
+  .popup-price{ display:flex;align-items:baseline;gap:7px;flex-wrap:wrap }
+  .popup-price-thb{ font-weight:800;color:var(--text);font-size:22px;line-height:1.05;letter-spacing:-.5px }
+  .popup-price-unit{ font-size:14px;font-weight:600;color:var(--accent) }
+  .popup-price-eur{ font-weight:800;color:var(--accent);font-size:28px;line-height:1.05;letter-spacing:-.5px }
+  .popup-loc{ font-size:11.5px;color:var(--muted);margin-top:6px }
+
+  .popup-badges{ display:flex;flex-wrap:wrap;gap:5px;margin-top:8px }
+  .popup-badge{
+    border-radius:var(--r-pill);padding:3px 9px;font-size:9.5px;font-weight:800;
+    font-family:var(--mono);letter-spacing:.06em;color:#fff;white-space:nowrap
+  }
+  .popup-badge-1{ background:var(--accent) }
+  .popup-badge-3{ background:var(--purple) }
+  .popup-badge-6{ background:var(--brand-gold);color:var(--text) }
+
+  /* Specs en lignes label/valeur: plus calme que des cartes empilees,
+     et aligne sur le rendu de la modale. */
+  .popup-specs{
+    border:1px solid var(--border);border-radius:var(--r-ctl);
+    background:var(--bg);overflow:hidden
+  }
+  .popup-spec{
+    display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+    padding:8px 12px;border-bottom:1px solid var(--border)
+  }
+  .popup-spec:last-child{ border-bottom:none }
+  .popup-spec-label{
+    font-size:9.5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;
+    color:var(--dim);white-space:nowrap;flex-shrink:0
+  }
+  .popup-spec-val{ font-size:12px;font-weight:700;color:var(--text);text-align:right;word-break:break-word }
+  .popup-spec-val.na{ color:var(--dim);font-weight:500 }
+  .popup-spec-val.yes{ color:var(--green) }
+
+  .popup-section-head{
+    font-size:9.5px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:6px
+  }
+  .popup-rooms{ display:grid;grid-template-columns:1fr;gap:6px }
+  .popup-rooms .mc{ padding:8px 12px }
+  .popup-rooms .mc-val{ font-size:12px }
+  .popup-rooms .mc-room-group{ padding:9px;gap:6px }
+  .popup-rooms .mc-room-label{ font-size:9.5px }
+  .popup-rooms .mc-room-terms{ gap:6px }
+  .popup-rooms .mc-room-terms .mc{ flex:1 1 80px;padding:7px 9px }
+
+  .popup-amenities{ display:flex;flex-wrap:wrap;gap:5px }
+  .popup-chip{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--r-pill);
+    padding:3px 9px;font-size:10.5px;color:var(--muted);white-space:nowrap
+  }
+  .popup-chip-more{ background:var(--bg);color:var(--dim);font-weight:700 }
+
+  /* Footer colle: le CTA reste visible meme si le corps defile. */
+  .popup-actions{
+    position:sticky;bottom:0;padding:12px 16px 14px;background:var(--card);
+    border-top:1px solid var(--border);display:flex;gap:6px
+  }
+  /* `.leaflet-container a` (0,1,1) bat `.popup-btn` (0,1,0): sans ce
+     selecteur le libelle prend le bleu de lien Leaflet sur fond violet. */
+  .leaflet-container a.popup-btn{
+    flex:1;text-align:center;background:var(--accent);color:var(--accent-ink);
+    text-decoration:none;padding:11px 14px;border-radius:var(--r-pill);
+    font-size:12.5px;font-weight:700;transition:filter .15s
+  }
+  .leaflet-container a.popup-btn:hover{ filter:brightness(1.12) }
+
+  /* ── Modale (portee depuis index.html) ── */
+  .modal-gallery-item {
+    position: relative;
+    flex-shrink: 0;
+    height: 220px;
+    max-width: 85%;
+    scroll-snap-align: start;
+  }
+  .modal-gallery-item img {
+    height: 220px;
+    width: auto;
+    max-width: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: zoom-in;
+  }
+
+  .badge {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    letter-spacing: .05em;
+  }
+
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(20,19,15,.45);
+    backdrop-filter: blur(8px);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .lightbox-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 4000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    cursor: zoom-out;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-content img#lightbox-img {
+    display: block;
+    max-width: 95vw;
+    max-height: 95vh;
+    width: auto; height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    background: var(--border);
+    transform: scaleX(-1);
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    cursor: default;
+  }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+  .modal-close {
+    background: none; border: 1px solid var(--border);
+    border-radius: var(--r-pill); color: var(--muted);
+    width: 28px; height: 28px; cursor: pointer;
+    font-size: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .mc-val {
+    font-size: 13px; font-weight: 700;
+    font-family: var(--mono); color: var(--accent);
+  }
+
+/* Actions du popup pour un visiteur non premium venu de /789: deux boutons
+   verrouilles au lieu de l'unique "Voir l'annonce complete" (voir
+   SHOW_LOCK_BUTTONS dans map.js et popupActionsHTML dans thai-map.js). */
+.popup-actions-stacked{ flex-direction:column }
+.leaflet-container a.popup-btn-lock{
+  background:var(--bg);color:var(--muted);border:1px dashed var(--dim)
+}
+.leaflet-container a.popup-btn-lock:hover{ border-color:var(--accent);color:var(--accent) }

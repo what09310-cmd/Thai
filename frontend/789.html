@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiMonth — Trouvez votre logement</title>
+<meta property="og:title" content="ThaiMonth — Trouvez votre logement">
+<meta property="og:description" content="Répondez à 3 questions pour voir les logements qui correspondent à votre recherche en Thaïlande.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/static/css/common.css">
+<style>
+  :root {
+    --bg: #faf8f4;
+    --card: #ffffff;
+    --border: #e9e4da;
+    --accent: #5046f5;
+    --accent-ink: #ffffff;
+    --brand-lime: #c7ef6c;
+    --brand-gold: #e8b765;
+    --text: #14130f;
+    --muted: #6c6660;
+    --dim: #9b948b;
+    --green: #2f9e44;
+    --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --r-pill: 9999px;
+    --r-card: 20px;
+    --r-ctl: 12px;
+    --sky-1: #cfe8b8;
+    --sky-2: #dcd6f9;
+    --sky-3: #cde8f4;
+    --forest: #1d3c10;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* La bande de ciel fixe de common.css (body::before, 135px, z-index 80)
+     masque ce qui passe sous une navbar fixe ; ici tout defile avec la
+     page, donc elle ne ferait que recouvrir le haut de la carte. */
+  body::before { display: none; }
+
+  body {
+    min-height: 100vh;
+    font-family: var(--sans);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 92px 16px 64px;
+  }
+
+  /* Pilule fixe, identique a celle de la page d'accueil (test.html): hors
+     du flux, donc le padding-top du body compense sa hauteur. */
+  .pillnav {
+    position: fixed;
+    top: 18px;
+    z-index: 100;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    max-width: 640px;
+    background: var(--forest);
+    border-radius: var(--r-pill);
+    padding: 9px 10px 9px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    box-shadow: 0 10px 28px rgba(29,60,16,.22);
+  }
+
+  .pillnav-brand {
+    display: flex;
+    align-items: baseline;
+    flex-shrink: 0;
+    font-weight: 800;
+    font-size: 25px;
+    letter-spacing: -.6px;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .pillnav-cta {
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--r-pill);
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: filter .15s;
+  }
+
+  .pillnav-cta:hover { filter: brightness(1.12); }
+
+  main {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .tunnel-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    padding: 32px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  .progress-track {
+    height: 6px;
+    border-radius: var(--r-pill);
+    background: var(--border);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 33.33%;
+    background: var(--accent);
+    border-radius: var(--r-pill);
+    transition: width .3s ease;
+  }
+
+  .progress-label {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 22px;
+  }
+
+  .step { display: none; }
+
+  .step.is-active { display: block; }
+
+  h1 { font-size: 21px; margin-bottom: 20px; line-height: 1.35; }
+
+  .choices { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+
+  .choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-ctl);
+    padding: 14px 16px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    transition: border-color .15s, background .15s;
+  }
+
+  .choice:hover { border-color: var(--accent); }
+
+  .choice input { position: absolute; opacity: 0; pointer-events: none; }
+
+  .choice.is-selected {
+    border-color: var(--accent);
+    background: rgba(80,70,245,.06);
+    color: var(--accent);
+  }
+
+  .step-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 26px;
+  }
+
+  button {
+    font: inherit;
+    border-radius: var(--r-ctl);
+    cursor: pointer;
+    border: none;
+    padding: 14px 18px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  button:disabled { opacity: .5; cursor: default; }
+
+  .btn-primary { background: var(--accent); color: var(--accent-ink); flex: 1; }
+
+  .btn-back {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<nav class="pillnav" aria-label="Navigation principale">
+  <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
+  <a class="pillnav-cta" href="/payant.html">Version Payante</a>
+</nav>
+
+<main>
+  <div class="tunnel-card">
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="progress-label" id="progress-label">Étape 1/3</div>
+
+    <form id="tunnel-form" novalidate>
+      <section class="step is-active" data-step="1">
+        <h1>Où souhaitez-vous louer en Thaïlande ?</h1>
+        <div class="choices" id="location-choices" role="radiogroup" aria-label="Localisation">
+          <label class="choice"><input type="radio" name="location" value="bangkok">Bangkok</label>
+          <label class="choice"><input type="radio" name="location" value="pattaya">Pattaya</label>
+          <label class="choice"><input type="radio" name="location" value="phuket">Phuket</label>
+          <label class="choice"><input type="radio" name="location" value="chiang_mai">Chiang Mai</label>
+          <label class="choice"><input type="radio" name="location" value="other">Autre</label>
+        </div>
+        <div class="step-actions">
+          <button type="button" class="btn-primary" id="next-1" disabled>Continuer</button>
+        </div>
+      </section>
+
+      <section class="step" data-step="2">
+        <h1>Quel est votre budget mensuel ?</h1>
+        <div class="choices" id="budget-choices" role="radiogroup" aria-label="Budget mensuel">
+          <label class="choice"><input type="radio" name="budget" value="under_10k">Moins de 150 €</label>
+          <label class="choice"><input type="radio" name="budget" value="10k_20k">150 – 300 €</label>
+          <label class="choice"><input type="radio" name="budget" value="20k_30k">300 – 500 €</label>
+          <label class="choice"><input type="radio" name="budget" value="30k_plus">500 €+</label>
+        </div>
+        <div class="step-actions">
+          <button type="button" class="btn-back" id="back-2">Retour</button>
+          <button type="button" class="btn-primary" id="next-2" disabled>Continuer</button>
+        </div>
+      </section>
+
+      <section class="step" data-step="3">
+        <h1>Combien de temps souhaitez-vous louer ?</h1>
+        <div class="choices" id="duration-choices" role="radiogroup" aria-label="Durée du contrat">
+          <label class="choice"><input type="radio" name="contract_duration" value="1_month">1 mois</label>
+          <label class="choice"><input type="radio" name="contract_duration" value="3_months">3 mois</label>
+          <label class="choice"><input type="radio" name="contract_duration" value="6_months">6 mois</label>
+          <label class="choice"><input type="radio" name="contract_duration" value="12_months_plus">12 mois+</label>
+        </div>
+        <div class="step-actions">
+          <button type="button" class="btn-back" id="back-3">Retour</button>
+          <button type="submit" class="btn-primary" id="submit-btn" disabled>Voir les logements correspondant à ma recherche →</button>
+        </div>
+      </section>
+    </form>
+  </div>
+</main>
+
+<script src="/static/js/common.js"></script>
+<script>
+  const LOCATION_LABELS = {
+    bangkok: "Bangkok", pattaya: "Pattaya", phuket: "Phuket",
+    chiang_mai: "Chiang Mai", other: "Autre",
+  };
+  const BUDGET_LABELS = {
+    under_10k: "Moins de 150 €", "10k_20k": "150 – 300 €",
+    "20k_30k": "300 – 500 €", "30k_plus": "500 €+",
+  };
+  const DURATION_LABELS = {
+    "1_month": "1 mois", "3_months": "3 mois",
+    "6_months": "6 mois", "12_months_plus": "12 mois+",
+  };
+
+  // Bornes numeriques de chaque tranche de budget, uniquement utilisees
+  // pour interroger /listings?price_min=&price_max= sur /resultats: la
+  // reponse au questionnaire garde le libelle (budget), pas ces bornes.
+  const BUDGET_RANGES = {
+    under_10k: { min: null, max: 5742 },
+    "10k_20k": { min: 5742, max: 11484 },
+    "20k_30k": { min: 11484, max: 19140 },
+    "30k_plus": { min: 19140, max: null },
+  };
+
+  const answers = { location: null, neighborhood: "", budget: null, contract_duration: null };
+
+  const form = document.getElementById("tunnel-form");
+  const progressFill = document.getElementById("progress-fill");
+  const progressLabel = document.getElementById("progress-label");
+  const steps = Array.from(form.querySelectorAll(".step"));
+
+  function showStep(n) {
+    steps.forEach((s) => s.classList.toggle("is-active", s.dataset.step === String(n)));
+    progressFill.style.width = (n / 3 * 100) + "%";
+    progressLabel.textContent = `Étape ${n}/3`;
+  }
+
+  function wireChoiceGroup(name, nextBtnId, onPick) {
+    const inputs = form.querySelectorAll(`input[name="${name}"]`);
+    const nextBtn = document.getElementById(nextBtnId);
+    inputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        inputs.forEach((i) => i.closest(".choice").classList.toggle("is-selected", i.checked));
+        if (nextBtn) nextBtn.disabled = false;
+        if (onPick) onPick(input.value);
+      });
+    });
+  }
+
+  wireChoiceGroup("location", "next-1", (value) => { answers.location = value; });
+  wireChoiceGroup("budget", "next-2", (value) => { answers.budget = value; });
+  wireChoiceGroup("contract_duration", "submit-btn", (value) => { answers.contract_duration = value; });
+
+  document.getElementById("next-1").addEventListener("click", () => showStep(2));
+  document.getElementById("back-2").addEventListener("click", () => showStep(1));
+  document.getElementById("next-2").addEventListener("click", () => showStep(3));
+  document.getElementById("back-3").addEventListener("click", () => showStep(2));
+
+  function getSessionToken() {
+    try {
+      let token = localStorage.getItem("tm_session_token");
+      if (!token) {
+        token = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+        localStorage.setItem("tm_session_token", token);
+      }
+      return token;
+    } catch (err) {
+      return String(Date.now()) + Math.random().toString(16).slice(2);
+    }
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const submitBtn = document.getElementById("submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Recherche en cours…";
+
+    try {
+      await fetch(`${API}/api/questionnaire`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_token: getSessionToken(),
+          location: answers.location,
+          neighborhood: answers.neighborhood || null,
+          budget: answers.budget,
+          contract_duration: answers.contract_duration,
+        }),
+      });
+    } catch (err) {
+      // La recherche de logements ne depend pas de cet enregistrement.
+    }
+
+    try {
+      sessionStorage.setItem("tm_search_criteria", JSON.stringify({
+        location: answers.location,
+        location_label: LOCATION_LABELS[answers.location],
+        budget_label: BUDGET_LABELS[answers.budget],
+        duration_label: DURATION_LABELS[answers.contract_duration],
+        contract_duration: answers.contract_duration,
+        ...BUDGET_RANGES[answers.budget],
+      }));
+    } catch (err) {
+      // Session storage indisponible (navigation privee stricte): /resultats
+      // renverra alors vers /789 faute de criteres, ce qui reste correct.
+    }
+
+    window.location.href = "/resultats";
+  });
+</script>
+</body>
+</html>

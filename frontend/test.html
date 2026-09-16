@@ -475,7 +475,7 @@
      La photo vient d'une vraie annonce de la base.
      ══════════════════════════════════════════════════════════════════ */
 
-  .how { background: var(--bg); padding: 16px 24px 72px; text-align: center; }
+  .how { background: var(--bg); padding: 140px 24px 72px; text-align: center; }
   .how-title {
     font-family: var(--display);
     font-size: clamp(28px, 4.4vw, 46px);
@@ -660,7 +660,7 @@
 
   /* La navbar fixe recouvrirait le titre quand on saute ici depuis le
      pied de page : on decale la cible d'ancre de sa hauteur. */
-  .faq { background: var(--bg); padding: 8px 24px 96px; scroll-margin-top: 92px; }
+  .faq { background: var(--bg); padding: 8px 24px 48px; scroll-margin-top: 92px; }
   .faq-inner { max-width: 620px; margin: 0 auto; }
   .faq-title {
     font-family: var(--display);
@@ -679,6 +679,7 @@
   .faq-card summary {
     display: flex; align-items: center; justify-content: space-between;
     gap: 18px; padding: 18px 22px; cursor: pointer;
+    font-family: var(--display);
     font-size: 16px; font-weight: 600; color: #14130f;
     list-style: none;
   }
@@ -714,7 +715,7 @@
   .cta-final {
     position: relative; overflow: hidden;
     background: var(--bg);
-    padding: 104px 24px 116px;
+    padding: 56px 24px 116px;
     text-align: center;
   }
   .cta-final::before, .cta-final::after {
@@ -746,7 +747,7 @@
      ══════════════════════════════════════════════════════════════════ */
 
   .site-footer {
-    background: #fff;
+    background: var(--bg);
     border-top: 1px solid var(--border);
     padding: 30px 24px 26px;
   }
@@ -805,7 +806,7 @@
 
 <!-- Navbar fixe : hors du hero, qui a overflow:hidden et la retiendrait. -->
 <nav class="pillnav" aria-label="Navigation principale">
-  <a class="pillnav-brand" href="/test"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
+  <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
   <a class="pillnav-cta" href="payant.html">Version Payante</a>
 </nav>
 
@@ -988,14 +989,9 @@
         </summary>
         <div class="faq-answer">
           <p>
-            Les loyers sont fixés en bahts par les propriétaires. Les montants
-            en euros de cette page sont <strong>indicatifs</strong>&nbsp;: ils
-            sont convertis à taux fixe, et arrondis à la dizaine au-delà de
-            150&nbsp;€.
-          </p>
-          <p>
-            Le montant exact, dans sa devise d&rsquo;origine, vous est
-            communiqué avec la fiche complète du logement.
+            Les prix affichés sont en euros, convertis à taux fixe depuis le baht thaïlandais.
+            Les montants sont <strong>indicatifs</strong>&nbsp;: ils sont arrondis à la dizaine
+            au-delà de 150&nbsp;€.
           </p>
         </div>
       </details>

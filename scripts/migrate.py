@@ -25,9 +25,9 @@ la main, et couvre les cas suivants, dans l'ordre:
    avant que _mark_scan_failed n'existe) -> "failed"; content_hash recalcule apres un changement de
    HASH_FIELDS, sans quoi le scan suivant ecrit un UPDATED par annonce;
 7. avec --drop-orphans: tables sans modele (locations, provinces,
-   rental_requests) et colonnes absentes du modele (listings.city,
-   listings.published_at, listing_images.local_path -- jamais renseignees),
-   vestiges de fonctionnalites retirees.
+   rental_requests, questionnaire_responses) et colonnes absentes du modele
+   (listings.city, listings.published_at, listing_images.local_path --
+   jamais renseignees), vestiges de fonctionnalites retirees.
 
 Sauvegarder la base avant (voir .claude/rules/scripts.md): les etapes 3
 et 7 suppriment des lignes.
@@ -57,7 +57,7 @@ OBSOLETE_INDEXES = {
 # Tables creees par des fonctionnalites retirees (crawler geo_discovery,
 # table provinces jamais alimentee, formulaire rental_requests jamais
 # branche). Supprimees seulement sur demande explicite.
-ORPHAN_TABLES = ("locations", "provinces", "rental_requests")
+ORPHAN_TABLES = ("locations", "provinces", "rental_requests", "questionnaire_responses")
 
 # Age au-dela duquel un ScanLog encore "running" est considere abandonne.
 STUCK_AFTER = timedelta(hours=12)
