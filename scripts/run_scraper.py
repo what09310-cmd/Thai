@@ -36,6 +36,13 @@ from src.scraper.list_scraper import scrape_all_listings, scrape_all_location_li
 from src.tracker.change_detector import load_existing, mark_removed_listings, upsert_listing
 from src.tracker.exporter import export_listings
 
+# Sous Windows, une sortie redirigee (fichier de log, pipe) est encodee en
+# cp1252 et les emojis du rapport font planter rich (UnicodeEncodeError):
+# le scan s'arretait avant meme de commencer. UTF-8 partout, sans exception.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 console = Console()
 
 

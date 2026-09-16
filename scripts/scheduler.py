@@ -23,6 +23,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.config import settings
 
+# Sous Windows, une sortie redirigee (fichier de log, pipe) est encodee en
+# cp1252 et les emojis du rapport font planter rich (UnicodeEncodeError):
+# le scan s'arretait avant meme de commencer. UTF-8 partout, sans exception.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
