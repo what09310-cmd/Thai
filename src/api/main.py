@@ -35,6 +35,7 @@ from fastapi.responses import (
     FileResponse, HTMLResponse, JSONResponse, RedirectResponse,
 )
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy import func, desc, distinct, inspect, text as sa_text
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -376,7 +377,48 @@ def get_db():
 
 
 def _client_key(request: Request) -> str:
+    """Adresse du client, cle des compteurs de debit et d'echecs de login.
+
+    Derriere un proxy inverse (tunnel Cloudflare du lanceur, Render,
+    docker-compose derriere nginx), `request.client.host` est l'adresse du
+    proxy: tous les visiteurs partageaient alors un seul budget de 60
+    requetes par minute -- les cartes cassaient des deux ou trois visiteurs
+    simultanes -- et cinq mots de passe faux saisis par n'importe qui
+    verrouillaient /login pour tout le monde pendant quinze minutes.
+
+    `--proxy-headers --forwarded-allow-ips="*"` (Dockerfile, render.yaml)
+    ne corrige pas cela: uvicorn prend alors la *premiere* adresse de
+    X-Forwarded-For, c'est-a-dire celle que le client a ecrite lui-meme, et
+    les deux plafonds se contournent en changeant l'en-tete a chaque
+    requete. On lit donc l'en-tete depuis la fin, en remontant d'autant de
+    sauts qu'il y a de proxys de confiance (TRUSTED_PROXY_HOPS): le dernier
+    element a ete ecrit par le proxy qui nous parle, pas par le client.
+    """
+    hops = settings.trusted_proxy_hops
+    if hops > 0:
+        forwarded = [
+            part.strip()
+            for part in request.headers.get("x-forwarded-for", "").split(",")
+            if part.strip()
+        ]
+        if len(forwarded) >= hops:
+            return forwarded[-hops]
     return request.client.host if request.client else "unknown"
+
+
+def _forwarded_https(request: Request) -> bool:
+    """Vrai si un proxy de confiance annonce que le client parle en HTTPS.
+
+    Le tunnel Cloudflare et Render terminent le TLS: l'application voit du
+    http, et `request.url_for` fabrique des URLs en http:// -- que Google
+    refuse comme URI de redirection OAuth. L'en-tete n'est cru que derriere
+    un proxy declare (TRUSTED_PROXY_HOPS), sinon n'importe quel client
+    pourrait le poser.
+    """
+    if settings.trusted_proxy_hops <= 0:
+        return False
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return proto == "https"
 
 
 def _session(request: Request) -> SessionInfo | None:
@@ -471,7 +513,17 @@ def register_submit(
         return HTMLResponse(
             _render_auth_page("register", "Un compte existe déjà avec cet email"), status_code=409
         )
-    user = register_user(db, email, password)
+    try:
+        user = register_user(db, email, password)
+    except IntegrityError:
+        # Deux inscriptions simultanees du meme email: la seconde passe le
+        # test d'unicite ci-dessus puis echoue sur la contrainte de la
+        # table. Sans ce rattrapage, elle sortait en 500.
+        db.rollback()
+        register_failed_login(client_key)
+        return HTMLResponse(
+            _render_auth_page("register", "Un compte existe déjà avec cet email"), status_code=409
+        )
     return _login_response(token_for_user(user))
 
 
@@ -480,7 +532,7 @@ async def google_login(request: Request):
     if not _google_configured():
         raise HTTPException(status_code=404, detail="Connexion Google non configurée")
     redirect_uri = str(request.url_for("google_callback"))
-    if settings.cookie_secure and redirect_uri.startswith("http://"):
+    if (settings.cookie_secure or _forwarded_https(request)) and redirect_uri.startswith("http://"):
         # Derriere un tunnel/proxy TLS, l'app voit du http; Google, lui,
         # exige l'URI exacte declaree (https).
         redirect_uri = "https://" + redirect_uri[len("http://"):]
@@ -505,6 +557,15 @@ async def google_callback(request: Request, db: SASession = Depends(get_db)):
             _render_auth_page("login", "Google n'a pas fourni d'adresse email"), status_code=400
         )
     user = get_or_create_google_user(db, sub, email, bool(info.get("email_verified")))
+    if user is None:
+        return HTMLResponse(
+            _render_auth_page(
+                "login",
+                "Google n'a pas vérifié cette adresse email : "
+                "connectez-vous avec votre mot de passe ou créez un compte",
+            ),
+            status_code=403,
+        )
     return _login_response(token_for_user(user))
 
 
@@ -715,7 +776,7 @@ class PublicStatsResponse(BaseModel):
 # authentifiés. `deposit`/`electric_price` restent publics (repris dans
 # `description` via build_contact_description, affichés sur les pages
 # publiques payant.html et /test).
-_CONTACT_FIELDS = ("phone", "line_id", "whatsapp", "email")
+_CONTACT_FIELDS = ("phone", "line_id", "whatsapp", "email", "line_verified")
 
 # Colonnes de suivi interne: aucun interet pour un client, et elles
 # decrivent le fonctionnement du tracker (etat du hash, nombre de scans
@@ -915,7 +976,14 @@ def get_listings(
     query = _apply_filters(query, province, district, price_min, price_max, monthly, status)
 
     if updated_since:
-        query = query.filter(Listing.source_updated_at >= datetime.combine(updated_since, datetime.min.time()))
+        # Minuit *local* (settings.tz) converti en UTC, comme les compteurs
+        # "du jour" de /stats: les colonnes portent une heure murale UTC, et
+        # un minuit naif etait lu comme minuit UTC, soit 7 h de decalage
+        # sur la frontiere du jour a Bangkok.
+        since = datetime.combine(
+            updated_since, datetime.min.time(), tzinfo=ZoneInfo(settings.tz)
+        ).astimezone(timezone.utc)
+        query = query.filter(Listing.source_updated_at >= since)
 
     # Departage par id: sans lui, deux annonces de meme source_updated_at
     # peuvent changer d'ordre entre deux requetes, et la pagination par

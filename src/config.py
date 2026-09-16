@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # des virgules. Vide par defaut: le frontend etant servi par cette meme
     # application, les appels sont same-origin et le CORS est inutile.
     cors_allow_origins: str = ""
+    # Nombre de proxys inverses de confiance devant l'application (tunnel
+    # Cloudflare, Render, nginx...). 0 = aucun: l'adresse du client est celle
+    # de la connexion TCP. N > 0: l'adresse du client est la N-ieme en partant
+    # de la fin de X-Forwarded-For, celle qu'a ecrite le proxy de confiance.
+    # Sans ce reglage, derriere un proxy, tous les visiteurs partagent la
+    # meme adresse (celle du proxy) et donc le meme budget de requetes et le
+    # meme compteur d'echecs de connexion. Voir src/api/main.py::_client_key.
+    trusted_proxy_hops: int = 0
     # OAuth Google (connexion "Continuer avec Google"). Les deux vides =>
     # le bouton n'apparait pas et /auth/google repond 404. URL de redirection
     # a declarer dans Google Cloud Console: <origine>/auth/google/callback.

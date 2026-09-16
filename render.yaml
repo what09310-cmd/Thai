@@ -9,7 +9,9 @@ services:
     name: renthub-tracker-api
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    # requirements-api.txt et non requirements.txt: le service n'a besoin ni
+    # du scraper (scrapling, playwright) ni des outils d'export (pandas).
+    buildCommand: pip install -r requirements-api.txt
     startCommand: python -m uvicorn src.api.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /health
     envVars:
@@ -19,6 +21,10 @@ services:
           property: connectionString
       - key: COOKIE_SECURE
         value: "true"
+      # Render est le seul proxy devant l'application: l'adresse du client
+      # est la derniere de X-Forwarded-For (voir src/api/main.py::_client_key).
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
       - key: CORS_ALLOW_ORIGINS
         value: "https://what09310-cmd.github.io"
       - key: TZ

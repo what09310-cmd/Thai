@@ -233,15 +233,27 @@ def authenticate_user(db: SASession, email: str, password: str) -> User | None:
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt())
 
 
-def get_or_create_google_user(db: SASession, sub: str, email: str, email_verified: bool) -> User:
+def get_or_create_google_user(
+    db: SASession, sub: str, email: str, email_verified: bool
+) -> User | None:
     """Retrouve le compte par `sub`, sinon par email (verifie), sinon le cree.
 
     Rattacher par email un compte existant suppose que Google atteste de
     l'adresse: sans `email_verified`, n'importe quel compte Google portant
     l'email d'un utilisateur s'emparerait de son compte.
+
+    Un email non verifie ne sert pas non plus a *creer* un compte: `email`
+    est unique dans `users`, donc l'insertion echouait en IntegrityError
+    (un 500) des qu'un compte a mot de passe portait deja l'adresse, et
+    quand elle passait, elle reservait l'adresse a quelqu'un qui n'en a
+    pas prouve la propriete -- son vrai proprietaire ne pouvait plus
+    s'inscrire, et un passage en premium "par email" lui aurait profite.
+    Rend None dans ce cas: l'appelant invite a se connecter autrement.
     """
     user = db.query(User).filter(User.google_sub == sub).first()
-    if user is None and email_verified:
+    if user is None:
+        if not email_verified:
+            return None
         user = get_user_by_email(db, email)
         if user is not None:
             user.google_sub = sub

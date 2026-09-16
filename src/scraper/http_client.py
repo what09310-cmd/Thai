@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import httpx
@@ -59,6 +61,36 @@ def is_allowed_url(url: str) -> bool:
     """Vrai si l'URL vise RentHub en http(s)."""
     parsed = urlparse(url)
     return parsed.scheme in ("http", "https") and parsed.hostname in ALLOWED_HOSTS
+
+
+# Attente sur un 429 quand Retry-After manque ou est illisible, et plafond
+# quel que soit ce que le serveur demande.
+RETRY_AFTER_DEFAULT_S = 60
+RETRY_AFTER_MAX_S = 300
+
+
+def _retry_after_seconds(header: Optional[str]) -> int:
+    """Delai a respecter apres un 429, borne a [1, RETRY_AFTER_MAX_S].
+
+    `int(header)` levait ValueError sur la forme HTTP-date de l'en-tete
+    ("Wed, 21 Oct 2026 07:28:00 GMT"), et l'exception remontait comme un
+    echec definitif de la page au lieu d'une simple attente. Une valeur
+    demesuree, elle, endormait le scan pour des heures.
+    """
+    if not header:
+        return RETRY_AFTER_DEFAULT_S
+    header = header.strip()
+    if header.isdigit():
+        seconds = int(header)
+    else:
+        try:
+            when = parsedate_to_datetime(header)
+        except (TypeError, ValueError):
+            return RETRY_AFTER_DEFAULT_S
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        seconds = int((when - datetime.now(timezone.utc)).total_seconds())
+    return max(1, min(seconds, RETRY_AFTER_MAX_S))
 
 
 # `time.monotonic` est global au processus: il traverse sans probleme
@@ -183,7 +215,7 @@ class ScraperClient:
 
             if response.status_code == 429:
                 # Rate limited: attendre plus longtemps
-                wait_time = int(response.headers.get("Retry-After", 60))
+                wait_time = _retry_after_seconds(response.headers.get("Retry-After"))
                 log.warning(f"Rate limited (429), attente {wait_time}s")
                 await asyncio.sleep(wait_time)
                 raise httpx.TimeoutException(f"Rate limited, retrying after {wait_time}s")

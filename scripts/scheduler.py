@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -61,9 +62,15 @@ def main() -> None:
     log.info("Scheduler démarré: scan toutes les %d minutes", interval)
 
     scheduler = BlockingScheduler()
-    # Sans start_date explicite, IntervalTrigger déclenche un premier
-    # passage immédiatement, puis toutes les `interval` minutes.
-    scheduler.add_job(run_scan, IntervalTrigger(minutes=interval))
+    # `next_run_time` explicite: sans lui, IntervalTrigger place le premier
+    # passage a maintenant + `interval` (le commentaire precedent affirmait
+    # l'inverse), et un conteneur fraichement demarre restait sans scan
+    # pendant une demi-heure.
+    scheduler.add_job(
+        run_scan,
+        IntervalTrigger(minutes=interval),
+        next_run_time=datetime.now(timezone.utc),
+    )
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):

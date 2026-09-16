@@ -182,10 +182,25 @@ def parse_listing_page_json(html: str) -> Optional[list[ListingRaw]]:
     except (KeyError, TypeError):
         return None
 
+    if not isinstance(items, list):
+        return None
+
     listings = []
     seen_slugs = set()
     for item in items:
-        result = listing_from_json_item(item)
+        # Un seul item hors format (prix en chaine, `price` qui n'est pas un
+        # objet...) faisait echouer la page entiere, et l'exception remontait
+        # jusqu'a run_scraper: le scan complet tombait pour une carte. On
+        # ignore la carte et on garde les autres.
+        try:
+            result = listing_from_json_item(item) if isinstance(item, dict) else None
+        except Exception as e:
+            log.warning(
+                "Carte JSON ignoree (%s): %s",
+                e,
+                item.get("slug") if isinstance(item, dict) else item,
+            )
+            continue
         if result and result.slug not in seen_slugs:
             seen_slugs.add(result.slug)
             listings.append(result)
@@ -193,14 +208,26 @@ def parse_listing_page_json(html: str) -> Optional[list[ListingRaw]]:
 
 
 def extract_last_page_json(html: str) -> Optional[int]:
-    """Lit `pagination.totalPages` depuis le JSON __NEXT_DATA__."""
+    """Lit `pagination.totalPages` depuis le JSON __NEXT_DATA__.
+
+    La valeur est validee comme un entier >= 1: telle quelle, une chaine
+    ou un null seraient passes a `min()` et `range()` dans list_scraper, qui
+    levent TypeError -- fin du scan pour une page d'entete inhabituelle.
+    """
     data = extract_next_data(html)
     if not data:
         return None
     try:
-        return data["props"]["pageProps"]["pagination"]["totalPages"]
+        total = data["props"]["pageProps"]["pagination"]["totalPages"]
     except (KeyError, TypeError):
         return None
+    if isinstance(total, bool):
+        return None
+    if isinstance(total, str) and total.isdigit():
+        total = int(total)
+    if not isinstance(total, int) or total < 1:
+        return None
+    return total
 
 
 # Slugs de pages utilitaires (nav/footer) à ignorer dans la stratégie

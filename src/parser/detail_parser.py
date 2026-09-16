@@ -28,21 +28,33 @@ CDN_BASE = "https://bcdn.renthub.in.th"
 _MAX_COORD_MATCHES = 200
 
 
+# Valeur par defaut du parametre `next_data` des extracteurs: "non fourni",
+# a distinguer de None qui signifie "la page n'a pas de JSON exploitable".
+_NOT_GIVEN = object()
+
+
+def _next_data_or_extract(soup: Selector, next_data) -> Optional[dict]:
+    return _extract_next_data(soup) if next_data is _NOT_GIVEN else next_data
+
+
 def parse_detail_page(html: str, url: str) -> Optional[ListingDetail]:
     """Parse la page détail d'une annonce."""
     try:
         soup = Selector(html)
+        # Lu une seule fois: ce JSON pese souvent plusieurs centaines de Ko
+        # et cinq extracteurs le decodaient chacun de leur cote.
+        next_data = _extract_next_data(soup)
 
         source_id = _extract_listing_no(soup)
         description = _extract_description(soup)
         amenities = _extract_amenities_from_icons(soup)
         if amenities is None:
             amenities = derive_amenities(description)
-        room_types = _extract_room_types(soup)
+        room_types = _extract_room_types(soup, next_data=next_data)
         images = _extract_images(soup)
-        phone, line_id, whatsapp, email = _extract_contacts(soup)
-        deposit, advance, electric, water, service = _extract_fees(soup)
-        latitude, longitude = _extract_coordinates(soup, html)
+        phone, line_id, whatsapp, email = _extract_contacts(soup, next_data=next_data)
+        deposit, advance, electric, water, service = _extract_fees(soup, next_data=next_data)
+        latitude, longitude = _extract_coordinates(soup, html, next_data=next_data)
 
         return ListingDetail(
             source_id=source_id,
@@ -61,7 +73,7 @@ def parse_detail_page(html: str, url: str) -> Optional[ListingDetail]:
             service_fee=service,
             latitude=latitude,
             longitude=longitude,
-            has_structured_data=_has_listing_payload(_extract_next_data(soup)),
+            has_structured_data=_has_listing_payload(next_data),
         )
     except Exception as e:
         log.warning(f"Erreur parsing détail {url}: {e}")
@@ -239,7 +251,7 @@ def _extract_room_types_from_next_data(next_data: Optional[dict]) -> Optional[li
     return result
 
 
-def _extract_room_types(soup: Selector) -> list[RoomTypeSchema]:
+def _extract_room_types(soup: Selector, next_data=_NOT_GIVEN) -> list[RoomTypeSchema]:
     """
     Extrait le tableau des types de chambre.
 
@@ -247,7 +259,7 @@ def _extract_room_types(soup: Selector) -> list[RoomTypeSchema]:
     Room Type | Size | Monthly Rental | Daily Rental | Short Contract | Status
     + sous-tableau: Contract 1 month / Contract 3 month / Contract 6 month
     """
-    from_next_data = _extract_room_types_from_next_data(_extract_next_data(soup))
+    from_next_data = _extract_room_types_from_next_data(_next_data_or_extract(soup, next_data))
     if from_next_data is not None:
         return from_next_data
 
@@ -549,9 +561,11 @@ def _page_has_whatsapp_link(soup: Selector) -> bool:
     return any("wa.me/" in a.attrib.get("href", "") for a in soup.css("a[href]"))
 
 
-def _extract_contacts(soup: Selector) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+def _extract_contacts(
+    soup: Selector, next_data=_NOT_GIVEN
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """Extrait phone, line_id, whatsapp, email."""
-    from_next_data = _extract_contacts_from_next_data(_extract_next_data(soup))
+    from_next_data = _extract_contacts_from_next_data(_next_data_or_extract(soup, next_data))
     if from_next_data:
         phone, line_id, whatsapp, email = from_next_data
         if whatsapp and not _page_has_whatsapp_link(soup):
@@ -704,10 +718,12 @@ def _extract_fees_from_next_data(
     return deposit, advance, electric, water, service
 
 
-def _extract_fees(soup: Selector) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
+def _extract_fees(
+    soup: Selector, next_data=_NOT_GIVEN
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
     """Extrait Deposit, Advance payment, Electric price, Water price, Service fee."""
     json_deposit, json_advance, json_electric, json_water, json_service = (
-        _extract_fees_from_next_data(_extract_next_data(soup))
+        _extract_fees_from_next_data(_next_data_or_extract(soup, next_data))
     )
 
     def _find_value(label_pattern: str) -> Optional[str]:
@@ -744,7 +760,8 @@ def _extract_fees(soup: Selector) -> tuple[Optional[str], Optional[str], Optiona
 
 def _extract_coordinates(
     soup: Selector,
-    html: str
+    html: str,
+    next_data=_NOT_GIVEN,
 ) -> tuple[Optional[float], Optional[float]]:
     """
     Extrait latitude/longitude depuis une page RentHub.
@@ -785,7 +802,7 @@ def _extract_coordinates(
     # pages sans ce JSON.
 
     try:
-        location = _extract_next_data(soup)["props"]["pageProps"]["listing"]["location"]
+        location = _next_data_or_extract(soup, next_data)["props"]["pageProps"]["listing"]["location"]
     except (KeyError, TypeError):
         location = None
 

@@ -64,6 +64,20 @@ PRICE_FIELDS = [
 ]
 
 
+def _to_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Ramene une date aware en UTC avant stockage.
+
+    Le type DATETIME de SQLite ecarte le fuseau a l'ecriture et garde
+    l'heure murale: une date en Asia/Bangkok (repli HTML de
+    list_parser._extract_date) etait donc stockee avec 7 h d'avance sur
+    les dates UTC du chemin JSON, et relue comme de l'UTC par l'API. Une
+    date naive est laissee telle quelle (convention: deja UTC).
+    """
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc)
+
+
 def apply_detail_fields(db_listing: Listing, detail) -> None:
     """Reporte sur la ligne en base les champs issus de la page détail.
 
@@ -342,8 +356,8 @@ def _create_listing(
         has_promotion=listing.has_promotion,
         status="active",
         missing_scan_count=0,
-        source_updated_at=listing.source_updated_at,
-        published_at=listing.published_at,
+        source_updated_at=_to_utc(listing.source_updated_at),
+        published_at=_to_utc(listing.published_at),
         first_seen_at=now,
         last_seen_at=now,
         last_scraped_at=now,
@@ -404,7 +418,7 @@ def _update_listing_fields(
     apply_contract_fields(db_listing, listing)
     db_listing.is_verified = listing.is_verified
     db_listing.has_promotion = listing.has_promotion
-    db_listing.source_updated_at = listing.source_updated_at
+    db_listing.source_updated_at = _to_utc(listing.source_updated_at)
     db_listing.last_seen_at = now
     db_listing.last_scraped_at = now
 

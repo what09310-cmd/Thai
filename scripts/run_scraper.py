@@ -432,30 +432,9 @@ def _run_scan(
     console.print("\n[bold]Phase 3: Mise à jour de la base de données...[/bold]")
 
     with get_session() as session:
-        for listing_raw in listings_to_process:
-            try:
-                seen_slugs.add(listing_raw.slug)
-
-                # Fusionner avec les données détail
-                detail = detail_map.get(listing_raw.url)
-                listing_full = _merge_listing(listing_raw, detail)
-
-                change_type, db_listing = upsert_listing(session, listing_full, scan_time)
-
-                if db_listing and listing_full.has_monthly_contract == "true":
-                    stats["monthly"] += 1
-
-                if change_type == "NEW":
-                    stats["new"] += 1
-                elif change_type == "UPDATED":
-                    stats["updated"] += 1
-                elif change_type == "PRICE_CHANGED":
-                    stats["price_changed"] += 1
-
-            except Exception as e:
-                log.error(f"Erreur traitement {listing_raw.slug}: {e}")
-                stats["errors"] += 1
-                continue
+        _persist_listings(
+            session, listings_to_process, detail_map, scan_time, stats, seen_slugs, log
+        )
 
         # Détecter les annonces supprimées (seulement si scan complet).
         # --max-pages tronque la collecte, et --locations-provinces ne revoit
@@ -484,6 +463,92 @@ def _run_scan(
             scan_log.monthly_count = stats["monthly"]
             scan_log.error_count = stats["errors"]
             scan_log.status = "completed"
+
+
+# Nombre d'annonces persistees entre deux commits de la phase 3. Borne ce
+# qu'un rollback (voir _persist_listings) peut defaire.
+PERSIST_COMMIT_EVERY = 100
+
+
+def _persist_listings(
+    session,
+    listings_to_process: list,
+    detail_map: dict,
+    scan_time: datetime,
+    stats: dict,
+    seen_slugs: set,
+    log,
+) -> None:
+    """Phase 3: upsert de chaque annonce collectee, en isolant les echecs.
+
+    Une exception levee pendant le flush (contrainte violee, valeur trop
+    longue pour Postgres...) laisse la session SQLAlchemy dans un etat
+    "rollback en attente": chaque operation suivante releve la meme
+    erreur. Avec un simple `continue`, toutes les annonces restantes
+    passaient donc en erreur, puis mark_removed_listings et la mise a jour
+    du ScanLog echouaient a leur tour -- le scan entier etait perdu pour
+    une seule annonce.
+
+    Chaque annonce est flushee aussitot, pour que l'erreur lui soit
+    attribuee (et non au commit final, sans coupable). En cas d'echec, la
+    session est remise en etat par un rollback: il defait au plus les
+    annonces du lot courant, dont l'ecriture est reprise au scan suivant;
+    un commit tous les PERSIST_COMMIT_EVERY borne cette perte.
+    """
+    # Compteurs du lot en cours, reportes dans `stats` seulement une fois le
+    # lot ecrit: un rollback ne doit pas laisser dans le rapport des NEW ou
+    # PRICE_CHANGED qui n'ont jamais atteint la base.
+    pending = {"new": 0, "updated": 0, "price_changed": 0, "monthly": 0}
+
+    def _flush_pending() -> None:
+        for key, value in pending.items():
+            stats[key] += value
+            pending[key] = 0
+
+    since_commit = 0
+    for listing_raw in listings_to_process:
+        seen_slugs.add(listing_raw.slug)
+        try:
+            # Fusionner avec les données détail
+            detail = detail_map.get(listing_raw.url)
+            listing_full = _merge_listing(listing_raw, detail)
+
+            change_type, db_listing = upsert_listing(session, listing_full, scan_time)
+            session.flush()
+
+            if db_listing and listing_full.has_monthly_contract == "true":
+                pending["monthly"] += 1
+
+            if change_type == "NEW":
+                pending["new"] += 1
+            elif change_type == "UPDATED":
+                pending["updated"] += 1
+            elif change_type == "PRICE_CHANGED":
+                pending["price_changed"] += 1
+
+        except Exception as e:
+            log.error(f"Erreur traitement {listing_raw.slug}: {e}")
+            stats["errors"] += 1
+            if since_commit:
+                log.warning(
+                    "%d annonce(s) du lot courant seront reprises au prochain scan",
+                    since_commit,
+                )
+            session.rollback()
+            for key in pending:
+                pending[key] = 0
+            since_commit = 0
+            continue
+
+        since_commit += 1
+        if since_commit >= PERSIST_COMMIT_EVERY:
+            session.commit()
+            _flush_pending()
+            since_commit = 0
+
+    # Le dernier lot est commite par l'appelant (get_session), avec la
+    # detection des suppressions et le ScanLog.
+    _flush_pending()
 
 
 def _merge_listing(listing_raw, detail) -> ListingFull:
