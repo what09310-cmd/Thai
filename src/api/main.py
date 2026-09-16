@@ -156,13 +156,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # servies sur leur route directe ("/", /payant.html...) ne sont pas
         # concernees: elles passent par le gate d'authentification.
         if request.url.path.startswith(_STATIC_PREFIX) and response.status_code == 200:
-            response.headers.setdefault("Cache-Control", f"public, max-age={_STATIC_MAX_AGE}")
+            max_age = _CODE_MAX_AGE if request.url.path.endswith((".js", ".css")) else _STATIC_MAX_AGE
+            response.headers.setdefault("Cache-Control", f"public, max-age={max_age}")
         return response
 
 
-# Un jour: assez pour ne pas retelecharger 3 MB d'images a chaque visite,
-# assez court pour qu'un deploiement soit visible le lendemain sans purge.
+# Un jour pour les images et les JSON de coordonnees: assez pour ne pas
+# retelecharger 3 MB d'images a chaque visite, assez court pour qu'un
+# deploiement soit visible le lendemain sans purge. Cinq minutes pour le
+# JS/CSS partage (frontend/js/): une page fraichement deployee ne doit pas
+# tourner une journee avec un script de la version precedente.
 _STATIC_MAX_AGE = 24 * 3600
+_CODE_MAX_AGE = 5 * 60
 
 
 # Seules ces pages exigent une session; tout le reste (autres pages, API,

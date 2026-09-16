@@ -8,6 +8,7 @@
 <meta property="og:description" content="Toutes les annonces actives géolocalisées à Phuket">
 <meta property="og:image" content="/static/logo.png">
 <meta property="og:type" content="website">
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
@@ -126,123 +127,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="/static/js/common.js"></script>
+<script src="/static/js/map.js"></script>
 <script>
-const RENDER_API = "https://thai-month.onrender.com";
-const API = window.location.origin.startsWith("file:") ? "http://localhost:8000"
-          : window.location.hostname === "what09310-cmd.github.io" ? RENDER_API
-          : window.location.origin;
-
-// Render (plan gratuit) endort l'API après ~15 min sans trafic : le premier
-// visiteur attend 30 à 60 s de redémarrage, pendant lesquelles les fetch vers
-// l'API pendent, échouent (erreur réseau) ou reçoivent un 502/503. Plutôt
-// qu'une page vide qui a l'air cassée, on affiche un bandeau dès qu'une
-// requête traîne, et en cas d'échec on attend que /health réponde avant de
-// rejouer la requête. Les URLs hors API (fichiers locaux, tuiles) ne sont
-// pas concernées.
-(() => {
-  const nativeFetch = window.fetch.bind(window);
-  const SLOW_AFTER_MS = 4000;     // au-delà, on prévient le visiteur
-  const HEALTH_EVERY_MS = 3000;
-  const MAX_WAIT_MS = 120000;     // au-delà, on laisse l'erreur remonter
-  let banner = null;
-  let slowRequests = 0;
-  let waking = null;
-
-  function refreshBanner() {
-    const visible = slowRequests > 0 || waking !== null;
-    if (visible && !banner) {
-      banner = document.createElement("div");
-      banner.id = "api-wake-banner";
-      banner.setAttribute("role", "status");
-      banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;padding:10px 16px;" +
-        "background:#1f2937;color:#fff;font:14px/1.4 system-ui,sans-serif;text-align:center;" +
-        "box-shadow:0 2px 8px rgba(0,0,0,.3)";
-      banner.textContent = "Chargement des annonces… Première visite : le serveur se réveille, compte environ 30 secondes.";
-      (document.body || document.documentElement).appendChild(banner);
-    } else if (!visible && banner) {
-      banner.remove();
-      banner = null;
-    }
-  }
-
-  function looksAsleep(response, error) {
-    return error !== null || response.status === 502 || response.status === 503 || response.status === 504;
-  }
-
-  // Une seule attente partagée, quel que soit le nombre de requêtes en échec.
-  function waitForApi() {
-    if (waking) return waking;
-    waking = (async () => {
-      const deadline = Date.now() + MAX_WAIT_MS;
-      while (Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, HEALTH_EVERY_MS));
-        try {
-          const h = await nativeFetch(`${API}/health`, { cache: "no-store" });
-          if (h.ok) return true;
-        } catch (e) {}
-      }
-      return false;
-    })().finally(() => { waking = null; refreshBanner(); });
-    refreshBanner();
-    return waking;
-  }
-
-  window.fetch = async function (input, init) {
-    const url = typeof input === "string" ? input : (input && input.url) || "";
-    if (!url.startsWith(`${API}/`)) return nativeFetch(input, init);
-
-    for (let attempt = 0; ; attempt++) {
-      let slow = false;
-      const timer = setTimeout(() => { slow = true; slowRequests++; refreshBanner(); }, SLOW_AFTER_MS);
-      let response = null, error = null;
-      try {
-        response = await nativeFetch(input, init);
-      } catch (e) {
-        error = e;
-      } finally {
-        clearTimeout(timer);
-        if (slow) { slowRequests--; refreshBanner(); }
-      }
-
-      if (!looksAsleep(response, error) || attempt > 0) {
-        if (error) throw error;
-        return response;
-      }
-      if (!(await waitForApi())) {
-        if (error) throw error;
-        return response;
-      }
-      // /health répond : on rejoue la requête une fois.
-    }
-  };
-})();
-
-let ads = [];
-let leafletMap = null;
-let monthlyOnly = false;
-let priceBoundsMax = 0;
-let priceMin = 0;
-let priceMax = 0;
-const markersById = {};
-
-function text(v){ return v == null ? "" : String(v); }
-
-function priceValue(ad){
-  const n = ad.contract_monthly_min ?? ad.price_monthly_min;
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function priceLabel(ad){
-  const n = priceValue(ad);
-  return n ? n.toLocaleString("fr-FR") + " ฿" : "";
-}
-
-function escapeHtml(s){
-  return text(s).replace(/[&<>"']/g,c=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",
-    '"':"&quot;","'":"&#039;"
-  }[c]));
-}
 
 function pinIcon(){
   return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [14, 14] });
@@ -267,42 +154,6 @@ function buildMap(){
       );
     markersById[ad.id] = marker;
   });
-}
-
-function setupPriceFilter(){
-  const prices = ads.map(priceValue).filter(Boolean);
-  priceBoundsMax = prices.length ? Math.ceil(Math.max(...prices) / 1000) * 1000 : 0;
-  priceMin = 0;
-  priceMax = priceBoundsMax;
-
-  const minInput = document.getElementById("priceMin");
-  const maxInput = document.getElementById("priceMax");
-  [minInput, maxInput].forEach(el => { el.max = priceBoundsMax; el.value = el === minInput ? 0 : priceBoundsMax; });
-
-  updatePriceUI();
-
-  minInput.addEventListener("input", () => {
-    priceMin = Math.min(Number(minInput.value), priceMax);
-    minInput.value = priceMin;
-    updatePriceUI();
-    applyFilters();
-  });
-  maxInput.addEventListener("input", () => {
-    priceMax = Math.max(Number(maxInput.value), priceMin);
-    maxInput.value = priceMax;
-    updatePriceUI();
-    applyFilters();
-  });
-}
-
-function updatePriceUI(){
-  document.getElementById("priceMinLabel").textContent = priceMin.toLocaleString("fr-FR") + " ฿";
-  document.getElementById("priceMaxLabel").textContent = priceMax.toLocaleString("fr-FR") + " ฿";
-  const fill = document.getElementById("rangeFill");
-  if (priceBoundsMax > 0) {
-    fill.style.left = (priceMin / priceBoundsMax * 100) + "%";
-    fill.style.right = (100 - priceMax / priceBoundsMax * 100) + "%";
-  }
 }
 
 function applyFilters(){
