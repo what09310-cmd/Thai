@@ -79,6 +79,6 @@ Historical/migration notes that don't need to load automatically live in `docs/m
 
 - `frontend/carte.html` is ~1 MB (map page with inline geographic data). Grep for the specific section/id you need instead of reading the whole file.
 - `tests/fixtures/*.html` and `tests/fixtures/*.golden.json` are raw captured pages and expected-parse snapshots (up to ~340 KB each), used only by the parser regression tests in `tests/`. Only open them when working on `src/parser/` or the tests that reference them.
-- `frontend/img/provinces/*.jpg|png` are static province icons — binary assets, never source of truth for anything; don't attempt to read them as text.
+- `frontend/img/provinces/*.webp` are static province photos (640 px, q80) — binary assets, never source of truth for anything; don't attempt to read them as text.
 - `renthub.db.bak-*` (if present at the repo root) are manual SQLite backups, not part of the app; ignore them entirely.
 - `frontend/test.html` is a scratch/draft page, not a page served in production — check with the user before treating it as canonical.
