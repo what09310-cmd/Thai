@@ -12,6 +12,8 @@ __pycache__/
 .env
 
 # Base locale et sauvegardes (~200 Mo) — le conteneur utilise Postgres
+thaimonth.db
+thaimonth.db.bak-*
 renthub.db
 renthub.db.bak-*
 *.sqlite

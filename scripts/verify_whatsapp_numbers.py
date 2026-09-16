@@ -16,7 +16,7 @@ rescanner au lancement suivant.
 
 Par defaut le script tourne en dry-run (affiche juste le resultat). Avec
 --apply, il efface le `whatsapp` des annonces jugees invalides -- a lancer
-seulement apres backup de la base (renthub.db.bak-*), comme pour les autres
+seulement apres backup de la base (thaimonth.db.bak-*), comme pour les autres
 scripts de correction en masse de ce dossier.
 
 A utiliser par petits lots (--limit) avec un delai genereux (--delay,

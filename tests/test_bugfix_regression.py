@@ -37,7 +37,7 @@ NOW = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
 
 @pytest.fixture
 def session():
-    """Session SQLAlchemy sur une base SQLite en mémoire (jamais renthub.db)."""
+    """Session SQLAlchemy sur une base SQLite en mémoire (jamais thaimonth.db)."""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},

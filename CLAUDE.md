@@ -64,4 +64,4 @@ Module-specific architecture, invariants, and conventions are scoped by path in 
 - `frontend/test.html` is the public landing page (the "vitrine"), served on `/test` — not a draft.
 - `tests/fixtures/*.html` and `tests/fixtures/*.golden.json` are raw captured pages and expected-parse snapshots (up to ~340 KB each), used only by the parser regression tests in `tests/`. Only open them when working on `src/parser/` or the tests that reference them.
 - `frontend/img/provinces/*.webp` are static province photos (640 px, q80) — binary assets, never source of truth for anything; don't attempt to read them as text.
-- `renthub.db.bak-*` (if present at the repo root) are manual SQLite backups, not part of the app; ignore them entirely.
+- `thaimonth.db.bak-*` (if present at the repo root) are manual SQLite backups, not part of the app; ignore them entirely.

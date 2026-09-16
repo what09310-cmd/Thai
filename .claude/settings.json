@@ -4,6 +4,8 @@
       "Read(./venv/**)",
       "Grep(./venv/**)",
       "Glob(./venv/**)",
+      "Read(./thaimonth.db)",
+      "Read(./thaimonth.db.bak-*)",
       "Read(./renthub.db)",
       "Read(./renthub.db.bak-*)",
       "Read(./*.log)",

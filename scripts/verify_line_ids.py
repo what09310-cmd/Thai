@@ -14,7 +14,7 @@ sans toucher a `line_id` lui-meme : le frontend garde tous les LINE ID
 affiches et cliquables (y compris les invalides), mais bascule le lien vers
 `line.me/ti/p/~<id>` pour ceux verifies invalides afin d'eviter un 404 --
 voir frontend/index.html. A lancer seulement apres backup de la base
-(renthub.db.bak-*), comme pour les autres scripts de correction en masse de
+(thaimonth.db.bak-*), comme pour les autres scripts de correction en masse de
 ce dossier.
 """
 import argparse

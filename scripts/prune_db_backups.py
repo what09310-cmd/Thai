@@ -1,4 +1,4 @@
-"""Delete old renthub.db.bak-* backups at the repo root, keeping only the N most recent.
+"""Delete old thaimonth.db.bak-* backups at the repo root, keeping only the N most recent.
 
 Usage:
     python scripts/prune_db_backups.py            # keep 5 most recent (default)
@@ -20,7 +20,7 @@ def main() -> None:
     if args.keep < 0:
         parser.error("--keep must be >= 0")
 
-    backups = sorted(REPO_ROOT.glob("renthub.db.bak-*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted(list(REPO_ROOT.glob("thaimonth.db.bak-*")) + list(REPO_ROOT.glob("renthub.db.bak-*")), key=lambda p: p.stat().st_mtime, reverse=True)
     to_delete = backups[args.keep:]
 
     if not to_delete:

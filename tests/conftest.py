@@ -19,7 +19,7 @@ from src.database.models import Base
 
 @pytest.fixture
 def session():
-    """Session SQLAlchemy sur une base SQLite en memoire (jamais renthub.db)."""
+    """Session SQLAlchemy sur une base SQLite en memoire (jamais thaimonth.db)."""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},

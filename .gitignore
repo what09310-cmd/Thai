@@ -9,6 +9,9 @@ __pycache__/
 .env
 
 # Base de données locale et ses sauvegardes
+thaimonth.db
+thaimonth.db.bak-*
+# anciens noms, avant le renommage de 2026-09
 renthub.db
 renthub.db.bak-*
 *.sqlite

@@ -7,7 +7,7 @@ Usage:
 L'URL Postgres vient de l'environnement, jamais du code: la version
 precedente la portait en dur, mot de passe compris, dans un depot public
 (commit c696be9) -- ce mot de passe a du etre revoque. SQLITE_URL permet de
-pointer une autre base source (defaut: renthub.db a la racine du depot).
+pointer une autre base source (defaut: thaimonth.db a la racine du depot).
 
 Vide chaque table Postgres avant d'y recopier la table SQLite: c'est une
 migration initiale, pas une synchronisation.
@@ -28,7 +28,7 @@ if not POSTGRES_URL or not POSTGRES_URL.startswith("postgresql"):
         "POSTGRES_URL manquante ou invalide dans l'environnement "
         "(attendu: postgresql://user:pass@host/db)."
     )
-SQLITE_URL = os.environ.get("SQLITE_URL", "sqlite:///renthub.db")
+SQLITE_URL = os.environ.get("SQLITE_URL", "sqlite:///thaimonth.db")
 
 sqlite_engine = create_engine(SQLITE_URL, connect_args={"check_same_thread": False})
 SqliteSession = sessionmaker(bind=sqlite_engine)
