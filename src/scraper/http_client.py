@@ -38,8 +38,8 @@ HEADERS = {
 }
 
 # Hotes que ce client accepte de joindre. Les URLs scrapees viennent du
-# contenu du site lui-meme et sont rejouees telles quelles par cinq scripts
-# de maintenance (refix_*, refresh_*, rescrape_*): une URL empoisonnee, ou
+# contenu du site lui-meme et sont rejouees telles quelles par le script
+# de maintenance (rescrape_details.py): une URL empoisonnee, ou
 # une simple redirection, suffisait a faire interroger 127.0.0.1,
 # 169.254.169.254 (metadonnees cloud) ou `postgres:5432` sur le reseau
 # interne de docker-compose, et a ranger la reponse en base.
@@ -124,7 +124,7 @@ async def _throttle() -> None:
 
     Le verrou est indispensable: sans lui, deux tâches concurrentes lisent
     le même _last_request_time, calculent le même délai et repartent
-    ensemble — REQUEST_DELAY se retrouve divisé par MAX_CONCURRENT_REQUESTS.
+    ensemble — REQUEST_DELAY se retrouverait divisé par le nombre de tâches.
     """
     global _last_request_time
     async with _get_throttle_lock():
