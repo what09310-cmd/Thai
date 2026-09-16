@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RentHub Tracker — Script principal
+ThaiMonth — Script principal (scan de renthub.in.th)
 
 Usage:
     python scripts/run_scraper.py

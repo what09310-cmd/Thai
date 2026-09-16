@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-RentHub Tracker: a scraper + tracker + API for rental listings on renthub.in.th (Thailand). It periodically scrapes listing and detail pages, diffs them against a database to detect new/updated/price-changed/removed listings, and serves the result through a FastAPI backend with a static multi-page frontend (one HTML page per city/province map).
+ThaiMonth (the product's only name; the repository folder is still `renthub-tracker`): a scraper + tracker + API for rental listings on renthub.in.th (Thailand). It periodically scrapes listing and detail pages, diffs them against a database to detect new/updated/price-changed/removed listings, and serves the result through a FastAPI backend with a static multi-page frontend (one HTML page per city/province map).
 
 ## Commands
 

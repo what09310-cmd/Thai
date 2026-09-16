@@ -1,5 +1,5 @@
 """
-API REST FastAPI pour le tracker RentHub.
+API REST FastAPI de ThaiMonth.
 
 Endpoints de donnees (publics, plafonnes en debit):
   GET /listings          catalogue pagine, filtrable
@@ -54,8 +54,8 @@ from src.database.session import init_db
 log = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="RentHub Tracker API",
-    description="API de suivi des annonces RentHub (Short-term Monthly, Thaïlande)",
+    title="ThaiMonth API",
+    description="API ThaiMonth: suivi des locations courte durée en Thaïlande (source renthub.in.th)",
     version="1.0.0",
 )
 

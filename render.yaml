@@ -6,7 +6,7 @@ databases:
 
 services:
   - type: web
-    name: renthub-tracker-api
+    name: thaimonth-api
     runtime: python
     plan: free
     # requirements-api.txt et non requirements.txt: le service n'a besoin ni

@@ -42,7 +42,7 @@ if not settings.database_url.startswith("sqlite"):
 DB_PATH = Path(settings.database_url.split("///", 1)[1])
 OUT_PATH = Path(__file__).parent.parent / "frontend" / "address_coords.json"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "renthub-tracker/1.0 (geocoding cache script)"
+USER_AGENT = "thaimonth/1.0 (geocoding cache script)"
 DELAY_SECONDS = 1.1
 
 

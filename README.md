@@ -1,4 +1,4 @@
-# ThaiMonth / RentHub Tracker
+# ThaiMonth
 
 Suivi des locations courte durée (1, 3, 6 mois) publiées sur renthub.in.th : un scraper
 alimente une base, un tracker détecte nouveautés, changements de prix et retraits, une API
