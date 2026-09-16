@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="/static/css/common.css">
 <style>
 
+  html { scroll-behavior: smooth; }
+
   :root {
     --bg: #faf8f4;
     --surface: #ffffff;
@@ -232,6 +234,39 @@
     line-height: 1.3;
   }
 
+  .reassurance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    list-style: none;
+    padding: 0;
+    margin: 16px 0;
+    font-size: 0.85rem;
+    color: #374151;
+  }
+
+  .side-card-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: auto;
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), #5f7cf9);
+    color: var(--accent-ink);
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-decoration: none;
+    text-align: center;
+    box-shadow: 0 14px 24px rgba(79,70,229,0.16);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .side-card-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 28px rgba(79,70,229,0.2);
+  }
+
   .listing-teaser {
     width: 100%;
     display: flex;
@@ -242,6 +277,65 @@
     border-radius: 16px;
     background: #fff;
     box-shadow: 0 4px 16px rgba(20,19,15,.06);
+  }
+
+  .card-media { display: flex; flex-direction: column; }
+
+  .main-image-wrapper {
+    position: relative;
+    max-height: 240px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg);
+    aspect-ratio: 4 / 3;
+  }
+
+  .main-img {
+    width: 100%;
+    height: 100%;
+    max-height: 240px;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+  }
+
+  .badge-verified {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 5px 11px;
+    border-radius: var(--r-pill);
+    background: rgba(20,19,15,.55);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .gallery-thumbnails {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .thumb {
+    width: 56px;
+    height: 42px;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.6;
+    border: 2px solid transparent;
+    transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .thumb:hover { opacity: 0.85; }
+
+  .thumb.active {
+    opacity: 1;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(80, 70, 245, 0.18);
   }
 
   .listing-teaser-price {
@@ -294,6 +388,7 @@
   }
 
   .pricing-block {
+    scroll-margin-top: 84px;
     margin-top: 42px;
     padding: 30px 28px 28px;
     border: 1px solid var(--border);
@@ -566,6 +661,13 @@
 <main class="main">
   <div class="hero">
     <div class="listing-teaser" id="listing-teaser" style="display:none" aria-live="polite">
+      <div class="card-media" id="lt-media">
+        <div class="main-image-wrapper">
+          <span class="badge-verified">Photo réelle</span>
+          <img id="lt-main-img" src="" alt="Logement" class="main-img" draggable="false" oncontextmenu="return false">
+        </div>
+        <div class="gallery-thumbnails" id="lt-thumbnails"></div>
+      </div>
       <div class="listing-teaser-price" id="lt-price"></div>
       <div class="listing-teaser-loc" id="lt-loc"></div>
       <div class="listing-teaser-row">
@@ -590,10 +692,16 @@
         <span class="savings-banner-amount" id="sc-savings"></span>
       </div>
       <p class="data-proof" id="sc-proof-text">* Estimation indicative basée sur un tarif moyen OTA (tarif local × 3,5).</p>
+      <ul class="reassurance-list">
+        <li>⚡ <strong>Contact direct</strong> propriétaire</li>
+        <li>✅ <strong>0 commission</strong> d'agence</li>
+        <li>🔒 Suivi quotidien de la disponibilité</li>
+      </ul>
+      <a href="#pricing-block" class="side-card-cta">Voir les disponibilités</a>
     </div>
   </div>
 
-  <div class="pricing-block">
+  <div class="pricing-block" id="pricing-block">
     <div class="section-header">
       <div class="kicker">Choisissez votre abonnement</div>
     </div>
@@ -732,6 +840,38 @@ function renderComparison(localPrice) {
     `* Estimation indicative basée sur un tarif moyen OTA (tarif local × ${OTA_MULTIPLIER.toLocaleString("fr-FR")}).`);
 }
 
+function selectImage(el) {
+  document.getElementById("lt-main-img").src = el.dataset.src;
+  el.parentElement.querySelectorAll(".thumb").forEach(t => t.classList.toggle("active", t === el));
+}
+
+function renderMedia(images) {
+  const media = document.getElementById("lt-media");
+  const mainImg = document.getElementById("lt-main-img");
+  const thumbContainer = document.getElementById("lt-thumbnails");
+
+  if (!images || !images.length) {
+    media.style.display = "none";
+    return;
+  }
+  media.style.display = "flex";
+
+  mainImg.src = images[0];
+  mainImg.onerror = () => { media.style.display = "none"; };
+
+  if (images.length > 1) {
+    thumbContainer.style.display = "flex";
+    thumbContainer.innerHTML = images.slice(0, 4).map((url, i) => `
+      <img src="${esc(url)}" data-src="${esc(url)}" class="thumb${i === 0 ? " active" : ""}" alt="" loading="lazy"
+           draggable="false" oncontextmenu="return false" onclick="selectImage(this)"
+           onerror="this.remove()">
+    `).join("");
+  } else {
+    thumbContainer.innerHTML = "";
+    thumbContainer.style.display = "none";
+  }
+}
+
 async function loadListingTeaser() {
   const id = new URLSearchParams(window.location.search).get("listing");
   if (!id) return;
@@ -740,6 +880,9 @@ async function loadListingTeaser() {
     const r = await fetch(`${API}/listings/${encodeURIComponent(id)}`);
     if (!r.ok) return;
     const l = await r.json();
+    if (l.status === "removed") return;
+
+    renderMedia(l.images || []);
 
     const price = l.contract_monthly_min ?? l.price_monthly_min;
     document.getElementById("lt-price").textContent = price
