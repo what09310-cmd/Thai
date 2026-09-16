@@ -3,6 +3,7 @@ venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 
 # Secrets (SECRET_KEY, SITE_PASSWORD, DATABASE_URL) — voir .env.example
 .env

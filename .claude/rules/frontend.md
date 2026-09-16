@@ -15,7 +15,7 @@ Shared code — one copy, loaded as classic scripts (everything declared is glob
 - `js/geo.js` — district/address coordinate fallbacks, `allData` (index, premium, test)
 - `js/modal.js` — listing sheet, contract helpers, Google Maps links, lightbox, watermark (index, premium, test, carte-thailande)
 - `js/catalog.js` — loading (`fetchAllListings`: `status=active`, pages after the first in parallel), filters, region menus, pager (index, premium)
-- `js/map.js` — Leaflet state, prices, budget/duration filters (vip, carte-thailande, city maps); `js/city-map.js` on top for the three city maps
+- `js/map.js` — Leaflet state, prices, budget/duration filters (vip, carte-thailande, city maps); on top of it `js/thai-map.js` (vip, carte-thailande: pins, loading, filters) or `js/city-map.js` (the three city maps, driven by their `CITY` object)
 - `css/common.css`, `css/modal.css`, `css/catalog.css`, `css/map.css`, `css/city-map.css` — same families
 
 What stays inline in a page is what differs between pages (`cardHTML`, `modalHTML`, `openModal`, `mapPoint`, `init`, page-specific CSS). To change a shared behaviour, edit the module; to change one page, edit the page. A function moved to a module must not be redeclared in a page (`let`/`const` would throw "already been declared"). `index.html` and `premium.html` are deliberately two files: they sit behind different access rules (`PROTECTED_PATHS`) and both must exist as static files for GitHub Pages.
