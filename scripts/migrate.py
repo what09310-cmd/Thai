@@ -18,11 +18,13 @@ la main, et couvre les cas suivants, dans l'ordre:
    dedoublonnage de listing_images (listing_id, image_url), que l'ancien
    calcul de position avait inscrit en double (15 paires dans renthub.db);
 4. index retires du modele (ix_listings_source_id, ix_history_change_type);
-5. donnees: scan_logs restes en "running" avant que _mark_scan_failed
-   n'existe -> "failed"; content_hash recalcule apres un changement de
+5. donnees: scan_logs restes en "running" depuis plus de 12 h (interrompus
+   avant que _mark_scan_failed n'existe) -> "failed"; content_hash recalcule apres un changement de
    HASH_FIELDS, sans quoi le scan suivant ecrit un UPDATED par annonce;
 6. avec --drop-orphans: tables sans modele (locations, provinces,
-   rental_requests), vestiges de fonctionnalites retirees.
+   rental_requests) et colonnes absentes du modele (listings.city,
+   listings.published_at, listing_images.local_path -- jamais renseignees),
+   vestiges de fonctionnalites retirees.
 
 Sauvegarder la base avant (voir .claude/rules/scripts.md): les etapes 3
 et 6 suppriment des lignes.
@@ -31,7 +33,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -53,6 +55,9 @@ OBSOLETE_INDEXES = {
 # table provinces jamais alimentee, formulaire rental_requests jamais
 # branche). Supprimees seulement sur demande explicite.
 ORPHAN_TABLES = ("locations", "provinces", "rental_requests")
+
+# Age au-dela duquel un ScanLog encore "running" est considere abandonne.
+STUCK_AFTER = timedelta(hours=12)
 
 
 def _log(dry_run: bool, message: str) -> None:
@@ -132,9 +137,16 @@ def drop_obsolete_indexes(conn, dry_run: bool) -> None:
 
 def fix_data(conn, dry_run: bool) -> None:
     session = Session(bind=conn)
-    stuck = session.query(ScanLog).filter(ScanLog.status == "running").all()
+    # Un scan complet dure au plus quelques heures: au-dela de STUCK_AFTER,
+    # "running" est un vestige. En dessous, c'est peut-etre un scan en cours
+    # (ne jamais migrer pendant un scan, mais au moins ne pas le declarer mort).
+    cutoff = datetime.now(timezone.utc) - STUCK_AFTER
+    stuck = [
+        scan for scan in session.query(ScanLog).filter(ScanLog.status == "running")
+        if (scan.started_at.replace(tzinfo=timezone.utc) if scan.started_at.tzinfo is None else scan.started_at) < cutoff
+    ]
     if stuck:
-        _log(dry_run, f"scan_logs: {len(stuck)} scan(s) restes en 'running' -> 'failed'")
+        _log(dry_run, f"scan_logs: {len(stuck)} scan(s) restes en 'running' depuis plus de {STUCK_AFTER} -> 'failed'")
         if not dry_run:
             for scan in stuck:
                 scan.status = "failed"
@@ -161,6 +173,20 @@ def drop_orphans(conn, dry_run: bool) -> None:
             _log(dry_run, f"table orpheline {name} ({rows} lignes) supprimee")
             if not dry_run:
                 conn.execute(text(f"DROP TABLE {name}"))
+    # Colonnes que le modele ne porte plus. DROP COLUMN existe sur SQLite
+    # depuis 3.35 (2021) et sur Postgres depuis toujours; une colonne encore
+    # referencee par un index ferait echouer l'instruction, d'ou le try.
+    for table in Base.metadata.sorted_tables:
+        if table.name not in inspector.get_table_names():
+            continue
+        present = {c["name"] for c in inspector.get_columns(table.name)}
+        for column in sorted(present - {c.name for c in table.columns}):
+            _log(dry_run, f"colonne orpheline {table.name}.{column} supprimee")
+            if not dry_run:
+                try:
+                    conn.execute(text(f"ALTER TABLE {table.name} DROP COLUMN {column}"))
+                except Exception as exc:  # noqa: BLE001 - on continue, la colonne est inoffensive
+                    print(f"  impossible de supprimer {table.name}.{column}: {exc}")
 
 
 def main() -> int:
