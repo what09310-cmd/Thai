@@ -1,16 +1,18 @@
 """
 API REST FastAPI pour le tracker RentHub.
 
-Endpoints:
-  GET /listings
-  GET /listings/{id}
-  GET /listings/new
-  GET /listings/updated
-  GET /listings/price-changed
-  GET /listings/monthly
-  GET /provinces
-  GET /stats
-  GET /history/{listing_id}
+Endpoints de donnees (publics, plafonnes en debit):
+  GET /listings          catalogue pagine, filtrable
+  GET /listings/{id}     fiche complete
+  GET /stats             compteurs du hero (forme reduite sans compte premium)
+  GET /health
+
+Comptes: GET/POST /login, GET/POST /register, /auth/google[/callback],
+POST /logout, GET /me. Pages: "/" et les .html de frontend/.
+
+Les routes /listings/new|updated|price-changed|monthly, /history/{id},
+/provinces et POST /rental-requests ont ete retirees: aucune page ne les
+appelait, et chaque route publique est de la surface d'attaque a defendre.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ import json
 import logging
 import math
 import posixpath
+import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
@@ -30,21 +33,20 @@ from pathlib import Path
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import FastAPI, HTTPException, Query, Depends, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import (
     FileResponse, HTMLResponse, JSONResponse, RedirectResponse,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SASession
-from sqlalchemy import func, desc, distinct, inspect, text as sa_text
+from sqlalchemy import func, desc, distinct
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.database.session import SessionLocal, init_db, engine
-from src.database.models import (
-    Listing, ListingHistory, ListingImage, Province, ScanLog, RentalRequest, User,
-)
+from src.database.session import SessionLocal, init_db
+from src.database.models import Listing, ListingHistory, ListingImage, ScanLog, User
 from src.api import rate_limit
 from src.api import auth as auth_module
 from src.api.auth import (
@@ -75,12 +77,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Plafond des fenetres "depuis N heures" (un an). Sans borne, ?since_hours
-# etait un moyen simple de demander tout le catalogue sur une route publique.
-_MAX_SINCE_HOURS = 24 * 366
-
-# Meme raison que _MAX_SINCE_HOURS: sans plafond, `offset` est le moyen le
-# plus simple d'aspirer le catalogue depuis une route publique.
+# Sans plafond, `offset` est le moyen le plus simple d'aspirer le catalogue
+# depuis une route publique.
 _MAX_OFFSET = 100_000
 
 # Un visiteur non authentifie recoit le catalogue entier avec des
@@ -150,7 +148,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         response.headers.setdefault("Content-Security-Policy", _CSP)
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # Les assets (images de provinces, coordonnees de quartiers, JS/CSS
+        # partages) sont immuables entre deux deploiements: sans cet en-tete
+        # le navigateur les retelechargeait a chaque visite. Les pages HTML
+        # servies sur leur route directe ("/", /payant.html...) ne sont pas
+        # concernees: elles passent par le gate d'authentification.
+        if request.url.path.startswith(_STATIC_PREFIX) and response.status_code == 200:
+            response.headers.setdefault("Cache-Control", f"public, max-age={_STATIC_MAX_AGE}")
         return response
+
+
+# Un jour: assez pour ne pas retelecharger 3 MB d'images a chaque visite,
+# assez court pour qu'un deploiement soit visible le lendemain sans purge.
+_STATIC_MAX_AGE = 24 * 3600
 
 
 # Seules ces pages exigent une session; tout le reste (autres pages, API,
@@ -177,9 +187,6 @@ _STATIC_PREFIX = "/static/"
 _RATE_LIMITED_PREFIXES = (
     "/listings",
     "/stats",
-    "/provinces",
-    "/history",
-    "/rental-requests",
 )
 
 
@@ -269,6 +276,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(AuthMiddleware)
 app.add_middleware(RateLimitMiddleware)
+# Le catalogue complet (index.html en charge ~1 200 annonces) pese ~3 MB de
+# JSON, et une page HTML 80-110 KB: compresses, c'est 5 a 6 fois moins.
+# Ni uvicorn ni Render ne compressent d'eux-memes.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Requis par authlib pour stocker le `state` anti-CSRF entre /auth/google et
 # le callback. Cookie distinct de SESSION_COOKIE_NAME ("session"), sinon les
 # deux s'ecrasent; vide en dehors du parcours OAuth.
@@ -629,22 +640,13 @@ def _assert_secrets_configured() -> None:
     )
 
 
-def _migrate_rental_requests_city() -> None:
-    inspector = inspect(engine)
-    if "rental_requests" not in inspector.get_table_names():
-        return
-    cols = {c["name"] for c in inspector.get_columns("rental_requests")}
-    if "city" not in cols:
-        with engine.begin() as conn:
-            conn.execute(sa_text("ALTER TABLE rental_requests ADD COLUMN city VARCHAR(50)"))
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # @app.on_event est déprécié depuis FastAPI 0.93.
+    """Demarrage: refus des secrets par defaut, puis creation des tables
+    manquantes. Les migrations d'une base existante (colonnes, index) sont
+    du ressort de scripts/migrate.py, pas du serveur."""
     _assert_secrets_configured()
     init_db()
-    _migrate_rental_requests_city()
     yield
 
 
@@ -652,92 +654,6 @@ app.router.lifespan_context = lifespan
 
 
 # — Response models —
-
-class ListingResponse(BaseModel):
-    id: int
-    source_id: Optional[str]
-    name: str
-    url: str
-    address: Optional[str]
-    subdistrict: Optional[str]
-    district: Optional[str]
-    province: Optional[str]
-    latitude: Optional[float]
-    longitude: Optional[float]
-    price_monthly_raw: Optional[str]
-    price_monthly_min: Optional[int]
-    price_monthly_max: Optional[int]
-    daily_price_raw: Optional[str]
-    daily_price_min: Optional[int]
-    daily_price_max: Optional[int]
-    contract_monthly_raw: Optional[str]
-    contract_monthly_min: Optional[int]
-    contract_monthly_max: Optional[int]
-    contract_3_month_raw: Optional[str]
-    contract_3_month_min: Optional[int]
-    contract_3_month_max: Optional[int]
-    contract_6_month_raw: Optional[str]
-    contract_6_month_min: Optional[int]
-    contract_6_month_max: Optional[int]
-    has_monthly_contract: str
-    description: Optional[str]
-    amenities: list
-    room_types: list
-    is_verified: bool
-    has_promotion: bool
-    images: list[str]
-    status: str
-    source_updated_at: Optional[datetime]
-    first_seen_at: Optional[datetime]
-    last_seen_at: Optional[datetime]
-    last_scraped_at: Optional[datetime]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class HistoryResponse(BaseModel):
-    id: int
-    changed_at: datetime
-    change_type: str
-    field_name: Optional[str]
-    old_value: Optional[str]
-    new_value: Optional[str]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ProvinceResponse(BaseModel):
-    id: int
-    name: str
-    slug: str
-    renthub_url: Optional[str]
-    listing_count: Optional[int]
-    active: bool
-    last_scan: Optional[datetime]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class RentalRequestCreate(BaseModel):
-    # Bornes alignees sur les colonnes (models.py: String(50)). Sans elles,
-    # SQLite stocke silencieusement une valeur de plusieurs Mo tandis que
-    # Postgres leve une DataError non rattrapee, donc un 500.
-    city: str = Field(min_length=1, max_length=50)
-    duration: str = Field(min_length=1, max_length=50)
-    budget: str = Field(min_length=1, max_length=50)
-    conditions: Optional[str] = Field(None, max_length=2000)
-
-
-class RentalRequestResponse(BaseModel):
-    id: int
-    city: str
-    duration: str
-    budget: str
-    conditions: Optional[str]
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
 
 class StatsResponse(BaseModel):
     total_active: int
@@ -998,124 +914,6 @@ def get_listings(
     return _listings_to_response(db, listings, authenticated=authenticated)
 
 
-@app.get("/listings/new", response_model=list[dict])
-def get_new_listings(
-    request: Request,
-    since_hours: int = Query(24, ge=1, le=_MAX_SINCE_HOURS, description="Annonces nouvelles depuis N heures"),
-    limit: int = Query(500, ge=1, le=500),
-    db: SASession = Depends(get_db),
-):
-    """Annonces détectées pour la première fois dans les N dernières heures."""
-    from datetime import timedelta
-    authenticated = _is_premium(request)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
-    listings = (
-        db.query(Listing)
-        .filter(Listing.first_seen_at >= cutoff)
-        .order_by(desc(Listing.first_seen_at))
-        .limit(limit)
-        .all()
-    )
-    return _listings_to_response(db, listings, authenticated=authenticated)
-
-
-@app.get("/listings/updated", response_model=list[dict])
-def get_updated_listings(
-    request: Request,
-    since_hours: int = Query(24, ge=1, le=_MAX_SINCE_HOURS),
-    limit: int = Query(500, ge=1, le=500),
-    db: SASession = Depends(get_db),
-):
-    from datetime import timedelta
-    authenticated = _is_premium(request)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
-    listing_ids = (
-        db.query(ListingHistory.listing_id)
-        .filter(
-            ListingHistory.change_type == "UPDATED",
-            ListingHistory.changed_at >= cutoff,
-        )
-        .distinct()
-        .scalar_subquery()
-    )
-    # Un `limit` sans `order_by` laisse le moteur choisir *quelles* lignes
-    # il rend: deux appels identiques pouvaient renvoyer des sous-ensembles
-    # differents. Meme tri que /listings, departage par id compris.
-    listings = (
-        db.query(Listing)
-        .filter(Listing.id.in_(listing_ids))
-        .order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .limit(limit)
-        .all()
-    )
-    return _listings_to_response(db, listings, authenticated=authenticated)
-
-
-@app.get("/listings/price-changed", response_model=list[dict])
-def get_price_changed_listings(
-    request: Request,
-    since_hours: int = Query(24, ge=1, le=_MAX_SINCE_HOURS),
-    limit: int = Query(500, ge=1, le=500),
-    db: SASession = Depends(get_db),
-):
-    from datetime import timedelta
-    authenticated = _is_premium(request)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
-    listing_ids = (
-        db.query(ListingHistory.listing_id)
-        .filter(
-            ListingHistory.change_type == "PRICE_CHANGED",
-            ListingHistory.changed_at >= cutoff,
-        )
-        .distinct()
-        .scalar_subquery()
-    )
-    # Un `limit` sans `order_by` laisse le moteur choisir *quelles* lignes
-    # il rend: deux appels identiques pouvaient renvoyer des sous-ensembles
-    # differents. Meme tri que /listings, departage par id compris.
-    listings = (
-        db.query(Listing)
-        .filter(Listing.id.in_(listing_ids))
-        .order_by(desc(Listing.source_updated_at), desc(Listing.id))
-        .limit(limit)
-        .all()
-    )
-    return _listings_to_response(db, listings, authenticated=authenticated)
-
-
-@app.get("/listings/monthly", response_model=list[dict])
-def get_monthly_listings(
-    request: Request,
-    province: Optional[str] = Query(None, max_length=100),
-    price_max: Optional[int] = Query(None, ge=0, le=100_000_000),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0, le=_MAX_OFFSET),
-    db: SASession = Depends(get_db),
-):
-    """Annonces avec Contract monthly disponible."""
-    authenticated = _is_premium(request)
-    query = (
-        db.query(Listing)
-        .filter(
-            Listing.has_monthly_contract == "true",
-            Listing.status == "active",
-        )
-    )
-    if province:
-        query = query.filter(_match_text(Listing.province, province))
-    if price_max:
-        query = query.filter(
-            Listing.contract_monthly_min <= price_max
-        )
-    listings = (
-        query.order_by(Listing.contract_monthly_min)
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-    return _listings_to_response(db, listings, authenticated=authenticated)
-
-
 @app.get("/listings/{listing_id}", response_model=dict)
 def get_listing(listing_id: int, request: Request, db: SASession = Depends(get_db)):
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
@@ -1124,38 +922,48 @@ def get_listing(listing_id: int, request: Request, db: SASession = Depends(get_d
     return _listing_to_response(listing, authenticated=_is_premium(request))
 
 
-@app.get("/history/{listing_id}", response_model=list[HistoryResponse])
-def get_listing_history(listing_id: int, db: SASession = Depends(get_db)):
-    listing = db.query(Listing).filter(Listing.id == listing_id).first()
-    if not listing:
-        raise HTTPException(status_code=404, detail="Annonce non trouvée")
-    history = (
-        db.query(ListingHistory)
-        .filter(ListingHistory.listing_id == listing_id)
-        .order_by(desc(ListingHistory.changed_at))
-        .all()
+# Les compteurs ne bougent qu'au scan (une fois par jour): recalculer six a
+# huit COUNT a chaque ouverture de la vitrine, qui appelle /stats au
+# chargement, ne sert a rien. Deux entrees, publique et complete, chacune
+# valable _STATS_CACHE_SECONDS. Un seul worker => un dict de module suffit,
+# comme pour les compteurs de debit.
+_STATS_CACHE_SECONDS = 60
+_stats_cache: dict[str, tuple[float, BaseModel]] = {}
+
+
+def reset_stats_cache() -> None:
+    """Vide le cache (tests: chaque test repart d'une base vide)."""
+    _stats_cache.clear()
+
+
+def _today_start_utc() -> datetime:
+    """Minuit *local* (settings.tz, Asia/Bangkok) exprime en UTC.
+
+    Les colonnes portent une heure murale UTC (le type DATETIME de SQLite
+    ecarte le decalage a l'ecriture): comparer minuit local tel quel
+    melangeait deux horloges et decalait la frontiere du jour de 7 h; en
+    UTC pur, les compteurs "du jour" repartaient de zero en milieu
+    d'apres-midi pour l'utilisateur.
+    """
+    local_tz = ZoneInfo(settings.tz)
+    today = datetime.now(local_tz).date()
+    return datetime.combine(today, datetime.min.time(), tzinfo=local_tz).astimezone(timezone.utc)
+
+
+def _count_active(db: SASession, *criteria) -> int:
+    return db.query(func.count(Listing.id)).filter(Listing.status == "active", *criteria).scalar() or 0
+
+
+def _count_changed_today(db: SASession, change_type: str, today_start: datetime) -> int:
+    # count(distinct listing_id) et non count(distinct id): `id` est la cle
+    # primaire de l'historique, donc `distinct` n'y dedoublonne rien. Un seul
+    # changement de prix ecrit une ligne par champ touche (facteur ~6).
+    return (
+        db.query(func.count(distinct(ListingHistory.listing_id)))
+        .filter(ListingHistory.change_type == change_type, ListingHistory.changed_at >= today_start)
+        .scalar()
+        or 0
     )
-    return history
-
-
-@app.post("/rental-requests", response_model=RentalRequestResponse, status_code=201)
-def create_rental_request(payload: RentalRequestCreate, db: SASession = Depends(get_db)):
-    req = RentalRequest(
-        city=payload.city,
-        duration=payload.duration,
-        budget=payload.budget,
-        conditions=payload.conditions,
-    )
-    db.add(req)
-    db.commit()
-    db.refresh(req)
-    return req
-
-
-@app.get("/provinces", response_model=list[ProvinceResponse])
-def get_provinces(db: SASession = Depends(get_db)):
-    provinces = db.query(Province).filter(Province.active.is_(True)).order_by(Province.name).all()
-    return provinces
 
 
 # response_model=None: la route rend deux formes selon la session
@@ -1163,82 +971,33 @@ def get_provinces(db: SASession = Depends(get_db)):
 # par un modele unique sans rendre tous les champs optionnels.
 @app.get("/stats", response_model=None)
 def get_stats(request: Request, db: SASession = Depends(get_db)):
-    from datetime import timedelta, date as date_type
+    premium = _is_premium(request)
+    key = "full" if premium else "public"
+    cached = _stats_cache.get(key)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
 
-    # "Aujourd'hui" au sens de l'utilisateur, donc dans settings.tz
-    # (Asia/Bangkok): en UTC, la journee basculait avec 7 h de decalage et
-    # les compteurs "du jour" repartaient de zero en milieu d'apres-midi.
-    # ...puis reconverti en UTC: le type DATETIME de SQLite ecarte le
-    # decalage a l'ecriture, donc les colonnes portent une heure murale UTC.
-    # Comparer minuit *local* tel quel melangeait deux horloges et decalait
-    # la frontiere du jour de 7 h.
-    local_tz = ZoneInfo(settings.tz)
-    today = datetime.now(local_tz).date()
-    today_start = datetime.combine(
-        today, datetime.min.time(), tzinfo=local_tz
-    ).astimezone(timezone.utc)
-
-    total_active = db.query(func.count(Listing.id)).filter(Listing.status == "active").scalar()
-    monthly_count = db.query(func.count(Listing.id)).filter(
-        Listing.has_monthly_contract == "true",
-        Listing.status == "active",
-    ).scalar()
-    three_month_count = db.query(func.count(Listing.id)).filter(
-        Listing.contract_3_month_raw.isnot(None),
-        Listing.contract_3_month_raw.notin_(["", "-"]),
-        Listing.status == "active",
-    ).scalar()
-    six_month_count = db.query(func.count(Listing.id)).filter(
-        Listing.contract_6_month_raw.isnot(None),
-        Listing.contract_6_month_raw.notin_(["", "-"]),
-        Listing.status == "active",
-    ).scalar()
-
-    # `today_start` (minuit local, calcule plus haut) et non 24 h glissantes:
-    # les trois compteurs "du jour" de cette reponse doivent mesurer la meme
-    # fenetre. new_today utilisait `now - 24h` pendant que updated_today et
-    # price_changed_today partaient de minuit, si bien que les trois chiffres
-    # presentes cote a cote ne parlaient pas du meme intervalle.
-    new_today = db.query(func.count(Listing.id)).filter(
-        Listing.first_seen_at >= today_start
-    ).scalar()
-
-    # count(distinct listing_id) et non count(distinct id): `id` est la clé
-    # primaire de l'historique, donc `distinct` n'y dédoublonne rien et on
-    # comptait des lignes. Un seul changement de prix en écrit une par champ
-    # touché, ce qui gonflait le chiffre d'environ un facteur 6.
-    updated_today = (
-        db.query(func.count(distinct(ListingHistory.listing_id)))
-        .filter(
-            ListingHistory.change_type == "UPDATED",
-            ListingHistory.changed_at >= today_start,
-        )
-        .scalar()
+    # `today_start` et non 24 h glissantes: les trois compteurs "du jour"
+    # doivent mesurer la meme fenetre.
+    today_start = _today_start_utc()
+    public = PublicStatsResponse(
+        total_active=_count_active(db),
+        new_today=db.query(func.count(Listing.id)).filter(Listing.first_seen_at >= today_start).scalar() or 0,
+        monthly_contract_count=_count_active(db, Listing.has_monthly_contract == "true"),
+        three_month_contract_count=_count_active(
+            db, Listing.contract_3_month_raw.isnot(None), Listing.contract_3_month_raw.notin_(["", "-"])
+        ),
+        six_month_contract_count=_count_active(
+            db, Listing.contract_6_month_raw.isnot(None), Listing.contract_6_month_raw.notin_(["", "-"])
+        ),
     )
-    price_changed_today = (
-        db.query(func.count(distinct(ListingHistory.listing_id)))
-        .filter(
-            ListingHistory.change_type == "PRICE_CHANGED",
-            ListingHistory.changed_at >= today_start,
-        )
-        .scalar()
-    )
+    if not premium:
+        # Sortie avant les agregats reserves aux comptes: `by_province` est
+        # un GROUP BY sur toute la table, et les compteurs d'historique deux
+        # COUNT DISTINCT de plus -- calcules puis jetes, avant cette garde.
+        _stats_cache[key] = (time.monotonic() + _STATS_CACHE_SECONDS, public)
+        return public
 
-    if not _is_premium(request):
-        # Sortie avant les agregats reserves aux comptes: `by_province`
-        # est un GROUP BY sur toute la table, execute a chaque ouverture
-        # de la vitrine s'il restait ici.
-        return PublicStatsResponse(
-            total_active=total_active or 0,
-            new_today=new_today or 0,
-            monthly_contract_count=monthly_count or 0,
-            three_month_contract_count=three_month_count or 0,
-            six_month_contract_count=six_month_count or 0,
-        )
-
-    total_removed = db.query(func.count(Listing.id)).filter(Listing.status == "removed").scalar()
-
-    # Par province
     by_province = (
         db.query(Listing.province, func.count(Listing.id).label("count"))
         .filter(Listing.status == "active")
@@ -1246,32 +1005,22 @@ def get_stats(request: Request, db: SASession = Depends(get_db)):
         .order_by(desc("count"))
         .all()
     )
-    by_province_list = [
-        {"province": r.province or "Unknown", "count": r.count}
-        for r in by_province
-    ]
-
-    # Dernier scan
     last_scan_row = (
         db.query(ScanLog.finished_at)
         .filter(ScanLog.status == "completed")
         .order_by(desc(ScanLog.finished_at))
         .first()
     )
-    last_scan = last_scan_row.finished_at if last_scan_row else None
-
-    return StatsResponse(
-        total_active=total_active or 0,
-        total_removed=total_removed or 0,
-        new_today=new_today or 0,
-        updated_today=updated_today or 0,
-        price_changed_today=price_changed_today or 0,
-        monthly_contract_count=monthly_count or 0,
-        three_month_contract_count=three_month_count or 0,
-        six_month_contract_count=six_month_count or 0,
-        by_province=by_province_list,
-        last_scan=last_scan,
+    full = StatsResponse(
+        **public.model_dump(),
+        total_removed=db.query(func.count(Listing.id)).filter(Listing.status == "removed").scalar() or 0,
+        updated_today=_count_changed_today(db, "UPDATED", today_start),
+        price_changed_today=_count_changed_today(db, "PRICE_CHANGED", today_start),
+        by_province=[{"province": r.province or "Unknown", "count": r.count} for r in by_province],
+        last_scan=last_scan_row.finished_at if last_scan_row else None,
     )
+    _stats_cache[key] = (time.monotonic() + _STATS_CACHE_SECONDS, full)
+    return full
 
 
 @app.get("/health")
@@ -1284,37 +1033,29 @@ def health():
 
 _FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
 
+# Pages servies sur leur route courte ("/payant.html" en plus de
+# "/static/payant.html"), en plus de "/" (index.html) et "/test"
+# (test.html, la vitrine). Liste blanche explicite: tout autre nom rend
+# 404 sans jamais toucher le disque.
+_PAGES = (
+    "premium.html", "carte-thailande.html", "carte-bangkok.html",
+    "carte-pattaya.html", "carte-phuket.html", "payant.html", "vip.html",
+)
+
 if _FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="static")
 
     @app.get("/")
     def serve_frontend():
         return FileResponse(str(_FRONTEND_DIR / "index.html"))
-    @app.get("/premium.html")
-    def serve_premium():
-        return FileResponse(str(_FRONTEND_DIR / "premium.html"))
-    @app.get("/carte.html")
-    def serve_carte():
-        return FileResponse(str(_FRONTEND_DIR / "carte.html"))
-    @app.get("/carte-phuket.html")
-    def serve_carte_phuket():
-        return FileResponse(str(_FRONTEND_DIR / "carte-phuket.html"))
-    @app.get("/carte-thailande.html")
-    def serve_carte_thailande():
-        return FileResponse(str(_FRONTEND_DIR / "carte-thailande.html"))
-    @app.get("/carte-bangkok.html")
-    def serve_carte_bangkok():
-        return FileResponse(str(_FRONTEND_DIR / "carte-bangkok.html"))
-    @app.get("/carte-pattaya.html")
-    def serve_carte_pattaya():
-        return FileResponse(str(_FRONTEND_DIR / "carte-pattaya.html"))
-    @app.get("/payant.html")
-    def serve_payant():
-        return FileResponse(str(_FRONTEND_DIR / "payant.html"))
-    @app.get("/vip.html")
-    def serve_vip():
-        return FileResponse(str(_FRONTEND_DIR / "vip.html"))
+
     @app.get("/test")
     def serve_test():
         return FileResponse(str(_FRONTEND_DIR / "test.html"))
 
+    @app.get("/{page}.html")
+    def serve_page(page: str):
+        name = f"{page}.html"
+        if name not in _PAGES:
+            raise HTTPException(status_code=404)
+        return FileResponse(str(_FRONTEND_DIR / name))

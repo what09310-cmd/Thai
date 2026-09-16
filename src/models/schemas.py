@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, Literal
 from datetime import datetime
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel
 
 
 class RoomTypeSchema(BaseModel):
@@ -84,7 +84,6 @@ class ListingDetail(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     images: list[str] = []
-    published_at: Optional[datetime] = None
     # True quand le JSON __NEXT_DATA__ de la page a pu etre lu: contacts
     # et charges viennent alors directement de la source et font autorite,
     # y compris quand ils sont vides (voir apply_detail_fields).

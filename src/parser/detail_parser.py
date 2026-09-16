@@ -9,9 +9,7 @@ import json
 import logging
 import itertools
 from typing import Optional
-from datetime import datetime
 from urllib.parse import unquote
-from zoneinfo import ZoneInfo
 
 from scrapling.parser import Selector
 
@@ -20,8 +18,6 @@ from src.normalizers.price import parse_price_range
 from src.normalizers.amenities import derive_amenities
 
 log = logging.getLogger(__name__)
-BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
-CDN_BASE = "https://bcdn.renthub.in.th"
 
 # Nombre maximum d'occurrences "lat"/"lng" appariees dans le repli regex de
 # _extract_coordinates. Au-dela, on paie un produit cartesien pour rien.

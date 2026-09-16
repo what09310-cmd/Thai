@@ -9,9 +9,8 @@ echouent.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-
-import pytest
 
 import src.parser.list_parser as list_parser
 from scrapling.parser import Selector
@@ -31,6 +30,25 @@ def _to_json(model) -> dict:
     return json.loads(model.model_dump_json())
 
 
+_NEXT_DATA_TAG = re.compile(r'<script id="__NEXT_DATA__"[^>]*>.*?</script>', re.DOTALL)
+
+
+def _list_page_without_json() -> str:
+    """La page de liste privee de son JSON __NEXT_DATA__: force le chemin de
+    repli HTML. Derivee de list_page.html plutot que stockee (c'etait un
+    second fichier de 180 KB identique au premier a cette balise pres)."""
+    html = (FIXTURES / "list_page.html").read_text(encoding="utf-8")
+    stripped, n = _NEXT_DATA_TAG.subn("", html)
+    assert n == 1
+    return stripped
+
+
+def _list_page_relabeled() -> str:
+    """Meme page, le libelle "Contract monthly" renomme en "Monthly rate":
+    ce que fait un site qui change ses textes sans changer sa structure."""
+    return _list_page_without_json().replace("Contract monthly", "Monthly rate")
+
+
 def test_list_page_json_path_matches_golden():
     """Page avec __NEXT_DATA__: chemin JSON, inchange par la migration."""
     html = (FIXTURES / "list_page.html").read_text(encoding="utf-8")
@@ -43,7 +61,7 @@ def test_list_page_json_path_matches_golden():
 
 def test_list_page_fallback_path_matches_golden():
     """Page sans __NEXT_DATA__: chemin de repli, migre vers Scrapling."""
-    html = (FIXTURES / "list_page_no_json.html").read_text(encoding="utf-8")
+    html = _list_page_without_json()
     listings = parse_listing_page(html)
     golden = _load_golden("list_page_no_json.golden.json")
 
@@ -92,8 +110,8 @@ def test_adaptive_relocation_survives_label_rename(tmp_path, monkeypatch):
             html, adaptive=True, storage_args={"storage_file": str(db_path), "url": ""}
         )
 
-    original_html = (FIXTURES / "list_page_no_json.html").read_text(encoding="utf-8")
-    renamed_html = (FIXTURES / "list_page_relabeled.html").read_text(encoding="utf-8")
+    original_html = _list_page_without_json()
+    renamed_html = _list_page_relabeled()
 
     baseline_cards = list_parser._find_contract_cards(make_page(original_html))
     assert len(baseline_cards) == 40

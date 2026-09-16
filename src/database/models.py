@@ -12,21 +12,6 @@ class Base(DeclarativeBase):
     pass
 
 
-class Province(Base):
-    __tablename__ = "provinces"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    renthub_url: Mapped[Optional[str]] = mapped_column(String(500))
-    listing_count: Mapped[Optional[int]] = mapped_column(Integer)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    last_scan: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-
 class Listing(Base):
     __tablename__ = "listings"
 
@@ -41,7 +26,6 @@ class Listing(Base):
     address: Mapped[Optional[str]] = mapped_column(String(500))
     subdistrict: Mapped[Optional[str]] = mapped_column(String(200))
     district: Mapped[Optional[str]] = mapped_column(String(200))
-    city: Mapped[Optional[str]] = mapped_column(String(200))
     province: Mapped[Optional[str]] = mapped_column(String(200))
     latitude: Mapped[Optional[float]] = mapped_column(Float)
     longitude: Mapped[Optional[float]] = mapped_column(Float)
@@ -100,7 +84,6 @@ class Listing(Base):
     content_hash: Mapped[Optional[str]] = mapped_column(String(64))
 
     # Timestamps
-    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     source_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     first_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -146,7 +129,6 @@ class ListingImage(Base):
     )
     image_url: Mapped[str] = mapped_column(String(1000), nullable=False)
     position: Mapped[int] = mapped_column(Integer, default=0)
-    local_path: Mapped[Optional[str]] = mapped_column(String(500))
     excluded: Mapped[bool] = mapped_column(Boolean, default=False)
     exclusion_reason: Mapped[Optional[str]] = mapped_column(String(200))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -186,19 +168,6 @@ class ListingHistory(Base):
         Index("ix_history_listing_id", "listing_id"),
         Index("ix_history_change_type", "change_type"),
         Index("ix_history_changed_at", "changed_at"),
-    )
-
-
-class RentalRequest(Base):
-    __tablename__ = "rental_requests"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    city: Mapped[str] = mapped_column(String(50), nullable=False)
-    duration: Mapped[str] = mapped_column(String(50), nullable=False)
-    budget: Mapped[str] = mapped_column(String(50), nullable=False)
-    conditions: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
     )
 
 

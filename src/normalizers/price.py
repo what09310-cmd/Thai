@@ -35,8 +35,3 @@ def parse_price_range(raw: Optional[str]) -> Tuple[Optional[int], Optional[int]]
     if len(nums) == 1:
         return nums[0], nums[0]
     return nums[0], nums[1]
-
-
-def parse_daily_price(raw: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
-    """Idem pour les prix journaliers."""
-    return parse_price_range(raw)

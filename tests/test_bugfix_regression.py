@@ -648,13 +648,15 @@ def test_listings_rejects_out_of_range_pagination(client, query):
     assert client.get(f"/listings?{query}").status_code == 422
 
 
-@pytest.mark.parametrize(
-    "path", ["/listings/new", "/listings/updated", "/listings/price-changed"],
-)
-def test_since_hours_windows_are_bounded(client, path):
-    assert client.get(f"{path}?since_hours=99999999").status_code == 422
-    assert client.get(f"{path}?since_hours=0").status_code == 422
-    assert client.get(f"{path}?since_hours=24").status_code == 200
+def test_removed_routes_stay_removed(client):
+    """Routes retirees (aucune page ne les appelait): chaque route publique
+    est de la surface d'attaque, elles ne doivent pas reapparaitre."""
+    for path in (
+        "/listings/new", "/listings/updated", "/listings/price-changed",
+        "/listings/monthly", "/history/1", "/provinces", "/carte.html",
+    ):
+        assert client.get(path).status_code in (404, 422), path
+    assert client.post("/rental-requests", json={}).status_code in (404, 405)
 
 
 def test_oversized_session_cookie_is_rejected_without_error(client):
@@ -670,13 +672,13 @@ def test_oversized_session_cookie_is_rejected_without_error(client):
 
 
 def test_changing_the_password_invalidates_existing_sessions(monkeypatch):
-    from src.api.auth import verify_session_token
+    from src.api.auth import read_session_token
 
     token = create_session_token()
-    assert verify_session_token(token) is True
+    assert read_session_token(token) is not None
 
     monkeypatch.setattr(settings, "site_password", "un-autre-mot-de-passe")
-    assert verify_session_token(token) is False
+    assert read_session_token(token) is None
 
 
 def test_security_headers_are_set(client):
@@ -841,8 +843,8 @@ def test_everything_outside_protected_paths_is_public(client):
     """La regle est une liste de pages protegees, pas une liste publique:
     assets, pages secondaires et routes API sont servis sans session."""
     assert client.get("/static/anything.js", follow_redirects=False).status_code == 404
-    assert client.get("/carte.html", follow_redirects=False).status_code == 200
-    assert client.get("/provinces", follow_redirects=False).status_code == 200
+    assert client.get("/carte-bangkok.html", follow_redirects=False).status_code == 200
+    assert client.get("/stats", follow_redirects=False).status_code == 200
 
 
 def test_static_assets_and_public_pages_still_work(client):
@@ -873,24 +875,6 @@ def test_like_wildcards_do_not_leak_into_the_filter(client, session):
 
     assert client.get("/listings?province=%25").json() == []
     assert len(client.get("/listings?province=Bangkok").json()) == 1
-
-
-def test_rental_request_rejects_oversized_fields(client):
-    """Les colonnes sont des VARCHAR(50): SQLite les accepte en silence,
-    Postgres lève une DataError non gérée (500)."""
-    client.cookies.set(SESSION_COOKIE_NAME, create_session_token())
-    ok = client.post(
-        "/rental-requests",
-        json={"city": "Bangkok", "duration": "1 mois", "budget": "10000"},
-    )
-    assert ok.status_code == 201
-
-    resp = client.post(
-        "/rental-requests",
-        json={"city": "x" * 500, "duration": "1 mois", "budget": "10000"},
-    )
-    assert resp.status_code == 422
-    client.cookies.clear()
 
 
 def test_logout_clears_the_session(client):

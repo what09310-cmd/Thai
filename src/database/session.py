@@ -28,10 +28,6 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def drop_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-
-
 @contextmanager
 def get_session() -> Generator[Session, None, None]:
     session = SessionLocal()

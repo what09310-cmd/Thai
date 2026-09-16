@@ -45,9 +45,8 @@ HEADERS = {
 # interne de docker-compose, et a ranger la reponse en base.
 #
 # Le controle est ici, dans la couche reseau, plutot que chez chaque
-# appelant: les deux scrapers et les cinq scripts en beneficient sans
-# modification. `src/scraper/geo_discovery.py::is_valid_renthub_url` fait
-# la meme verification pour son propre usage, sans passer par ce client.
+# appelant: les deux scrapers et les scripts de maintenance en beneficient
+# sans modification.
 ALLOWED_HOSTS = frozenset({"renthub.in.th", "www.renthub.in.th"})
 
 # Les redirections sont suivies a la main (voir _get_with_retry) pour
@@ -94,39 +93,29 @@ def _retry_after_seconds(header: Optional[str]) -> int:
 
 
 # `time.monotonic` est global au processus: il traverse sans probleme
-# plusieurs boucles d'evenements successives, contrairement aux primitives
+# plusieurs boucles d'evenements successives, contrairement au verrou
 # asyncio ci-dessous.
 _last_request_time: float = 0.0
 
-# Sémaphore et verrou sont liés à la boucle d'événements qui les utilise en
-# premier: réutilisés depuis une autre boucle (le scan appelle asyncio.run
-# une fois par phase), ils lèvent "is bound to a different event loop" dès
-# qu'il y a vraiment contention. Ils sont donc reconstruits au changement de
-# boucle. Tant que le scraping restait strictement séquentiel, la contention
-# n'arrivait jamais et le défaut passait inaperçu.
-_primitives_loop: Optional[asyncio.AbstractEventLoop] = None
-_semaphore: Optional[asyncio.Semaphore] = None
+# Le verrou est lie a la boucle d'evenements qui l'utilise en premier:
+# reutilise depuis une autre boucle (le scan appelle asyncio.run une fois
+# par phase), il leve "is bound to a different event loop" des qu'il y a
+# vraiment contention. Il est donc reconstruit au changement de boucle.
+#
+# Il n'y a plus de semaphore MAX_CONCURRENT_REQUESTS: le scraping est
+# strictement sequentiel (detail_scraper enchaine les pages une a une) et
+# ce verrou impose de toute facon REQUEST_DELAY entre deux requetes, quel
+# que soit le nombre de taches qui attendent.
+_throttle_loop: Optional[asyncio.AbstractEventLoop] = None
 _throttle_lock: Optional[asyncio.Lock] = None
 
 
-def _reset_primitives_if_loop_changed() -> None:
-    global _primitives_loop, _semaphore, _throttle_lock
-    loop = asyncio.get_running_loop()
-    if _primitives_loop is not loop:
-        _primitives_loop = loop
-        _semaphore = asyncio.Semaphore(settings.max_concurrent_requests)
-        _throttle_lock = asyncio.Lock()
-
-
-def _get_semaphore() -> asyncio.Semaphore:
-    _reset_primitives_if_loop_changed()
-    assert _semaphore is not None
-    return _semaphore
-
-
 def _get_throttle_lock() -> asyncio.Lock:
-    _reset_primitives_if_loop_changed()
-    assert _throttle_lock is not None
+    global _throttle_loop, _throttle_lock
+    loop = asyncio.get_running_loop()
+    if _throttle_loop is not loop or _throttle_lock is None:
+        _throttle_loop = loop
+        _throttle_lock = asyncio.Lock()
     return _throttle_lock
 
 
@@ -172,14 +161,12 @@ class ScraperClient:
         if not is_allowed_url(url):
             log.error(f"URL hors du domaine RentHub, requete refusee: {url}")
             return None
-        sem = _get_semaphore()
-        async with sem:
-            await _throttle()
-            try:
-                return await self._get_with_retry(url)
-            except Exception as e:
-                log.error(f"Échec définitif pour {url}: {e}")
-                return None
+        await _throttle()
+        try:
+            return await self._get_with_retry(url)
+        except Exception as e:
+            log.error(f"Échec définitif pour {url}: {e}")
+            return None
 
     @retry(
         stop=stop_after_attempt(3),

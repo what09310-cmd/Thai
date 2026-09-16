@@ -163,10 +163,6 @@ def read_session_token(token: str | None) -> SessionInfo | None:
     return SessionInfo(user_id=user_id, role=role, expiry=expiry)
 
 
-def verify_session_token(token: str | None) -> bool:
-    return read_session_token(token) is not None
-
-
 def check_credentials(username: str, password: str) -> bool:
     # compare_digest exige des bytes: sur des str, il leve TypeError des
     # qu'un caractere non-ASCII est saisi (mot de passe accentue).

@@ -23,7 +23,6 @@ services:
     environment:
       DATABASE_URL: postgresql://renthub:renthub@postgres:5432/renthub
       REQUEST_DELAY: "2"
-      MAX_CONCURRENT_REQUESTS: "2"
       REMOVED_AFTER_MISSING_SCANS: "3"
       TZ: Asia/Bangkok
     depends_on:

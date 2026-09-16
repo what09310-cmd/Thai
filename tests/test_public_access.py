@@ -8,10 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from src.api.auth import SESSION_COOKIE_NAME, create_session_token
-from src.database.models import Listing, ListingHistory
+from src.database.models import Listing
 
 
 def _add_listings(session, count: int) -> None:

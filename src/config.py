@@ -13,14 +13,9 @@ DEFAULT_SECRET_KEY = "change-this-to-a-random-secret"
 class Settings(BaseSettings):
     database_url: str = "postgresql://user:password@localhost:5432/renthub"
     request_delay: float = 2.0
-    max_concurrent_requests: int = 2
-    max_pages: Optional[int] = None
-    download_images: bool = False
     removed_after_missing_scans: int = 3
     detail_refresh_days: int = 7
     tz: str = "Asia/Bangkok"
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
     scan_interval_minutes: int = 30
     site_username: str = DEFAULT_SITE_USERNAME
     site_password: str = DEFAULT_SITE_PASSWORD
@@ -48,7 +43,12 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     anthropic_api_key: Optional[str] = None
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # extra="ignore": une cle inconnue dans .env (reglage retire, faute de
+    # frappe, variable d'un autre outil) ne doit pas empecher le demarrage.
+    # Sans cela, pydantic-settings refuse tout .env portant une cle qui n'est
+    # plus un champ -- c'est arrive en retirant MAX_CONCURRENT_REQUESTS,
+    # API_HOST et API_PORT, encore presents dans les .env deployes.
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()

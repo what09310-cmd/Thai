@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from src.database.models import Listing, ListingHistory, ListingImage, Province
+from src.database.models import Listing, ListingHistory, ListingImage
 from src.models.schemas import ListingFull
 from src.normalizers.contact_description import build_contact_description
 from src.config import settings
@@ -287,23 +287,6 @@ def mark_removed_listings(
     return removed_count
 
 
-def upsert_province(session: Session, province_data: dict) -> None:
-    """Insère ou met à jour une province."""
-    db_prov = session.query(Province).filter_by(slug=province_data["slug"]).first()
-    if db_prov is None:
-        db_prov = Province(
-            name=province_data["name"],
-            slug=province_data["slug"],
-            renthub_url=province_data.get("url"),
-            listing_count=province_data.get("count"),
-            active=True,
-        )
-        session.add(db_prov)
-    else:
-        db_prov.listing_count = province_data.get("count", db_prov.listing_count)
-        db_prov.renthub_url = province_data.get("url", db_prov.renthub_url)
-
-
 # --- Helpers ---
 
 def _create_listing(
@@ -357,7 +340,6 @@ def _create_listing(
         status="active",
         missing_scan_count=0,
         source_updated_at=_to_utc(listing.source_updated_at),
-        published_at=_to_utc(listing.published_at),
         first_seen_at=now,
         last_seen_at=now,
         last_scraped_at=now,

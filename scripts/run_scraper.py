@@ -11,10 +11,8 @@ Usage:
     python scripts/run_scraper.py --export json --output ./exports
 """
 import asyncio
-import json
 import logging
 import sys
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -30,11 +28,11 @@ from rich.table import Table
 from src.config import settings
 from src.database.session import init_db, get_session, check_connection
 from src.database.models import Listing, ScanLog
-from src.models.schemas import ListingFull
-from src.scraper.list_scraper import scrape_all_listings, scrape_provinces, scrape_all_location_listings
+from src.models.schemas import ListingDetail, ListingFull, ListingRaw
+from src.scraper.list_scraper import scrape_all_listings, scrape_all_location_listings
 from src.scraper.detail_scraper import scrape_details_batch
 from src.scraper.http_client import ScraperClient
-from src.tracker.change_detector import upsert_listing, mark_removed_listings, upsert_province
+from src.tracker.change_detector import upsert_listing, mark_removed_listings
 from src.tracker.exporter import export_listings
 from src.filters.contract import has_short_term_contract
 
@@ -124,7 +122,6 @@ def setup_logging(verbose: bool = False) -> None:
 @click.option("--scrape-details/--no-scrape-details", default=True, help="Scraper les pages individuelles")
 @click.option("--verbose", is_flag=True, help="Logs détaillés")
 @click.option("--init-db-only", is_flag=True, help="Créer les tables et quitter")
-@click.option("--update-provinces", is_flag=True, help="Mettre à jour la liste des provinces")
 @click.option(
     "--include-locations", is_flag=True,
     help="Scraper aussi /en/short-term-rental/<province> pour toutes les provinces "
@@ -148,7 +145,6 @@ def main(
     scrape_details: bool,
     verbose: bool,
     init_db_only: bool,
-    update_provinces: bool,
     include_locations: bool,
     locations_provinces: Optional[str],
 ) -> None:
@@ -166,16 +162,6 @@ def main(
     console.print("[green]✅ Base de données initialisée[/green]")
 
     if init_db_only:
-        return
-
-    # Mettre à jour les provinces
-    if update_provinces:
-        console.print("🗺️  Mise à jour des provinces...")
-        provinces = asyncio.run(scrape_provinces())
-        with get_session() as session:
-            for prov in provinces:
-                upsert_province(session, prov)
-        console.print(f"   {len(provinces)} provinces mises à jour")
         return
 
     # Lancer le scan
@@ -217,7 +203,7 @@ def main(
         )
 
     seen_slugs: set[str] = set()
-    listings_to_process: list["ListingRaw"] = []
+    listings_to_process: list[ListingRaw] = []
 
     try:
         _run_scan(
@@ -367,7 +353,7 @@ def _run_scan(
         )
 
     # — Phase 2: Scraping des pages détail —
-    detail_map: dict[str, "ListingDetail"] = {}
+    detail_map: dict[str, ListingDetail] = {}
 
     if scrape_details and listings_to_process:
         with get_session() as session:
@@ -390,7 +376,7 @@ def _run_scan(
         )
         skipped = len(listings_to_process) - len(urls_to_scrape)
 
-        console.print(f"\n[bold]Phase 2: Scraping détail...[/bold]")
+        console.print("\n[bold]Phase 2: Scraping détail...[/bold]")
         console.print(
             f"   {skipped} skippées (détail scrapé il y a moins de "
             f"{settings.detail_refresh_days} jours)"
@@ -566,8 +552,6 @@ def _merge_listing(listing_raw, detail) -> ListingFull:
     apply_contract_fields cesserait de reconnaître les sources autoritaires.
     Un tel ajout impose de fusionner champ par champ.
     """
-    from src.models.schemas import ListingFull
-
     raw_data = listing_raw.model_dump()
     detail_data = detail.model_dump() if detail else {}
 

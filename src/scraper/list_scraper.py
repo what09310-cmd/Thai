@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import AsyncIterator, Optional
-
-from bs4 import BeautifulSoup
 
 from src.models.schemas import ListingRaw
 from src.parser.list_parser import extract_last_page, parse_listing_page
@@ -14,7 +11,6 @@ log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.renthub.in.th"
 BROWSE_URL = f"{BASE_URL}/en/browse/short-term-monthly"
-PROVINCES_URL = f"{BASE_URL}/en/browse/provinces"
 
 # Les 77 provinces officielles de Thaïlande -> slug utilisé par renthub.
 # (la page /en/browse/provinces mélange aussi les quartiers de Bangkok,
@@ -232,43 +228,3 @@ async def scrape_all_location_listings(
             count += 1
             yield listing
         log.info(f"{name}: {count} annonces via short-term-rental")
-
-
-async def scrape_provinces() -> list[dict]:
-    """
-    Récupère la liste des vraies provinces thaïlandaises depuis
-    /en/browse/provinces (cette page mélange aussi les quartiers de
-    Bangkok, on filtre avec THAI_PROVINCES pour ne garder que les
-    provinces officielles).
-    """
-    async with ScraperClient() as client:
-        html = await client.get(PROVINCES_URL)
-
-        if not html:
-            log.error(
-                f"Impossible de charger la page des provinces : {PROVINCES_URL}"
-            )
-            return []
-
-        soup = BeautifulSoup(html, "lxml")
-        hrefs = {
-            a["href"] for a in soup.find_all(
-                "a", href=re.compile(r"^/en/short-term-rental/[^/]+$")
-            )
-        }
-        by_slug = {h.rsplit("/", 1)[-1]: h for h in hrefs}
-
-        provinces = []
-        for name, slug in THAI_PROVINCES.items():
-            href = by_slug.get(slug)
-            if not href:
-                continue
-            provinces.append({
-                "name": name,
-                "slug": slug,
-                "url": f"{BASE_URL}{href}",
-                "count": None,
-            })
-
-        log.info(f"Provinces trouvées: {len(provinces)}")
-        return provinces

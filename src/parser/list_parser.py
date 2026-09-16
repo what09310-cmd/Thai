@@ -12,11 +12,10 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from bs4 import BeautifulSoup
 from scrapling.parser import Selector
 
 from src.models.schemas import ListingRaw
-from src.normalizers.price import parse_price_range, parse_daily_price
+from src.normalizers.price import parse_price_range
 from src.filters.contract import has_monthly_contract
 
 log = logging.getLogger(__name__)
@@ -385,7 +384,7 @@ def _parse_card(card: Selector) -> Optional[ListingRaw]:
         price_monthly_min, price_monthly_max = parse_price_range(price_monthly_raw)
 
         daily_price_raw = _extract_price(full_text, "THB/day")
-        daily_price_min, daily_price_max = parse_daily_price(daily_price_raw)
+        daily_price_min, daily_price_max = parse_price_range(daily_price_raw)
 
         # Contrats structurés: extraire la valeur qui suit chaque label
         contract_monthly_raw = _extract_contract_value(lines, "Contract monthly")
@@ -577,26 +576,3 @@ def extract_last_page(html: str, path_marker: str = "short-term-monthly") -> int
             if n > max_page:
                 max_page = n
     return max_page
-
-
-def extract_provinces(html: str) -> list[dict]:
-    soup = BeautifulSoup(html, "lxml")
-    provinces = []
-    seen = set()
-    links = soup.find_all("a", href=re.compile(r"/en/apartment/short-term-monthly/([^/]+)$"))
-    for link in links:
-        m = re.search(r"/en/apartment/short-term-monthly/([^/]+)$", link["href"])
-        if not m:
-            continue
-        slug = m.group(1)
-        if slug in seen:
-            continue
-        seen.add(slug)
-        text = re.sub(r"^Apartment\s+", "", link.get_text(strip=True), flags=re.I).strip()
-        provinces.append({
-            "name": text,
-            "slug": slug,
-            "url": BASE_URL + link["href"],
-            "count": None,
-        })
-    return provinces

@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.api import rate_limit
-from src.api.main import app, get_db
+from src.api.main import app, get_db, reset_stats_cache
 from src.database.models import Base
 
 
@@ -49,13 +49,16 @@ def client(session):
 
 
 @pytest.fixture(autouse=True)
-def _reset_rate_limits():
-    """Compteurs de debit remis a zero entre deux tests.
+def _reset_module_state():
+    """Compteurs de debit et cache de /stats remis a zero entre deux tests.
 
-    Ils vivent dans un dict de module (deploiement a un seul worker): sans
-    cette purge, les requetes d'un test consomment le budget du suivant et
-    l'ordre d'execution decide qui echoue.
+    Ils vivent dans des dicts de module (deploiement a un seul worker): sans
+    cette purge, les requetes d'un test consomment le budget du suivant, ou
+    lui servent les compteurs d'une base qui n'existe plus, et l'ordre
+    d'execution decide qui echoue.
     """
     rate_limit.reset()
+    reset_stats_cache()
     yield
     rate_limit.reset()
+    reset_stats_cache()
