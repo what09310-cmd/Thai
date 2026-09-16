@@ -158,47 +158,56 @@ async def scrape_all_listings(
 async def scrape_location_listings(
     location_url: str,
     max_pages: Optional[int] = None,
+    client: Optional[ScraperClient] = None,
 ) -> AsyncIterator[ListingRaw]:
     """
     Scrape les annonces d'une page "par lieu" du type
     /en/short-term-rental/<slug>, paginée en /<slug>/2, /<slug>/3, ...
     Ces pages n'ont presque jamais de contrat structuré (1/3/6 mois),
     juste un prix THB/month générique.
+
+    `client` permet de partager une connexion entre plusieurs lieux: en
+    ouvrir un par province refaisait 77 poignees de main TCP+TLS+HTTP/2
+    par passe --include-locations.
     """
-    async with ScraperClient() as client:
+    if client is None:
+        async with ScraperClient() as owned_client:
+            async for listing in scrape_location_listings(location_url, max_pages, owned_client):
+                yield listing
+        return
 
-        base = location_url.rstrip("/")
-        path_marker = base.replace(BASE_URL, "").lstrip("/")
+    base = location_url.rstrip("/")
+    path_marker = base.replace(BASE_URL, "").lstrip("/")
 
-        html = await client.get(base)
+    html = await client.get(base)
+
+    if not html:
+        log.warning(f"Impossible de charger : {base}")
+        return
+
+    last_page = extract_last_page(html, path_marker=path_marker)
+    limit = min(last_page, max_pages) if max_pages else last_page
+
+    listings = parse_listing_page(html)
+    log.info(f"{path_marker} page 1: {len(listings)} annonces")
+
+    for listing in listings:
+        yield listing
+
+    for page_num in range(2, limit + 1):
+
+        url = f"{base}/{page_num}"
+        html = await client.get(url)
 
         if not html:
-            log.warning(f"Impossible de charger : {base}")
-            return
-
-        last_page = extract_last_page(html, path_marker=path_marker)
-        limit = min(last_page, max_pages) if max_pages else last_page
+            log.warning(f"Page {page_num} inaccessible : {url}")
+            continue
 
         listings = parse_listing_page(html)
-        log.info(f"{path_marker} page 1: {len(listings)} annonces")
+        log.info(f"{path_marker} page {page_num}: {len(listings)} annonces")
 
         for listing in listings:
             yield listing
-
-        for page_num in range(2, limit + 1):
-
-            url = f"{base}/{page_num}"
-            html = await client.get(url)
-
-            if not html:
-                log.warning(f"Page {page_num} inaccessible : {url}")
-                continue
-
-            listings = parse_listing_page(html)
-            log.info(f"{path_marker} page {page_num}: {len(listings)} annonces")
-
-            for listing in listings:
-                yield listing
 
 
 async def scrape_all_location_listings(
@@ -221,10 +230,11 @@ async def scrape_all_location_listings(
         wanted = set(provinces)
         items = [(name, slug) for name, slug in items if slug in wanted]
 
-    for name, slug in items:
-        url = f"{BASE_URL}/en/short-term-rental/{slug}"
-        count = 0
-        async for listing in scrape_location_listings(url, max_pages=max_pages_per_location):
-            count += 1
-            yield listing
-        log.info(f"{name}: {count} annonces via short-term-rental")
+    async with ScraperClient() as client:
+        for name, slug in items:
+            url = f"{BASE_URL}/en/short-term-rental/{slug}"
+            count = 0
+            async for listing in scrape_location_listings(url, max_pages_per_location, client):
+                count += 1
+                yield listing
+            log.info(f"{name}: {count} annonces via short-term-rental")

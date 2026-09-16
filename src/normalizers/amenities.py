@@ -148,6 +148,18 @@ AMENITY_PATTERNS: dict[str, tuple[list[str], list[str]]] = {
 }
 
 
+# Compiles une fois: ~90 motifs evalues sur chaque description, le cache
+# interne de `re` (256 entrees) ne suffisait plus a les garder tous.
+_COMPILED: list[tuple[str, list[re.Pattern], list[re.Pattern]]] = [
+    (
+        name,
+        [re.compile(p, re.I) for p in positives],
+        [re.compile(n, re.I) for n in negatives],
+    )
+    for name, (positives, negatives) in AMENITY_PATTERNS.items()
+]
+
+
 def derive_amenities(description: str | None) -> list[str]:
     """
     Détecte, parmi les 28 catégories connues, celles réellement mentionnées
@@ -161,9 +173,9 @@ def derive_amenities(description: str | None) -> list[str]:
 
     text = description.lower()
     result = []
-    for name, (positives, negatives) in AMENITY_PATTERNS.items():
-        if any(re.search(neg, text, re.I) for neg in negatives):
+    for name, positives, negatives in _COMPILED:
+        if any(neg.search(text) for neg in negatives):
             continue
-        if any(re.search(pos, text, re.I) for pos in positives):
+        if any(pos.search(text) for pos in positives):
             result.append(name)
     return result

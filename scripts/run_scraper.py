@@ -33,7 +33,7 @@ from src.models.schemas import ListingDetail, ListingFull, ListingRaw
 from src.scraper.detail_scraper import scrape_details_batch
 from src.scraper.http_client import ScraperClient
 from src.scraper.list_scraper import scrape_all_listings, scrape_all_location_listings
-from src.tracker.change_detector import mark_removed_listings, upsert_listing
+from src.tracker.change_detector import load_existing, mark_removed_listings, upsert_listing
 from src.tracker.exporter import export_listings
 
 console = Console()
@@ -491,6 +491,14 @@ def _persist_listings(
     # PRICE_CHANGED qui n'ont jamais atteint la base.
     pending = {"new": 0, "updated": 0, "price_changed": 0, "monthly": 0}
 
+    # Une requete pour toutes les annonces connues (images comprises), au
+    # lieu d'un SELECT par slug. `expire_on_commit=False`: sans cela, chaque
+    # commit intermediaire expirait ces objets et le SELECT par annonce
+    # revenait par la porte de derriere. Un rollback les expire quand meme,
+    # ce qui ne coute qu'un rechargement du lot en cours.
+    session.expire_on_commit = False
+    existing = load_existing(session, [l.slug for l in listings_to_process])
+
     def _flush_pending() -> None:
         for key, value in pending.items():
             stats[key] += value
@@ -504,8 +512,10 @@ def _persist_listings(
             detail = detail_map.get(listing_raw.url)
             listing_full = _merge_listing(listing_raw, detail)
 
-            change_type, db_listing = upsert_listing(session, listing_full, scan_time)
+            change_type, db_listing = upsert_listing(session, listing_full, scan_time, existing)
             session.flush()
+            if change_type == "NEW" and db_listing is not None:
+                existing[listing_raw.slug] = db_listing
 
             if db_listing and listing_full.has_monthly_contract == "true":
                 pending["monthly"] += 1

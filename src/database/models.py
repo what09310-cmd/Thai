@@ -3,7 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -109,12 +120,11 @@ class Listing(Base):
         Index("ix_listings_province", "province"),
         Index("ix_listings_status", "status"),
         Index("ix_listings_has_monthly", "has_monthly_contract"),
-        Index("ix_listings_source_id", "source_id"),
         Index("ix_listings_price_monthly_min", "price_monthly_min"),
         # Tri par defaut de GET /listings. Sans lui, chaque appel faisait un
         # SCAN de la table suivi d'un USE TEMP B-TREE FOR ORDER BY.
         Index("ix_listings_source_updated_at", "source_updated_at"),
-        # Filtre de GET /listings/new et du compteur "nouvelles" de /stats.
+        # Compteur "nouvelles aujourd'hui" de /stats.
         Index("ix_listings_first_seen_at", "first_seen_at"),
     )
 
@@ -142,6 +152,9 @@ class ListingImage(Base):
         # ~60 000 lignes de la table a chaque requete pour n'en tirer qu'une
         # vignette par annonce (SCAN listing_images).
         Index("ix_listing_images_listing_id", "listing_id"),
+        # Une URL par annonce: l'ancien calcul de position en avait inscrit
+        # certaines deux fois (scripts/migrate.py dedoublonne l'existant).
+        UniqueConstraint("listing_id", "image_url", name="uq_listing_images_listing_url"),
     )
 
 
@@ -165,8 +178,10 @@ class ListingHistory(Base):
 
     __table_args__ = (
         Index("ix_history_listing_id", "listing_id"),
-        Index("ix_history_change_type", "change_type"),
         Index("ix_history_changed_at", "changed_at"),
+        # Compteurs "du jour" de /stats: WHERE change_type = ? AND changed_at >= ?.
+        # Un index sur change_type seul (5 valeurs) ne servait a rien.
+        Index("ix_history_type_changed_at", "change_type", "changed_at"),
     )
 
 

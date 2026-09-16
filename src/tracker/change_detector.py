@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.config import settings
 from src.database.models import Listing, ListingHistory, ListingImage
@@ -27,13 +27,31 @@ log = logging.getLogger(__name__)
 # scrapé faisait donc basculer le hash à chaque cycle de péremption détail
 # (detail_refresh_days), produisant un UPDATED fantôme par annonce et par
 # bascule. Voir compute_content_hash.
+#
+# `deposit` et `electric_price` plutot que `description`: la description est
+# regeneree a partir de ces deux champs et de la climatisation (deja dans
+# `amenities`), donc la hasher revenait a hasher ceux-ci -- sauf qu'un
+# simple changement de format de build_contact_description declenchait un
+# UPDATED sur tout le catalogue. Changer cette liste impose de recalculer
+# content_hash sur les lignes existantes (scripts/migrate.py le fait), sans
+# quoi le scan suivant ecrit un UPDATED fantome par annonce.
 HASH_FIELDS = [
     "name",
     "price_monthly_min", "price_monthly_max",
     "contract_monthly_raw", "contract_3_month_raw", "contract_6_month_raw",
-    "description",
+    "deposit", "electric_price",
     "amenities",
 ]
+
+# Taille des clauses IN (...) envoyees en base: SQLite d'avant 3.32 plafonne
+# a 999 parametres, et une clause de plusieurs milliers d'entrees n'apporte
+# rien de plus qu'une serie de 500.
+_IN_CHUNK = 500
+
+
+def _chunks(values: list, size: int = _IN_CHUNK):
+    for i in range(0, len(values), size):
+        yield values[i:i + size]
 
 # Fraction minimale du catalogue actif qu'un scan doit avoir vue pour que
 # la détection des suppressions soit considérée fiable.
@@ -140,21 +158,45 @@ def compute_content_hash(db_listing: Listing) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
+def load_existing(session: Session, slugs: list[str]) -> dict[str, Listing]:
+    """Charge en quelques requetes les annonces deja connues, images comprises.
+
+    Sans cette table, upsert_listing faisait un SELECT par slug puis
+    chargeait les ~45 images de chaque annonce a la demande: ~4 000 aller-
+    retours par scan, soit plusieurs minutes vers un Postgres distant.
+    """
+    found: dict[str, Listing] = {}
+    for chunk in _chunks(slugs):
+        for db_listing in (
+            session.query(Listing)
+            .options(selectinload(Listing.images))
+            .filter(Listing.slug.in_(chunk))
+        ):
+            found[db_listing.slug] = db_listing
+    return found
+
+
 def upsert_listing(
     session: Session,
     listing: ListingFull,
     scan_time: datetime,
+    existing: Optional[dict[str, Listing]] = None,
 ) -> tuple[str, Optional[Listing]]:
     """
     Insère ou met à jour une annonce dans la base.
+
+    `existing` (voir load_existing) evite un SELECT par annonce; sans lui,
+    l'annonce est cherchee par slug.
 
     Retourne: (change_type, db_listing)
     change_type: "NEW" | "UPDATED" | "PRICE_CHANGED" | "UNCHANGED"
     """
     now = scan_time
 
-    # Chercher l'annonce existante par slug
-    db_listing = session.query(Listing).filter_by(slug=listing.slug).first()
+    if existing is not None:
+        db_listing = existing.get(listing.slug)
+    else:
+        db_listing = session.query(Listing).filter_by(slug=listing.slug).first()
 
     if db_listing is None:
         # Nouvelle annonce
@@ -245,10 +287,12 @@ def mark_removed_listings(
     - Si missing_scan_count >= REMOVED_AFTER_MISSING_SCANS -> status = "removed"
     """
     threshold = settings.removed_after_missing_scans
-    removed_count = 0
 
-    active_listings = (
-        session.query(Listing)
+    # Quatre colonnes, pas des objets ORM complets: cette fonction ne fait
+    # que des mises a jour en masse, elle n'a pas besoin de charger 1 200
+    # annonces avec leurs 50 colonnes.
+    active = (
+        session.query(Listing.id, Listing.slug, Listing.missing_scan_count, Listing.name)
         .filter(Listing.status == "active")
         .all()
     )
@@ -256,35 +300,37 @@ def mark_removed_listings(
     # Filet de sécurité: un scan interrompu (panne réseau, --max-pages) ne
     # voit qu'une fraction du catalogue. Incrémenter missing_scan_count sur
     # tout le reste finirait par marquer l'ensemble des annonces "removed".
-    if active_listings and len(seen_slugs) < len(active_listings) * MIN_SCAN_COVERAGE:
+    if active and len(seen_slugs) < len(active) * MIN_SCAN_COVERAGE:
         log.warning(
             "Scan partiel (%d annonces vues pour %d actives): "
             "détection des suppressions ignorée",
             len(seen_slugs),
-            len(active_listings),
+            len(active),
         )
         return 0
 
-    for db_listing in active_listings:
-        if db_listing.slug not in seen_slugs:
-            db_listing.missing_scan_count += 1
+    seen_to_reset = [row.id for row in active if row.slug in seen_slugs and row.missing_scan_count]
+    missing = [row for row in active if row.slug not in seen_slugs]
+    to_remove = [row for row in missing if row.missing_scan_count + 1 >= threshold]
 
-            if db_listing.missing_scan_count >= threshold:
-                if db_listing.status != "removed":
-                    db_listing.status = "removed"
-                    _add_history(
-                        session, db_listing, "REMOVED", scan_time,
-                        field_name="missing_scan_count",
-                        old_value="active",
-                        new_value=str(db_listing.missing_scan_count),
-                    )
-                    removed_count += 1
-                    log.info(f"[REMOVED] {db_listing.name[:50]}")
-        else:
-            # Annonce vue: réinitialiser le compteur
-            db_listing.missing_scan_count = 0
+    for chunk in _chunks(seen_to_reset):
+        session.query(Listing).filter(Listing.id.in_(chunk)).update({Listing.missing_scan_count: 0})
+    for chunk in _chunks([row.id for row in missing]):
+        session.query(Listing).filter(Listing.id.in_(chunk)).update(
+            {Listing.missing_scan_count: Listing.missing_scan_count + 1}
+        )
+    for chunk in _chunks([row.id for row in to_remove]):
+        session.query(Listing).filter(Listing.id.in_(chunk)).update({Listing.status: "removed"})
+    for row in to_remove:
+        _add_history(
+            session, row.id, "REMOVED", scan_time,
+            field_name="missing_scan_count",
+            old_value="active",
+            new_value=str(row.missing_scan_count + 1),
+        )
+        log.info(f"[REMOVED] {row.name[:50]}")
 
-    return removed_count
+    return len(to_remove)
 
 
 # --- Helpers ---
@@ -442,7 +488,7 @@ def _update_listing_fields(
 
 def _add_history(
     session: Session,
-    db_listing: Listing,
+    listing: Listing | int,
     change_type: str,
     changed_at: datetime,
     field_name: Optional[str] = None,
@@ -450,7 +496,7 @@ def _add_history(
     new_value: Optional[str] = None,
 ) -> None:
     entry = ListingHistory(
-        listing_id=db_listing.id,
+        listing_id=listing if isinstance(listing, int) else listing.id,
         changed_at=changed_at,
         change_type=change_type,
         field_name=field_name,

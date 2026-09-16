@@ -288,8 +288,8 @@ def test_a_failing_listing_does_not_poison_the_rest_of_the_scan(session, monkeyp
 
     real_upsert = runner.upsert_listing
 
-    def upsert_with_one_broken_row(db, listing, scan_time):
-        result = real_upsert(db, listing, scan_time)
+    def upsert_with_one_broken_row(db, listing, scan_time, existing=None):
+        result = real_upsert(db, listing, scan_time, existing)
         if listing.slug == "broken":
             # Ligne invalide (listing_id NOT NULL): l'erreur sort au flush,
             # exactement comme une contrainte violée en production.
@@ -318,10 +318,10 @@ def test_a_rollback_forgets_the_uncommitted_counters(session, monkeypatch):
     """Les NEW du lot défait ne doivent pas figurer dans le rapport."""
     import scripts.run_scraper as runner
 
-    def upsert_raising_on(db, listing, scan_time):
+    def upsert_raising_on(db, listing, scan_time, existing=None):
         if listing.slug == "broken":
             raise IntegrityError("INSERT", {}, Exception("boom"))
-        return upsert_listing(db, listing, scan_time)
+        return upsert_listing(db, listing, scan_time, existing)
 
     monkeypatch.setattr(runner, "upsert_listing", upsert_raising_on)
     monkeypatch.setattr(runner, "PERSIST_COMMIT_EVERY", 100)
