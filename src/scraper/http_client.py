@@ -201,11 +201,14 @@ class ScraperClient:
                 return ""
 
             if response.status_code == 429:
-                # Rate limited: attendre plus longtemps
+                # Rate limited: on respecte Retry-After puis on rejoue la
+                # meme URL dans cette boucle. Lever une exception ici
+                # faisait attendre tenacity une seconde fois (4 a 30 s
+                # d'exponentielle) apres le delai deja respecte.
                 wait_time = _retry_after_seconds(response.headers.get("Retry-After"))
                 log.warning(f"Rate limited (429), attente {wait_time}s")
                 await asyncio.sleep(wait_time)
-                raise httpx.TimeoutException(f"Rate limited, retrying after {wait_time}s")
+                continue
 
             if response.status_code >= 500:
                 raise httpx.NetworkError(f"Erreur serveur {response.status_code}")
@@ -213,5 +216,7 @@ class ScraperClient:
             response.raise_for_status()
             return response.text
 
-        log.warning(f"Trop de redirections ({MAX_REDIRECTS}) pour {url}")
+        # Plus de MAX_REDIRECTS sauts, ou 429 a repetition: la page est
+        # traitee comme indisponible ("" = a ne pas recompter en erreur).
+        log.warning(f"Trop de redirections ou de 429 ({MAX_REDIRECTS + 1} essais) pour {url}")
         return ""

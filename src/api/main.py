@@ -745,7 +745,7 @@ def _approximate_position(listing_id: int, lat: float, lon: float) -> tuple[floa
 def _listing_to_response(
     listing: Listing,
     images: Optional[list[str]] = None,
-    authenticated: bool = False,
+    premium: bool = False,
 ) -> dict:
     d = {}
     for col in Listing.__table__.columns:
@@ -758,7 +758,7 @@ def _listing_to_response(
         images = [img.image_url for img in ordered]
     d["images"] = images
     d["location_approx"] = False
-    if not authenticated:
+    if not premium:
         for field in _CONTACT_FIELDS + _PRECIOUS_FIELDS:
             d[field] = None
         if d.get("latitude") is not None and d.get("longitude") is not None:
@@ -819,7 +819,7 @@ def _thumbnail_map(db: SASession, listing_ids: list[int]) -> dict[int, str]:
 
 
 def _listings_to_response(
-    db: SASession, listings: list[Listing], authenticated: bool = False
+    db: SASession, listings: list[Listing], premium: bool = False
 ) -> list[dict]:
     """Serialise une liste d'annonces avec leur seule vignette."""
     thumbnails = _thumbnail_map(db, [l.id for l in listings])
@@ -827,7 +827,7 @@ def _listings_to_response(
         _listing_to_response(
             l,
             images=[thumbnails[l.id]] if l.id in thumbnails else [],
-            authenticated=authenticated,
+            premium=premium,
         )
         for l in listings
     ]
@@ -887,7 +887,7 @@ def get_listings(
     offset: int = Query(0, ge=0, le=_MAX_OFFSET),
     db: SASession = Depends(get_db),
 ):
-    authenticated = _is_premium(request)
+    premium = _is_premium(request)
     query = db.query(Listing)
     query = _apply_filters(query, province, district, price_min, price_max, monthly, status)
 
@@ -911,7 +911,7 @@ def get_listings(
         .all()
     )
 
-    return _listings_to_response(db, listings, authenticated=authenticated)
+    return _listings_to_response(db, listings, premium=premium)
 
 
 @app.get("/listings/{listing_id}", response_model=dict)
@@ -919,7 +919,7 @@ def get_listing(listing_id: int, request: Request, db: SASession = Depends(get_d
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Annonce non trouvée")
-    return _listing_to_response(listing, authenticated=_is_premium(request))
+    return _listing_to_response(listing, premium=_is_premium(request))
 
 
 # Les compteurs ne bougent qu'au scan (une fois par jour): recalculer six a

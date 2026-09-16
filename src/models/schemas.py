@@ -88,6 +88,11 @@ class ListingDetail(BaseModel):
     # et charges viennent alors directement de la source et font autorite,
     # y compris quand ils sont vides (voir apply_detail_fields).
     has_structured_data: bool = False
+    # True quand la page detail n'existe plus (404, redirection hors site):
+    # ce n'est pas un echec de scrape mais une information -- l'annonce sera
+    # retiree par la page de liste au bout de N scans. Marquer
+    # detail_scraped_at evite de redemander cette page a chaque scan.
+    page_gone: bool = False
 
 
 class ListingFull(ListingRaw, ListingDetail):

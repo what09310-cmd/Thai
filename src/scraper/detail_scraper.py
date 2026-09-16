@@ -16,8 +16,13 @@ log = logging.getLogger(__name__)
 async def scrape_detail(url: str, client: ScraperClient) -> Optional[ListingDetail]:
     """Scrape et parse une page d'annonce individuelle."""
     html = await client.get(url)
-    if not html:
-        return None
+    if html is None:
+        return None  # echec technique (reseau, 5xx apres retries): a recompter
+    if html == "":
+        # 404 ou redirection hors domaine: la page n'existe plus. Ce n'est
+        # pas une erreur de scan, et rien ne doit ecraser les champs deja
+        # connus (has_structured_data reste False).
+        return ListingDetail(page_gone=True)
     return parse_detail_page(html, url)
 
 

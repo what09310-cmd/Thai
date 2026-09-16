@@ -336,3 +336,52 @@ def test_a_rollback_forgets_the_uncommitted_counters(session, monkeypatch):
     assert {l.slug for l in session.query(Listing).all()} == {"c"}
     assert stats["new"] == 1
     assert stats["errors"] == 1
+
+
+# ── Page détail disparue: ni une erreur, ni une page à redemander ────
+#
+# Le client HTTP rend "" pour un 404 (annonce retirée) et None pour un échec
+# technique; scrape_detail confondait les deux en None, si bien qu'une page
+# disparue comptait comme une erreur de scan et, faute de detail_scraped_at,
+# était redemandée à chaque scan jusqu'à ce que la page de liste la retire.
+
+def test_a_vanished_detail_page_is_not_an_error_and_is_not_refetched(session):
+    import asyncio
+
+    from src.scraper.detail_scraper import scrape_detail
+    from src.models.schemas import ListingDetail
+
+    class GoneClient:
+        async def get(self, url):
+            return ""
+
+    class DownClient:
+        async def get(self, url):
+            return None
+
+    gone = asyncio.run(scrape_detail("https://www.renthub.in.th/en/x", GoneClient()))
+    assert isinstance(gone, ListingDetail) and gone.page_gone and not gone.has_structured_data
+    assert asyncio.run(scrape_detail("https://www.renthub.in.th/en/x", DownClient())) is None
+
+    # Persistée, la page disparue marque detail_scraped_at sans toucher aux
+    # contacts déjà connus.
+    upsert_listing(session, ListingFull(**_raw("x").model_dump(), phone="0812345678", source_id="1"), NOW)
+    session.commit()
+    later = NOW + timedelta(days=1)
+    _, db_listing = upsert_listing(session, ListingFull(**_raw("x").model_dump(), page_gone=True), later)
+    session.commit()
+    session.refresh(db_listing)
+    assert db_listing.phone == "0812345678"
+    assert db_listing.detail_scraped_at.replace(tzinfo=timezone.utc) == later
+
+
+def test_a_zero_coordinate_is_not_mistaken_for_a_missing_one(session):
+    """`listing.latitude or db_listing.latitude` ignorait une coordonnée 0.0."""
+    upsert_listing(session, ListingFull(**_raw("z").model_dump(), latitude=13.7, longitude=100.5), NOW)
+    session.commit()
+    _, db_listing = upsert_listing(
+        session, ListingFull(**_raw("z").model_dump(), latitude=0.0, longitude=0.0), NOW
+    )
+    session.commit()
+    session.refresh(db_listing)
+    assert (db_listing.latitude, db_listing.longitude) == (0.0, 0.0)

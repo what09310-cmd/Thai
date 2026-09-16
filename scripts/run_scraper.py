@@ -182,6 +182,7 @@ def main(
         "removed": 0,
         "monthly": 0,
         "errors": 0,
+        "gone": 0,
     }
 
     console.print(f"\n[bold cyan]🚀 Scan démarré — {scan_time.strftime('%Y-%m-%d %H:%M:%S UTC')}[/bold cyan]")
@@ -272,6 +273,7 @@ def _print_report(console: Console, scan_time: datetime, stats: dict) -> None:
     table.add_row("Supprimées [REMOVED]", f"[red]{stats['removed']}[/red]")
     table.add_row("Avec Contract monthly", f"[cyan]{stats['monthly']}[/cyan]")
     table.add_row("Erreurs", f"[red]{stats['errors']}[/red]")
+    table.add_row("Pages détail disparues (404)", f"[dim]{stats['gone']}[/dim]")
 
     console.print(table)
 
@@ -357,16 +359,13 @@ def _run_scan(
 
     if scrape_details and listings_to_process:
         with get_session() as session:
-            # source_id ("Listing no") n'est renseigné que par le parseur
-            # de page détail: c'est le seul marqueur fiable d'un scrape
-            # détail réussi. `description` ne convient pas, elle est
-            # regénérée pour toute annonce par build_contact_description.
-            last_detail_scrape = {
-                slug: detail_scraped_at
-                for slug, detail_scraped_at in session.query(
-                    Listing.slug, Listing.detail_scraped_at
-                ).filter(Listing.source_id.isnot(None))
-            }
+            # detail_scraped_at n'est pose que par un scrape detail reussi
+            # (source_id lu) ou par une page disparue (404): c'est le
+            # marqueur fiable. `description` ne convient pas, elle est
+            # regeneree pour toute annonce par build_contact_description.
+            last_detail_scrape = dict(
+                session.query(Listing.slug, Listing.detail_scraped_at)
+            )
 
         urls_to_scrape = select_detail_urls(
             listings_to_process,
@@ -401,12 +400,18 @@ def _run_scan(
                     )
                     results = await scrape_details_batch(batch, client)
                     detail_map.update(results)
+                    # None = echec technique (compte comme erreur); page_gone =
+                    # annonce retiree cote site, qui n'est pas un echec.
                     errors_in_batch = sum(1 for v in results.values() if v is None)
+                    gone_in_batch = sum(1 for v in results.values() if v is not None and v.page_gone)
                     if errors_in_batch:
                         stats["errors"] += errors_in_batch
                         console.print(
                             f"   [yellow]⚠️  {errors_in_batch} erreurs dans ce batch[/yellow]"
                         )
+                    if gone_in_batch:
+                        stats["gone"] += gone_in_batch
+                        console.print(f"   [dim]{gone_in_batch} page(s) détail disparue(s) (404)[/dim]")
 
         asyncio.run(run_detail_scraper())
 

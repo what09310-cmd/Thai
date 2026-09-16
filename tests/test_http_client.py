@@ -143,3 +143,32 @@ async def test_404_returns_empty_not_none():
         assert await client.get(LISTING_URL) == ""
     finally:
         await client._client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_429_is_replayed_in_place_after_retry_after(monkeypatch):
+    """Un 429 attend Retry-After puis rejoue l'URL dans la boucle: lever une
+    exception ici faisait attendre tenacity une seconde fois (4 a 30 s)."""
+    import src.scraper.http_client as http_client
+
+    waits: list[float] = []
+
+    async def fake_sleep(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(http_client.asyncio, "sleep", fake_sleep)
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"Retry-After": "7"})
+        return httpx.Response(200, text="<html>ok</html>")
+
+    client = await _client_with(handler)
+    try:
+        assert await client.get(LISTING_URL) == "<html>ok</html>"
+    finally:
+        await client._client.aclose()
+    assert calls == ["/en/some-listing", "/en/some-listing"]
+    assert waits == [7]

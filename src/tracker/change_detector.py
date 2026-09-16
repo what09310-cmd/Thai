@@ -345,7 +345,7 @@ def _create_listing(
         last_scraped_at=now,
         # source_id n'est renseigné que par le parseur de page détail:
         # sa présence signale que la page individuelle a bien été lue.
-        detail_scraped_at=now if listing.source_id else None,
+        detail_scraped_at=now if (listing.source_id or listing.page_gone) else None,
     )
     db_listing.description = build_contact_description(db_listing)
     # Après build_contact_description: `description` est un champ de hash.
@@ -389,8 +389,8 @@ def _update_listing_fields(
     db_listing.subdistrict = listing.subdistrict or db_listing.subdistrict
     db_listing.district = listing.district or db_listing.district
     db_listing.province = listing.province or db_listing.province
-    db_listing.latitude = listing.latitude or db_listing.latitude
-    db_listing.longitude = listing.longitude or db_listing.longitude
+    if listing.latitude is not None and listing.longitude is not None:
+        db_listing.latitude, db_listing.longitude = listing.latitude, listing.longitude
     db_listing.price_monthly_raw = listing.price_monthly_raw
     db_listing.price_monthly_min = listing.price_monthly_min
     db_listing.price_monthly_max = listing.price_monthly_max
@@ -410,7 +410,10 @@ def _update_listing_fields(
     if listing.room_types:
         db_listing.room_types = json.dumps([r.model_dump() for r in listing.room_types])
     apply_detail_fields(db_listing, listing)
-    if listing.source_id:
+    # source_id n'est renseigne que par un scrape detail reussi; une page
+    # disparue (page_gone) compte aussi comme lue, sinon elle serait
+    # redemandee a chaque scan jusqu'a son retrait.
+    if listing.source_id or listing.page_gone:
         db_listing.detail_scraped_at = now
 
     db_listing.description = build_contact_description(db_listing)

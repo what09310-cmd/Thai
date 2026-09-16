@@ -26,9 +26,7 @@ CDN_URL = "https://bcdn.renthub.in.th"
 # Base de fingerprints adaptatifs Scrapling (locale, pas versionnée).
 # Un seul identifiant partagé entre toutes les pages: le gabarit de
 # carte "Contract monthly" est le même sur tout le site.
-_ADAPTIVE_DB_PATH = Path(__file__).resolve().parents[2] / ".scrapling" / "elements_storage.db"
-_ADAPTIVE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-_ADAPTIVE_DB_PATH = str(_ADAPTIVE_DB_PATH)
+_ADAPTIVE_DB_PATH = str(Path(__file__).resolve().parents[2] / ".scrapling" / "elements_storage.db")
 _CARD_IDENTIFIER = "listing-card"
 
 _NEXT_DATA_RE = re.compile(
@@ -252,6 +250,9 @@ def parse_listing_page(html: str) -> list[ListingRaw]:
         log.info(f"Annonces parsées (JSON): {len(from_json)}")
         return from_json
 
+    # Le dossier est cree ici, au premier repli, et non a l'import du module
+    # (les tests et l'API importaient ce module et creaient .scrapling/).
+    Path(_ADAPTIVE_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     page = Selector(
         html, adaptive=True, storage_args={"storage_file": _ADAPTIVE_DB_PATH, "url": ""}
     )
