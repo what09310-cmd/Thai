@@ -1,12 +1,11 @@
 ---
 paths:
   - "src/api/**"
-  - "frontend/**"
 ---
 
 ## API
 
-`src/api/main.py`: FastAPI app serving both the JSON API (`/listings*`, `/provinces`, `/stats`, `/history/{id}`) and the static frontend (mounted at `/static`, plus explicit routes per page under `frontend/`). `AuthMiddleware` gates only `PROTECTED_PATHS` (a dict: `/` = `index.html` for any signed-in account, `/vip.html` for premium only) behind a signed session cookie (`src/api/auth.py`); everything else — other pages, API routes, assets — is public. A signed-in non-premium account asking for a premium page is redirected to `/premium.html` (the offer), not to `/login`.
+`src/api/main.py`: FastAPI app serving both the JSON API (`/listings`, `/listings/{id}`, `/stats`, `/health`) and the static frontend (mounted at `/static`, plus `/` = index.html, `/test` = test.html and a whitelist route `/{page}.html` for the other pages, `_PAGES`). The routes no page ever called (`/listings/new|updated|price-changed|monthly`, `/history/{id}`, `/provinces`, `POST /rental-requests`) were removed in the 2026-09 audit: a public route is attack surface, don't add one without a consumer. Responses are gzipped; `/static` assets get a one-day `Cache-Control`, shared JS/CSS five minutes. `/stats` caches both its shapes for 60 s (`reset_stats_cache()` in tests). `AuthMiddleware` gates only `PROTECTED_PATHS` (a dict: `/` = `index.html` for any signed-in account, `/vip.html` for premium only) behind a signed session cookie (`src/api/auth.py`); everything else — other pages, API routes, assets — is public. A signed-in non-premium account asking for a premium page is redirected to `/premium.html` (the offer), not to `/login`.
 
 ## Accounts
 
@@ -24,4 +23,4 @@ Routes: `GET/POST /login` (email+password of a `users` row, or the admin pair �
 
 Both counters are keyed by `_client_key`. Behind a reverse proxy (the Cloudflare tunnel of the launcher, Render, nginx) `request.client.host` is the proxy's address, so every visitor would share one budget and one login lock; `TRUSTED_PROXY_HOPS=N` (`src/config.py`) makes `_client_key` read the N-th address from the *end* of `X-Forwarded-For` instead. Don't rely on uvicorn's `--forwarded-allow-ips="*"` for this: it takes the *first* address, which the client writes itself. With hops > 0, `X-Forwarded-Proto: https` is also trusted to build the Google OAuth `redirect_uri`.
 
-`frontend/test.html` requests its own sample size (`DEMO_SAMPLE_SIZE`) and reads the hero's "new today" figure from `/stats`.
+`frontend/test.html` requests its own sample size (`DEMO_SAMPLE_SIZE`) and reads the hero's "new today" figure from `/stats`. Shared serialisation lives in `src/database/serialize.py::listing_to_dict` (also used by the CSV/JSON export); `_listing_to_response` applies the anonymous/premium filtering on top.

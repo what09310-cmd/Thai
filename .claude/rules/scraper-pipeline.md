@@ -26,7 +26,7 @@ paths:
 
 ## Description normalization
 
-`src/normalizers/contact_description.py`: `build_contact_description` regenerates a listing's displayed description from structured fields every scan (self-healing) and from `scripts/regenerate_contact_descriptions.py` for backfills. Format is fixed: `Deposit: …`, `Electric price: …` (omitted if `"Please contact"`), `Air Conditioner : YES/NO` — no phone/LINE/other free text; those live in their own `phone`/`line_id`/`whatsapp` columns and are rendered separately by the frontend.
+`src/normalizers/contact_description.py`: `build_contact_description` regenerates a listing's displayed description from structured fields every scan (self-healing) and from `scripts/rescrape_details.py` for backfills. Format is fixed: `Deposit: …`, `Electric price: …` (omitted if `"Please contact"`), `Air Conditioner : YES/NO` — no phone/LINE/other free text; those live in their own `phone`/`line_id`/`whatsapp` columns and are rendered separately by the frontend.
 
 ## Scan invariants
 
@@ -38,4 +38,8 @@ A scan that changes nothing must write no history. Three rules keep it that way,
 
 ## Project-specific notes
 
-The parser was migrated from BeautifulSoup to Scrapling; if a migration or engine swap changes output on a golden test, treat it as a signal to investigate the underlying HTML rather than assuming the old output was correct — fix genuine bugs surfaced by the new engine instead of reproducing them. See `docs/migration-notes.md` for the full history.
+The parser was migrated from BeautifulSoup to Scrapling; if a migration or engine swap changes output on a golden test, treat it as a signal to investigate the underlying HTML rather than assuming the old output was correct — fix genuine bugs surfaced by the new engine instead of reproducing them.
+
+The detail parser reads `__NEXT_DATA__` (plus JSON-LD for coordinates and explicit `line.me`/`wa.me`/`mailto` links for contacts) and nothing else: the former HTML-table/regex fallbacks only ever ran on pages that are not listings. A page whose JSON has no `listing` key is RentHub's home page served for a withdrawn listing and comes back as `ListingDetail(page_gone=True)`, like a 404: it sets `detail_scraped_at` without touching known fields and is not counted as a scan error.
+
+`content_hash` covers `HASH_FIELDS` (`change_detector.py`): changing that list requires `python scripts/migrate.py`, which recomputes the hash on every row — otherwise the next scan writes one `UPDATED` per listing. Phase 3 preloads all known listings with `load_existing` (one query, images included) and `upsert_listing(..., existing)`; `mark_removed_listings` works with bulk `UPDATE`s.

@@ -39,3 +39,7 @@ tunnel_url.txt
 .codex/
 .env.render
 .env.local.bak
+
+# Exports generes par run_scraper.py --export et sauvegardes manuelles
+exports/
+*.bak
