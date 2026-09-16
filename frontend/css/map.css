@@ -1,0 +1,145 @@
+/* map.css -- Carte Thailande / VIP: filtres budget-duree, popups.
+   Partage par: vip, carte-thailande. */
+
+html,body{height:100%}
+
+body{ font-family:var(--sans);background:var(--bg);color:var(--text) }
+
+header{
+    position:absolute;top:14px;left:14px;right:14px;
+    width:auto;max-width:780px;margin:0 auto;
+    padding:9px 10px 9px 22px;background:#1d3c10;border-radius:var(--r-pill);
+    display:flex;align-items:center;justify-content:space-between;gap:18px;
+    box-shadow:0 10px 28px rgba(29,60,16,.28);z-index:2000
+  }
+
+.logo{
+    display:flex;align-items:center;text-decoration:none;
+    font-family:var(--sans);font-size:25px;font-weight:800;
+    letter-spacing:-.6px;line-height:1;flex-shrink:0
+  }
+
+.logo-thai{ color:var(--brand-lime) }
+
+.logo-month{ color:var(--brand-gold) }
+
+.header-list{
+    background:var(--accent);color:#fff;
+    border-radius:var(--r-pill);padding:10px 20px;font-size:14px;font-weight:600;
+    text-decoration:none;white-space:nowrap;transition:filter .15s;flex-shrink:0
+  }
+
+.header-list:hover{ filter:brightness(1.12) }
+
+main{ height:100vh }
+
+#map{ position:relative;height:100%;background:var(--bg) }
+
+.leaflet-tile-pane{ filter:saturate(.85) brightness(1.02) contrast(.96); }
+
+.leaflet-control-zoom a{ background:var(--card) !important;color:var(--text) !important;border-color:var(--border) !important }
+
+.leaflet-control-zoom a:hover{ background:var(--bg) !important }
+
+.leaflet-control-attribution{ background:rgba(255,255,255,.85) !important;color:var(--muted) !important }
+
+.leaflet-control-attribution a{ color:var(--accent) !important }
+
+.pin-icon{
+    width:14px;height:14px;border-radius:50%;
+    background:var(--accent);border:2px solid #fff;
+    box-shadow:0 2px 6px rgba(20,19,15,.35);
+  }
+
+.leaflet-popup-content{ font-family:var(--sans);font-size:13px;margin:10px 12px }
+
+.leaflet-popup-content-wrapper{ background:var(--card);color:var(--text);border-radius:var(--r-ctl);box-shadow:0 10px 30px rgba(20,19,15,.18) }
+
+.leaflet-popup-tip{ background:var(--card) }
+
+.controls{
+    position:absolute;top:14px;left:14px;z-index:1000;
+    background:var(--card);border:1px solid var(--border);border-radius:var(--r-card);
+    box-shadow:0 10px 30px rgba(20,19,15,.12);
+    padding:18px;width:270px;display:flex;flex-direction:column;gap:18px
+  }
+
+.filter-section{ display:flex;flex-direction:column;gap:9px }
+
+.filter-label{
+    font-size:11px;font-family:var(--mono);letter-spacing:.12em;
+    text-transform:uppercase;color:var(--dim)
+  }
+
+.chip-group{ display:flex;flex-wrap:wrap;gap:8px }
+
+.chip{
+    padding:8px 13px;border-radius:var(--r-pill);border:1.5px solid var(--border);
+    background:var(--card);color:var(--muted);font-family:var(--sans);
+    font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s
+  }
+
+.chip:hover{ border-color:var(--accent);color:var(--text) }
+
+.chip.active{
+    background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;
+    box-shadow:0 3px 10px rgba(80,70,245,.28)
+  }
+
+.budget-values{
+    display:flex;justify-content:space-between;font-size:12px;
+    font-family:var(--mono);color:var(--text)
+  }
+
+.budget-values #budget-min-label, .budget-values #budget-max-label{ color:var(--accent);font-weight:700 }
+
+.range-slider{ position:relative;height:28px;margin-top:2px }
+
+.range-slider .range-track{
+    position:absolute;top:50%;left:0;right:0;height:6px;
+    transform:translateY(-50%);background:var(--border);border-radius:999px
+  }
+
+.range-slider .range-fill{
+    position:absolute;top:50%;height:6px;
+    transform:translateY(-50%);background:var(--accent);border-radius:999px
+  }
+
+.range-slider input[type="range"]{
+    position:absolute;top:0;left:0;width:100%;height:28px;margin:0;
+    background:transparent;-webkit-appearance:none;appearance:none;pointer-events:none
+  }
+
+.range-slider input[type="range"]::-webkit-slider-runnable-track{
+    -webkit-appearance:none;background:transparent
+  }
+
+.range-slider input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;pointer-events:auto;
+    width:18px;height:18px;border-radius:50%;
+    background:var(--accent);border:3px solid #fff;cursor:pointer;
+    box-shadow:0 1px 4px rgba(20,19,15,.3);margin-top:5px
+  }
+
+.range-slider input[type="range"]::-moz-range-track{ background:transparent;border:none }
+
+.range-slider input[type="range"]::-moz-range-thumb{
+    pointer-events:auto;width:18px;height:18px;border-radius:50%;
+    background:var(--accent);border:3px solid #fff;cursor:pointer;
+    box-shadow:0 1px 4px rgba(20,19,15,.3)
+  }
+
+.empty{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--muted);font-size:13px;text-align:center;padding:20px;background:var(--bg)
+  }
+
+@media (max-width: 640px){
+    header{ left:10px;right:10px;top:10px;padding:8px 8px 8px 18px;gap:10px }
+    .logo{ font-size:20px }
+    .header-list{ padding:8px 14px;font-size:12px }
+    .controls{
+      left:10px;right:10px;top:76px;width:auto;
+      max-height:calc(100% - 86px);overflow-y:auto
+    }
+  }

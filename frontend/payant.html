@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/static/css/common.css">
 <style>
 
   :root {
@@ -53,23 +54,6 @@
     font-size: 14px;
     min-height: 100vh;
   }
-
-  /* Ciel : un seul degrade fixe derriere la page (::after) et une bande de
-     135px par-dessus le contenu (::before) qui masque ce qui passe sous la
-     nav. Les deux partagent la meme taille pour se superposer pile. */
-  body::before, body::after {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    pointer-events: none;
-    background: linear-gradient(165deg,
-      var(--sky-1) 0%, var(--sky-2) 46%, var(--sky-3) 100%) no-repeat;
-    background-size: 100vw 100vh;
-  }
-  body::after { bottom: 0; z-index: -1; }
-  body::before { height: 135px; z-index: 80; }
 
   a { color: inherit; text-decoration: none; }
   button, input { font: inherit; }
@@ -114,8 +98,6 @@
     line-height: 1;
     text-decoration: none;
   }
-  .brand-thai  { color: var(--brand-lime); }
-  .brand-month { color: var(--brand-gold); }
 
   .pillnav-cta {
     display: inline-flex;
