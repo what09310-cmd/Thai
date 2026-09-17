@@ -82,11 +82,7 @@ _CODE_MAX_AGE = 5 * 60
 # derriere "/", il faut donc le proteger aussi sous /static. La valeur dit
 # le niveau requis: True = compte premium (ou admin), False = n'importe
 # quel compte connecte.
-PROTECTED_PATHS = {
-    "/123": False,
-    "/index.html": False,
-    "/vip.html": True,
-}
+PROTECTED_PATHS: dict[str, bool] = {}
 
 # Un compte connecte mais non premium qui demande une page premium est
 # envoye vers l'offre, pas vers le login qu'il a deja passe.

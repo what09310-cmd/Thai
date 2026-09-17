@@ -270,12 +270,16 @@
      dont l'overflow:hidden la retiendrait si elle etait dedans. */
   .pillnav {
     position: fixed; top: 18px; z-index: 100;
-    left: 50%; transform: translateX(-50%);
-    /* will-change promeut la pilule sur son propre calque GPU : sans ca,
-       certains navigateurs la repeignent en retard pendant le defilement
-       (elle "traine" a son ancienne position ecran et chevauche les cartes
-       du dessous un instant avant de rattraper le scroll). */
+    left: 50%; transform: translate3d(-50%, 0, 0);
+    /* will-change + translate3d + backface-visibility forcent la pilule sur
+       son propre calque GPU compose independamment du reste de la page :
+       sans ca, certains navigateurs (Chrome/Windows notamment) la repeignent
+       en retard pendant le defilement (elle "traine" a son ancienne position
+       ecran et chevauche les cartes du dessous un instant avant de rattraper
+       le scroll). */
     will-change: transform;
+    backface-visibility: hidden;
+    isolation: isolate;
     width: calc(100% - 40px); max-width: 780px;
     background: var(--forest);
     border-radius: var(--r-pill);
@@ -295,6 +299,18 @@
     font-size: 25px; font-weight: 800;
     letter-spacing: -.6px; line-height: 1;
   }
+  .pillnav-links {
+    display: flex; align-items: center; gap: 4px;
+    flex: 1; justify-content: center;
+  }
+  .pillnav-link {
+    color: rgba(255,255,255,.82); text-decoration: none;
+    font-size: 14px; font-weight: 500;
+    padding: 7px 14px; border-radius: var(--r-pill);
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  .pillnav-link:hover { background: rgba(255,255,255,.12); color: #fff; }
   .pillnav-cta {
     background: var(--accent); color: #fff;
     border-radius: var(--r-pill); padding: 10px 20px;
@@ -807,6 +823,10 @@
 <!-- Navbar fixe : hors du hero, qui a overflow:hidden et la retiendrait. -->
 <nav class="pillnav" aria-label="Navigation principale">
   <a class="pillnav-brand" href="/"><span class="brand-thai">Thai</span><span class="brand-month">Month</span></a>
+  <div class="pillnav-links">
+    <a class="pillnav-link" href="/carte-thailande.html">Voir la carte</a>
+    <a class="pillnav-link" href="/premium.html">Voir les annonces</a>
+  </div>
   <a class="pillnav-cta" href="payant.html">Version Payante</a>
 </nav>
 

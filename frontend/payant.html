@@ -46,8 +46,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
-    height: 100%;
-    overflow: hidden;
+    min-height: 100%;
   }
 
   body {
@@ -114,20 +113,14 @@
     width: min(1180px, calc(100% - 28px));
     margin: 0 auto;
     padding: 142px 0 clamp(6px, 1.2vh, 18px);
-    flex: 1 1 auto;
-    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     background: linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.10) 100%);
   }
 
   .main > * { position: relative; z-index: 1; }
 
   .hero {
-    flex: 0 0 auto;
-    min-height: 0;
-    max-height: 44vh;
     display: grid;
     grid-template-columns: minmax(0, 760px) minmax(0, 380px);
     justify-content: center;
@@ -137,7 +130,6 @@
 
   .side-card {
     width: 100%;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: clamp(6px, 1.2vh, 12px);
@@ -146,7 +138,6 @@
     border-radius: 16px;
     background: #fff;
     box-shadow: 0 4px 16px rgba(20,19,15,.06);
-    overflow: hidden;
   }
 
   .card-comparison { position: relative; gap: clamp(6px, 1.4vh, 14px); }
@@ -252,41 +243,6 @@
     color: #374151;
   }
 
-  /* A listing teaser pulls a lot of the page's vertical budget already;
-     the trust bar/closing note repeat reassurance the side-card already
-     gives, so they're the first thing dropped to keep the plan picker
-     readable without a scrollbar. */
-  body.has-listing-teaser .trust-bar,
-  body.has-listing-teaser .conversion-note,
-  body.has-listing-teaser .plan-option-text,
-  body.has-listing-teaser .reassurance-list,
-  body.has-listing-teaser .data-proof {
-    display: none;
-  }
-
-  /* With the description gone, each plan row is just a title + price band —
-     shrink both so they clear the row's own overflow:hidden edge instead of
-     being clipped mid-glyph when the hero above has already spent most of
-     the viewport's height. */
-  body.has-listing-teaser .plan-option {
-    padding-top: clamp(2px, 0.6vh, 8px);
-    padding-bottom: clamp(2px, 0.6vh, 8px);
-  }
-  body.has-listing-teaser .plan-option-title span {
-    font-size: clamp(13px, 2.1vh, 18px);
-  }
-  body.has-listing-teaser .plan-option-price strong {
-    font-size: clamp(15px, 2.6vh, 22px);
-  }
-  body.has-listing-teaser .plan-option-price small,
-  body.has-listing-teaser .plan-option-term {
-    font-size: clamp(9px, 1.2vh, 12px);
-  }
-  body.has-listing-teaser .plan-option input[type="radio"] {
-    width: 16px;
-    height: 16px;
-  }
-
   .side-card-cta {
     display: inline-flex;
     align-items: center;
@@ -311,7 +267,6 @@
 
   .listing-teaser {
     width: 100%;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: clamp(6px, 1.2vh, 12px);
@@ -320,14 +275,13 @@
     border-radius: 16px;
     background: #fff;
     box-shadow: 0 4px 16px rgba(20,19,15,.06);
-    overflow: hidden;
   }
 
-  .card-media { display: flex; flex-direction: column; min-height: 0; }
+  .card-media { display: flex; flex-direction: column; }
 
   .main-image-wrapper {
     position: relative;
-    max-height: clamp(60px, 12vh, 170px);
+    max-height: clamp(180px, 32vh, 320px);
     margin-bottom: clamp(4px, 0.8vh, 10px);
     border-radius: 12px;
     overflow: hidden;
@@ -338,7 +292,6 @@
   .main-img {
     width: 100%;
     height: 100%;
-    max-height: clamp(60px, 12vh, 170px);
     object-fit: cover;
     border-radius: 12px;
     display: block;
@@ -441,11 +394,8 @@
     border-radius: 28px;
     background: rgba(255,255,255,0.72);
     box-shadow: 0 12px 32px rgba(17,24,39,0.05);
-    flex: 1 1 auto;
-    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
 
   .section-header {
@@ -454,7 +404,6 @@
     gap: 16px;
     align-items: end;
     margin-bottom: clamp(8px, 1.6vh, 22px);
-    flex: 0 0 auto;
   }
 
   .kicker {
@@ -467,11 +416,8 @@
 
   .subscription-selector {
     width: 100%;
-    flex: 1 1 auto;
-    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 20px;
     background: var(--surface);
@@ -479,7 +425,6 @@
   }
 
   .selector-header {
-    flex: 0 0 auto;
     padding: clamp(8px, 1.4vh, 16px) 20px;
     border-bottom: 1px solid var(--border);
     background: rgba(255,255,255,0.78);
@@ -491,16 +436,11 @@
   }
 
   .plan-option-list {
-    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
   }
 
   .plan-option {
-    flex: 1 1 0;
-    min-height: 0;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 18px;
@@ -511,7 +451,6 @@
     transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
     background: transparent;
     border-radius: 14px;
-    overflow: hidden;
   }
 
   .plan-option:last-child { border-bottom: none; }
@@ -538,8 +477,6 @@
     flex-direction: column;
     justify-content: center;
     gap: 6px;
-    min-height: 0;
-    overflow: hidden;
   }
 
   .plan-option-title {
@@ -596,7 +533,9 @@
     color: var(--muted);
     font-size: 0.72rem;
     font-weight: 700;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: right;
+    max-width: 120px;
   }
 
   .selector-actions {
@@ -673,21 +612,12 @@
   }
 
   @media (max-width: 880px) {
-    /* Stacked hero (two full cards + pricing block) can't fit one screen
-       height on a phone no matter how compact — fall back to a normal
-       scrolling page here instead of silently clipping content. */
-    html, body { height: auto; overflow: visible; }
-
-    .main { min-height: 100vh; overflow: visible; }
-
     .hero {
       grid-template-columns: 1fr;
-      max-height: none;
     }
 
     .pricing-block {
       padding: 24px 18px 20px;
-      overflow: visible;
     }
 
     .section-header {
@@ -803,7 +733,7 @@
         </label>
 
         <label class="plan-option">
-          <input type="radio" name="subscription-plan" data-plan="essentiel" value="Essentiel — 6,67 € / mois, engagement 6 mois">
+          <input type="radio" name="subscription-plan" data-plan="essentiel" value="Essentiel — 6,66 € / mois, facturé 39,99 € tous les 6 mois">
           <div class="plan-option-main">
             <div class="plan-option-title">
               <span>Essentiel</span>
@@ -811,13 +741,13 @@
             <div class="plan-option-text">Le bon équilibre pour une recherche active et mieux organisée.</div>
           </div>
           <div class="plan-option-aside">
-            <div class="plan-option-price"><strong>6,67 €</strong><small>/mois</small></div>
-            <div class="plan-option-term">Engagement 6 mois</div>
+            <div class="plan-option-price"><strong>6,66 €</strong><small>/mois</small></div>
+            <div class="plan-option-term">Facturé 39,99 € tous les 6 mois</div>
           </div>
         </label>
 
         <label class="plan-option">
-          <input type="radio" name="subscription-plan" data-plan="serenite" value="Sérénité — 3,85 € / mois, engagement 1 an">
+          <input type="radio" name="subscription-plan" data-plan="serenite" value="Sérénité — 4,16 € / mois, facturé 49,99 € par an">
           <div class="plan-option-main">
             <div class="plan-option-title">
               <span>Sérénité</span>
@@ -825,8 +755,8 @@
             <div class="plan-option-text">La formule la plus complète pour chercher sur plusieurs mois avec calme.</div>
           </div>
           <div class="plan-option-aside">
-            <div class="plan-option-price"><strong>3,85 €</strong><small>/mois</small></div>
-            <div class="plan-option-term">Engagement 1 an</div>
+            <div class="plan-option-price"><strong>4,16 €</strong><small>/mois</small></div>
+            <div class="plan-option-term">Facturé 49,99&nbsp;€ par&nbsp;an</div>
           </div>
         </label>
       </div>
