@@ -118,8 +118,8 @@ function popupActionsHTML(ad){
   const locked = ad.url == null;
   if (SHOW_LOCK_BUTTONS && locked) {
     return `<div class="popup-actions popup-actions-stacked">` +
-      `<a href="/payant.html" class="popup-btn popup-btn-lock">🔒 Voir le contact du propriétaire</a>` +
-      `<a href="/payant.html" class="popup-btn popup-btn-lock">🔒 Voir l'annonce d'origine</a>` +
+      `<a href="/payant.html?listing=${encodeURIComponent(ad.id)}" class="popup-btn popup-btn-lock">🔒 Voir le contact du propriétaire</a>` +
+      `<a href="/payant.html?listing=${encodeURIComponent(ad.id)}" class="popup-btn popup-btn-lock">🔒 Voir l'annonce d'origine</a>` +
       `</div>`;
   }
   return `<div class="popup-actions">` +
@@ -337,7 +337,7 @@ function modalHTML(l) {
     </div>` : "";})()}
     ${l.url
       ? `<a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>`
-      : `<a class="modal-link" href="/payant.html">🔒 Débloquer l'annonce d'origine</a>`}
+      : `<a class="modal-link" href="/payant.html?listing=${encodeURIComponent(l.id)}">🔒 Débloquer l'annonce d'origine</a>`}
   `;
 }
 
