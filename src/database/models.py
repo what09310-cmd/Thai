@@ -244,3 +244,30 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class Subscription(Base):
+    """Abonnement Stripe d'un compte (src/api/billing_routes.py).
+
+    Bookkeeping / historique de facturation: `User.is_premium` reste le
+    seul champ que le reste de l'application lit pour l'acces (voir
+    `src/api/main.py::PROTECTED_PATHS`). `id` est l'identifiant
+    d'abonnement Stripe (`sub_...`), ce qui rend l'upsert idempotent face
+    aux livraisons en double des webhooks (Stripe livre au moins une fois).
+    """
+    __tablename__ = "subscriptions"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    stripe_customer_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    plan_name: Mapped[str] = mapped_column(String(20), nullable=False)  # flex, essentiel, serenite
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # active, canceled, past_due, trialing
+    current_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_subscriptions_user_id", "user_id"),
+        Index("ix_subscriptions_stripe_customer_id", "stripe_customer_id"),
+    )

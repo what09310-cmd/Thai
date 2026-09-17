@@ -68,24 +68,18 @@
     border-radius: 10px;
   }
 
-  /* La bande de ciel fixe de common.css (body::before, 135px, z-index 80)
-     masque ce qui passe sous une navbar fixe ; ici la navbar defile avec la
-     page, la bande ne ferait que recouvrir la navbar et le haut des cartes. */
-  body::before { display: none; }
-
-  /* Pas de position: fixed : la pilule chevauchait exactement la jointure
-     des deux cartes du hero (meme centrage horizontal, largeur comparable)
-     et masquait une partie de l'annonce des qu'on defilait un peu. En
-     flux normal, elle defile avec la page et ne recouvre plus rien. */
   .pillnav {
-    flex: 0 0 auto;
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
     width: min(780px, calc(100% - 28px));
-    margin: clamp(4px, 1vh, 14px) auto 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 18px;
-    padding: 7px 10px 7px 22px;
+    padding: 9px 10px 9px 22px;
     background: #1d3c10;
     border-radius: var(--r-pill);
     box-shadow: 0 10px 28px rgba(29,60,16,.22);
@@ -119,7 +113,7 @@
     position: relative;
     width: min(1180px, calc(100% - 28px));
     margin: 0 auto;
-    padding: clamp(6px, 1.2vh, 18px) 0;
+    padding: 142px 0 clamp(6px, 1.2vh, 18px);
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
@@ -704,13 +698,13 @@
 
   @media (max-width: 640px) {
     .pillnav {
-      margin-top: 12px;
+      top: 12px;
       padding: 8px 10px 8px 14px;
     }
 
     .main {
       width: min(100% - 18px, 1180px);
-      padding-top: 24px;
+      padding-top: 142px;
     }
 
     .plan-option {
@@ -795,7 +789,7 @@
 
       <div class="plan-option-list">
         <label class="plan-option is-selected">
-          <input type="radio" name="subscription-plan" value="Flex — 19,99 € / mois, sans engagement" checked>
+          <input type="radio" name="subscription-plan" data-plan="flex" value="Flex — 19,99 € / mois, sans engagement" checked>
           <div class="plan-option-main">
             <div class="plan-option-title">
               <span>Flex</span>
@@ -809,7 +803,7 @@
         </label>
 
         <label class="plan-option">
-          <input type="radio" name="subscription-plan" value="Essentiel — 6,67 € / mois, engagement 6 mois">
+          <input type="radio" name="subscription-plan" data-plan="essentiel" value="Essentiel — 6,67 € / mois, engagement 6 mois">
           <div class="plan-option-main">
             <div class="plan-option-title">
               <span>Essentiel</span>
@@ -823,7 +817,7 @@
         </label>
 
         <label class="plan-option">
-          <input type="radio" name="subscription-plan" value="Sérénité — 3,85 € / mois, engagement 1 an">
+          <input type="radio" name="subscription-plan" data-plan="serenite" value="Sérénité — 3,85 € / mois, engagement 1 an">
           <div class="plan-option-main">
             <div class="plan-option-title">
               <span>Sérénité</span>
@@ -1015,13 +1009,48 @@ function syncSelectedPlan() {
 planRadios.forEach(radio => radio.addEventListener("change", syncSelectedPlan));
 syncSelectedPlan();
 
-submitButton.addEventListener("click", () => {
+function mailtoFallback() {
   const checked = document.querySelector('input[name="subscription-plan"]:checked');
   const plan = checked ? checked.value : "une formule";
   const listing = new URLSearchParams(window.location.search).get("listing");
   const subject = `Demande ThaiMonth - ${plan}`;
   const context = listing ? `\n\nAnnonce consultée : ${listing}` : "";
   window.location.href = `mailto:contact@thaimonth.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Bonjour,\n\nJe souhaite choisir l'offre ${plan}.${context}\n\nMerci.`)}`;
+}
+
+submitButton.addEventListener("click", async () => {
+  const checked = document.querySelector('input[name="subscription-plan"]:checked');
+  const planKey = checked ? checked.dataset.plan : null;
+  if (!planKey) { mailtoFallback(); return; }
+
+  submitButton.disabled = true;
+  try {
+    const response = await fetch("/api/checkout/create-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: planKey }),
+    });
+    if (response.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    if (response.status === 404) {
+      // Stripe pas encore configuré (.env vide) : on garde le mail comme secours.
+      mailtoFallback();
+      return;
+    }
+    if (!response.ok) {
+      alert("Le paiement n'a pas pu démarrer, réessayez dans un instant.");
+      return;
+    }
+    const data = await response.json();
+    if (data.url) { window.location.href = data.url; }
+  } catch (err) {
+    console.error("Erreur lors de la création de la session Stripe:", err);
+    alert("Le paiement n'a pas pu démarrer, réessayez dans un instant.");
+  } finally {
+    submitButton.disabled = false;
+  }
 });
 
 </script>

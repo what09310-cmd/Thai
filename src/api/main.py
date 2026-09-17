@@ -9,7 +9,9 @@ Endpoints de donnees (publics, plafonnes en debit):
   POST /api/questionnaire  reponses au tunnel de qualification servi sur /789
 
 Comptes (src/api/auth_routes.py): GET/POST /login, GET/POST /register,
-/auth/google[/callback], POST /logout, GET /me. Middlewares et gate par
+/auth/google[/callback], POST /logout, GET /me. Abonnements Stripe
+(src/api/billing_routes.py): POST /api/checkout/create-session, GET
+/billing/success, POST /api/webhooks/stripe. Middlewares et gate par
 page: src/api/security.py. Pages: "/" et les .html de frontend/.
 
 Les routes /listings/new|updated|price-changed|monthly, /history/{id},
@@ -39,7 +41,7 @@ from sqlalchemy import desc, distinct, func
 from sqlalchemy.orm import Session as SASession
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.api import auth_routes
+from src.api import auth_routes, billing_routes
 from src.api.deps import get_db
 from src.api.security import (
     AuthMiddleware,
@@ -155,6 +157,7 @@ async def lifespan(_app: FastAPI):
 
 app.router.lifespan_context = lifespan
 app.include_router(auth_routes.router)
+app.include_router(billing_routes.router)
 
 
 # — Response models —

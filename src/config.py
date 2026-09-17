@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     anthropic_api_key: Optional[str] = None
+    # Abonnements Stripe (src/api/billing_routes.py). Vides par defaut: le
+    # bouton de paiement reste inerte (mailto: de secours) et /api/checkout/*
+    # repond 404 tant qu'ils ne sont pas remplis, comme le bouton Google
+    # ci-dessus.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_flex: str = ""
+    stripe_price_essentiel: str = ""
+    stripe_price_serenite: str = ""
 
     # extra="ignore": une cle inconnue dans .env (reglage retire, faute de
     # frappe, variable d'un autre outil) ne doit pas empecher le demarrage.
