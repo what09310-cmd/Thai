@@ -948,11 +948,7 @@ function mailtoFallback() {
   window.location.href = `mailto:contact@thaimonth.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Bonjour,\n\nJe souhaite choisir l'offre ${plan}.${context}\n\nMerci.`)}`;
 }
 
-submitButton.addEventListener("click", async () => {
-  const checked = document.querySelector('input[name="subscription-plan"]:checked');
-  const planKey = checked ? checked.dataset.plan : null;
-  if (!planKey) { mailtoFallback(); return; }
-
+async function startCheckout(planKey) {
   submitButton.disabled = true;
   try {
     const response = await fetch("/api/checkout/create-session", {
@@ -961,7 +957,12 @@ submitButton.addEventListener("click", async () => {
       body: JSON.stringify({ plan: planKey }),
     });
     if (response.status === 401) {
-      window.location.href = "/login";
+      // Pas connecté : on revient ici avec le plan choisi une fois la
+      // connexion faite, pour relancer Stripe sans reclic (`next`, lu par
+      // src/api/auth_routes.py::login_submit/google_callback).
+      const back = new URL(window.location.href);
+      back.searchParams.set("autocheckout", planKey);
+      window.location.href = "/login?next=" + encodeURIComponent(back.pathname + back.search);
       return;
     }
     if (response.status === 404) {
@@ -981,7 +982,26 @@ submitButton.addEventListener("click", async () => {
   } finally {
     submitButton.disabled = false;
   }
+}
+
+submitButton.addEventListener("click", () => {
+  const checked = document.querySelector('input[name="subscription-plan"]:checked');
+  const planKey = checked ? checked.dataset.plan : null;
+  if (!planKey) { mailtoFallback(); return; }
+  startCheckout(planKey);
 });
+
+// Retour de /login après un clic non connecté : re-sélectionne le plan et
+// relance Stripe directement, sans faire recliquer l'utilisateur.
+const autocheckoutPlan = new URLSearchParams(window.location.search).get("autocheckout");
+if (autocheckoutPlan) {
+  const radio = document.querySelector(`input[name="subscription-plan"][data-plan="${autocheckoutPlan}"]`);
+  if (radio) { radio.checked = true; syncSelectedPlan(); }
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("autocheckout");
+  window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search);
+  startCheckout(autocheckoutPlan);
+}
 
 </script>
 </body>

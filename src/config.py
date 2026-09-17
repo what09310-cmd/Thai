@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     stripe_price_flex: str = ""
     stripe_price_essentiel: str = ""
     stripe_price_serenite: str = ""
+    # Envoi de l'email "mot de passe oublié" (src/api/auth_routes.py). Vide =
+    # le lien de reinitialisation part dans les logs au lieu d'un email, comme
+    # les reglages Google/Stripe ci-dessus quand ils sont vides.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@thaimonth.app"
 
     # extra="ignore": une cle inconnue dans .env (reglage retire, faute de
     # frappe, variable d'un autre outil) ne doit pas empecher le demarrage.

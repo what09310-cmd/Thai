@@ -244,6 +244,10 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Jeton "mot de passe oublié" (hache sha256, jamais le jeton en clair):
+    # a usage unique, efface par reset_password() des qu'il sert.
+    password_reset_token: Mapped[Optional[str]] = mapped_column(String(64), unique=True)
+    password_reset_expires: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class Subscription(Base):

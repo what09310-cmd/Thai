@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import secrets
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from sqlalchemy.orm import Session as SASession
@@ -202,6 +203,50 @@ def authenticate_user(db: SASession, email: str, password: str) -> User | None:
 
 
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt())
+
+# — Mot de passe oublie —
+
+PASSWORD_RESET_TTL_SECONDS = 3600  # 1h: assez pour aller lire un email, court si intercepte
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_password_reset_token(db: SASession, user: User) -> str:
+    """Emet un jeton en clair (retourne, jamais stocke) et sauvegarde son hache.
+
+    Comme pour les mots de passe, ne jamais garder l'equivalent en clair en
+    base: une fuite de la table users ne doit pas suffire a fabriquer un
+    lien de reinitialisation valide.
+    """
+    token = secrets.token_urlsafe(32)
+    user.password_reset_token = _hash_reset_token(token)
+    user.password_reset_expires = datetime.now(timezone.utc) + timedelta(seconds=PASSWORD_RESET_TTL_SECONDS)
+    db.commit()
+    return token
+
+
+def get_user_by_reset_token(db: SASession, token: str) -> User | None:
+    if not token:
+        return None
+    user = db.query(User).filter(User.password_reset_token == _hash_reset_token(token)).first()
+    if user is None or user.password_reset_expires is None:
+        return None
+    expires = user.password_reset_expires
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires < datetime.now(timezone.utc):
+        return None
+    return user
+
+
+def reset_password(db: SASession, user: User, password: str) -> None:
+    """Change le mot de passe et invalide le jeton (usage unique)."""
+    user.password_hash = hash_password(password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    db.commit()
 
 
 def get_or_create_google_user(
