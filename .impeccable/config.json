@@ -74,6 +74,15 @@
         "value": "plus jakarta sans",
         "createdAt": "2026-09-16T23:15:28.903Z",
         "reason": "Plus Jakarta Sans is the site-wide brand font used across all frontend pages, not specific to this file"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "frontend/index.html"
+        ],
+        "createdAt": "2026-09-18T23:38:11.525Z",
+        "reason": "false positive: lightbox #lightbox-img src is set by JS on open, element is display:none by default via .lightbox-overlay (catalog.css)"
       }
     ]
   }
