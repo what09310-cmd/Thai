@@ -72,8 +72,6 @@ def create_checkout_session(body: CheckoutRequest, request: Request, db: SASessi
     if user is not None:
         checkout_kwargs["client_reference_id"] = str(user.id)
         checkout_kwargs["customer_email"] = user.email
-    else:
-        checkout_kwargs["customer_creation"] = "always"
     origin = str(request.base_url).rstrip("/")
     stripe.api_key = settings.stripe_secret_key
     try:

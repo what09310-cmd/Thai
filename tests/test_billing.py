@@ -75,7 +75,9 @@ def test_create_session_allows_anonymous_checkout(client, monkeypatch):
     assert resp.status_code == 200
     assert "client_reference_id" not in captured
     assert "customer_email" not in captured
-    assert captured["customer_creation"] == "always"
+    # En mode subscription, Stripe cree deja le Customer et refuse le
+    # parametre customer_creation (reserve aux modes payment et setup).
+    assert "customer_creation" not in captured
 
 
 def test_create_session_rejects_unknown_plan(client):
