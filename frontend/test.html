@@ -1869,7 +1869,7 @@ function modalHTML(l) {
     <div>
       <div class="section-head">Contact</div>
       <div class="modal-contracts">
-        ${l.phone?`<div class="mc"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></div>`:""}
+        ${l.phone?`<a class="mc mc-phone" href="tel:${encodeURIComponent(String(l.phone).replace(/[^+\d]/g,""))}"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></a>`:""}
         ${l.line_id?(()=>{
           // line_verified===false : identifiant deja confirme inexistant par
           // scripts/verify_line_ids.py -- on route vers line.me/ti/p/~<id>
@@ -1882,7 +1882,7 @@ function modalHTML(l) {
         ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
       </div>
     </div>` : "";})()}
-    ${l.url ? `<a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>` : ""}
+    ${l.url ? `<a class="modal-link" href="${safeHref(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>` : ""}
   `;
 }
 

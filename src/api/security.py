@@ -83,8 +83,8 @@ _CODE_MAX_AGE = 5 * 60
 # le niveau requis: True = compte premium (ou admin), False = n'importe
 # quel compte connecte.
 PROTECTED_PATHS: dict[str, bool] = {
-    "/123": False,
-    "/index.html": False,
+    "/123": True,
+    "/index.html": True,
     "/vip.html": True,
 }
 

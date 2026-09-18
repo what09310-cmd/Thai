@@ -10,8 +10,10 @@
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+      integrity="sha256-YU3qCpj/P06tdPBJGPax0bm6Q1wltfwjsho5TR4+TYc=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+      integrity="sha256-YSWCMtmNZNwqex4CEw1nQhvFub2lmU7vcCKP+XVwwXA=" crossorigin="">
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -58,7 +60,9 @@
   }
   .popup-btn:hover{ opacity:.85 }
   .popup-actions{ display:flex;gap:6px;flex-wrap:wrap }
-  .popup-btn.popup-btn-call{ background:var(--green) }
+  .popup-btn.popup-btn-call{ background:#237a35 }
+  .popup-btn.popup-btn-line{ background:#048848;color:#fff }
+  .popup-btn.popup-btn-wa{ background:#0f7d5c;color:#fff }
 </style>
 <script src="/static/auth-header.js" defer></script>
 </head>
@@ -112,6 +116,8 @@
           <button type="button" class="chip" data-value="Beauty Salon in Building">💇 Beautiful</button>
           <button type="button" class="chip" data-value="Parking">🅿️ Parking</button>
           <button type="button" class="chip" data-value="Smoking">🚬 Smoking</button>
+          <button type="button" class="chip" data-value="LINE">LINE</button>
+          <button type="button" class="chip" data-value="WhatsApp">WhatsApp</button>
         </div>
       </div>
     </div>
@@ -119,11 +125,12 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="/static/js/common.js"></script>
-<script src="/static/js/map.js"></script>
-<script src="/static/js/thai-map.js"></script>
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+        integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin="" defer></script>
+<script src="/static/js/common.js" defer></script>
+<script src="/static/js/map.js" defer></script>
+<script src="/static/js/thai-map.js" defer></script>
 <script>
 
 function buildMap(){
@@ -148,8 +155,19 @@ function buildMap(){
         `<div class="popup-info">Air Conditioner : ${hasAc ? "Oui" : "Non"}</div>` +
         (chips.length ? `<div class="popup-amenities">${chips.map(c => `<span class="popup-chip">${escapeHtml(AMENITY_ICONS[c])}</span>`).join("")}</div>` : "") +
         `<div class="popup-actions">` +
-        `<a href="${escapeHtml(ad.url)}" target="_blank" rel="noopener" class="popup-btn">Voir l'annonce complète</a>` +
-        (ad.phone ? `<a href="tel:${escapeHtml(ad.phone)}" class="popup-btn popup-btn-call">📞 Appeler</a>` : "") +
+        `<a href="${safeHref(ad.url)}" target="_blank" rel="noopener" class="popup-btn">Voir l'annonce complète</a>` +
+        (ad.phone ? `<a href="tel:${escapeHtml(String(ad.phone).replace(/[^+\d]/g,""))}" class="popup-btn popup-btn-call">📞 ${escapeHtml(ad.phone)}</a>` : "") +
+        (ad.line_id ? (() => {
+          // Meme regle que modal.js: line_verified===false route vers
+          // line.me/ti/p/~<id> (identifiant deja confirme inexistant),
+          // sinon page.line.me/<id> qui marche vraiment.
+          const slug = encodeURIComponent(String(ad.line_id).replace(/^@/, ""));
+          const href = ad.line_verified === false ? `https://line.me/ti/p/~${slug}` : `https://page.line.me/${slug}`;
+          return `<a href="${href}" target="_blank" rel="noopener" class="popup-btn popup-btn-line">LINE</a>`;
+        })() : "") +
+        (ad.whatsapp && String(ad.whatsapp).replace(/\D/g, "").length >= 5
+          ? `<a href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(ad.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener" class="popup-btn popup-btn-wa">WhatsApp</a>`
+          : "") +
         `</div>`
       );
     markersById[ad.id] = marker;
@@ -159,7 +177,7 @@ function buildMap(){
   leafletMap.fitBounds(bounds, { padding: [30, 30] });
 }
 
-loadAds();
+document.addEventListener("DOMContentLoaded", loadAds);
 </script>
 </body>
 </html>

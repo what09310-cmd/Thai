@@ -53,6 +53,13 @@ function escapeHtml(s){
   }[c]));
 }
 
+// escapeHtml() n'echappe que les caracteres HTML, pas le schema d'une URL :
+// une valeur "javascript:..." passerait telle quelle dans un attribut href.
+// A utiliser pour toute URL externe (ad.url, l.url) inseree dans un lien.
+function safeHref(url){
+  return /^https?:\/\//i.test(text(url)) ? escapeHtml(url) : "#";
+}
+
 // Render (plan gratuit) endort l'API après ~15 min sans trafic : le premier
 // visiteur attend 30 à 60 s de redémarrage, pendant lesquelles les fetch vers
 // l'API pendent, échouent (erreur réseau) ou reçoivent un 502/503. Plutôt

@@ -25,6 +25,11 @@ function applyFilters(){
     if (selectedAmenities.size) {
       const amenities = a.amenities || [];
       for (const am of selectedAmenities) {
+        // LINE/WhatsApp ne sont pas des equipements (pas dans a.amenities):
+        // ce sont des champs de contact a part, testes ici comme des
+        // pseudo-equipements pour reutiliser les memes chips de filtre.
+        if (am === "LINE") { if (!a.line_id) return false; continue; }
+        if (am === "WhatsApp") { if (!a.whatsapp || String(a.whatsapp).replace(/\D/g, "").length < 5) return false; continue; }
         if (!amenities.includes(am)) return false;
       }
     }
@@ -322,7 +327,7 @@ function modalHTML(l) {
     <div>
       <div class="section-head">Contact</div>
       <div class="modal-contracts">
-        ${l.phone?`<div class="mc"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></div>`:""}
+        ${l.phone?`<a class="mc mc-phone" href="tel:${encodeURIComponent(String(l.phone).replace(/[^+\d]/g,""))}"><div class="mc-label">Téléphone</div><div class="mc-val">📞 ${esc(l.phone)}</div></a>`:""}
         ${l.line_id?(()=>{
           // line_verified===false : identifiant deja confirme inexistant par
           // scripts/verify_line_ids.py -- on route vers line.me/ti/p/~<id>
@@ -336,7 +341,7 @@ function modalHTML(l) {
       </div>
     </div>` : "";})()}
     ${l.url
-      ? `<a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>`
+      ? `<a class="modal-link" href="${safeHref(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>`
       : `<a class="modal-link" href="/payant.html?listing=${encodeURIComponent(l.id)}">🔒 Débloquer l'annonce d'origine</a>`}
   `;
 }

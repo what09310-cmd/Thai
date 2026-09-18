@@ -400,7 +400,7 @@
 
 .modal-link:hover { opacity: .85; }
 
-a.mc-wa, a.mc-line {
+a.mc-wa, a.mc-line, a.mc-phone {
     text-decoration: none; color: inherit; cursor: pointer;
     transition: background .15s, border-color .15s;
   }
@@ -408,6 +408,8 @@ a.mc-wa, a.mc-line {
 a.mc-wa:hover { background: #25D36615; border-color: #25D366; }
 
 a.mc-line:hover { background: #06C75515; border-color: #06C755; }
+
+a.mc-phone:hover { background: #1677ff15; border-color: #1677ff; }
 
 .card-categories {
   display: flex;

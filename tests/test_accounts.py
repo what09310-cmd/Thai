@@ -125,17 +125,22 @@ def test_premium_account_reaches_vip(client, session):
     assert client.get("/vip.html", follow_redirects=False).status_code == 200
 
 
-def test_dashboard_123_requires_any_account_but_not_premium(client, session):
-    """`/123` (le tableau de bord, PROTECTED_PATHS["/123"] = False dans
+def test_dashboard_123_requires_premium(client, session):
+    """`/123` (le tableau de bord, PROTECTED_PATHS["/123"] = True dans
     security.py): un visiteur anonyme est renvoye au login, un compte
-    gratuit suffit ensuite -- pas besoin de premium contrairement a
-    /vip.html."""
+    gratuit est renvoye vers l'offre premium (meme regle que /vip.html)."""
     anon = client.get("/123", follow_redirects=False)
     assert anon.status_code in (302, 307)
     assert anon.headers["location"] == "/login"
 
-    user = User(email="free@x.io"); session.add(user); session.commit()
-    client.cookies.set(SESSION_COOKIE_NAME, token_for_user(user))
+    free = User(email="free@x.io"); session.add(free); session.commit()
+    client.cookies.set(SESSION_COOKIE_NAME, token_for_user(free))
+    dashboard = client.get("/123", follow_redirects=False)
+    assert dashboard.status_code in (302, 307)
+    assert dashboard.headers["location"] == "/premium.html"
+
+    premium = User(email="premium@x.io", is_premium=True); session.add(premium); session.commit()
+    client.cookies.set(SESSION_COOKIE_NAME, token_for_user(premium))
     assert client.get("/123", follow_redirects=False).status_code == 200
 
 
