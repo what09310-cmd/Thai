@@ -270,6 +270,60 @@ def test_webhook_payment_failed_revokes_premium(client, session, monkeypatch):
     assert session.query(Subscription).one().status == "past_due"
 
 
+def test_webhook_charge_refunded_revokes_premium(client, session, monkeypatch):
+    """Un remboursement (dashboard ou API) n'annule pas forcement
+    l'abonnement Stripe: `is_premium` doit repasser a False immediatement
+    depuis le seul event `charge.refunded`, sans attendre un eventuel
+    `customer.subscription.deleted` separe."""
+    _register(client)
+    user = session.query(User).one()
+    session.add(Subscription(
+        id="sub_123", user_id=user.id, stripe_customer_id="cus_123",
+        plan_name="flex", status="active",
+        current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    user.is_premium = True
+    session.commit()
+
+    event = {"type": "charge.refunded", "data": {"object": {"customer": "cus_123"}}}
+    monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
+    monkeypatch.setattr(billing_routes.stripe.Subscription, "cancel", lambda sub_id: None)
+
+    resp = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
+    assert resp.status_code == 200
+
+    session.refresh(user)
+    assert user.is_premium is False
+    assert session.query(Subscription).one().status == "canceled"
+
+
+def test_webhook_charge_refunded_survives_stripe_cancel_error(client, session, monkeypatch):
+    """L'annulation cote Stripe est du best-effort: si elle echoue (deja
+    annule, erreur reseau), `is_premium` doit quand meme rester coupe."""
+    _register(client)
+    user = session.query(User).one()
+    session.add(Subscription(
+        id="sub_123", user_id=user.id, stripe_customer_id="cus_123",
+        plan_name="flex", status="active",
+        current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    user.is_premium = True
+    session.commit()
+
+    def fake_cancel(sub_id):
+        raise billing_routes.stripe.error.StripeError("deja annule")
+
+    event = {"type": "charge.refunded", "data": {"object": {"customer": "cus_123"}}}
+    monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
+    monkeypatch.setattr(billing_routes.stripe.Subscription, "cancel", fake_cancel)
+
+    resp = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
+    assert resp.status_code == 200
+
+    session.refresh(user)
+    assert user.is_premium is False
+
+
 def test_webhook_404_when_stripe_not_configured(client, monkeypatch):
     # `_stripe_configured()` ne verifie pas stripe_webhook_secret (utile
     # seulement a la verification de signature) mais les cles/prix: c'est
@@ -325,6 +379,27 @@ def test_finalize_creates_account_and_activates_premium(client, session, monkeyp
     user = session.query(User).filter(User.email == "buyer@example.com").one()
     assert user.is_premium is True
     assert session.get(Subscription, "sub_anon").user_id == user.id
+
+
+def test_finalize_rejects_an_email_that_does_not_match_the_paid_session(client, session, monkeypatch):
+    """`body.email` est fourni par le client: sans verification contre
+    l'email reel du payeur Stripe, un attaquant en possession d'un
+    session_id paye (fuite Referer/historique/logs) pourrait creer un
+    compte premium sous l'adresse email d'une victime."""
+    session.add(Subscription(
+        id="sub_anon", user_id=None, stripe_customer_id="cus_anon", plan_name="flex",
+        status="active", current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    session.commit()
+    monkeypatch.setattr(
+        billing_routes.stripe.checkout.Session, "retrieve",
+        lambda session_id: _fake_checkout_session(email="buyer@example.com"),
+    )
+    resp = client.post("/api/billing/finalize", json={
+        "session_id": "cs_test_anon", "email": "victim@example.com", "password": "long-enough",
+    })
+    assert resp.status_code == 403
+    assert session.query(User).filter(User.email == "victim@example.com").first() is None
 
 
 def test_finalize_404_when_webhook_has_not_landed_yet(client, monkeypatch):

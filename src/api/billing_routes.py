@@ -206,6 +206,13 @@ def finalize_billing_account(body: FinalizeRequest, db: SASession = Depends(get_
     email = normalize_email(body.email)
     if "@" not in email or len(email) > 320:
         raise HTTPException(status_code=422, detail="Adresse email invalide")
+    paid_email = normalize_email((checkout_session.get("customer_details") or {}).get("email", ""))
+    if not paid_email or email != paid_email:
+        # `body.email` est fourni par le client: sans cette verification,
+        # quiconque connait un session_id paye (voir _claim_checkout_session
+        # sur la fuite possible) pourrait creer un compte premium sous
+        # l'adresse email de son choix, y compris celle d'une victime.
+        raise HTTPException(status_code=403, detail="Cette adresse email ne correspond pas au paiement")
     problem = password_problem(body.password)
     if problem:
         raise HTTPException(status_code=422, detail=problem)
@@ -343,5 +350,28 @@ async def stripe_webhook(request: Request, db: SASession = Depends(get_db)):
                 if user is not None:
                     user.is_premium = False
                 db.commit()
+
+    elif event_type == "charge.refunded":
+        # Un remboursement (dashboard ou API) n'annule pas forcement
+        # l'abonnement Stripe: sans ce cas, `is_premium` resterait `true`
+        # indefiniment tant que `customer.subscription.updated/deleted`
+        # n'est pas emis separement. On coupe l'acces immediatement en DB,
+        # puis on tente en best-effort d'annuler l'abonnement Stripe lui
+        # meme (idempotent s'il l'est deja) pour que Stripe et la DB
+        # convergent sans dependre d'un deuxieme webhook.
+        customer_id = data.get("customer")
+        if customer_id:
+            row = _find_subscription_by_customer(db, customer_id)
+            if row is not None:
+                row.status = "canceled"
+                user = db.get(User, row.user_id) if row.user_id is not None else None
+                if user is not None:
+                    user.is_premium = False
+                db.commit()
+                stripe.api_key = settings.stripe_secret_key
+                try:
+                    stripe.Subscription.cancel(row.id)
+                except stripe.error.StripeError as exc:
+                    log.warning("Annulation Stripe de %s apres remboursement: %s", row.id, exc)
 
     return {"status": "success"}
