@@ -277,3 +277,24 @@ class Subscription(Base):
         Index("ix_subscriptions_user_id", "user_id"),
         Index("ix_subscriptions_stripe_customer_id", "stripe_customer_id"),
     )
+
+
+class ClaimedCheckoutSession(Base):
+    """Marque un `session_id` Stripe Checkout comme deja echange contre un
+    cookie de session (src/api/billing_routes.py::finalize_billing_account,
+    billing_success).
+
+    Un Checkout Session reste interrogeable via l'API Stripe indefiniment
+    apres paiement (contrairement a la page de paiement elle-meme, qui
+    expire a 24h): sans cette table, un `session_id` qui fuit (Referer,
+    historique navigateur, logs de proxy) permettrait de re-emettre le
+    cookie de session premium a volonte. L'insertion (cle primaire) sert
+    de verrou: un deuxieme echange du meme `session_id` viole la contrainte
+    d'unicite et est refuse.
+    """
+    __tablename__ = "claimed_checkout_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    claimed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

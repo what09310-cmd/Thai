@@ -333,3 +333,78 @@ def test_finalize_404_when_webhook_has_not_landed_yet(client, monkeypatch):
         "session_id": "cs_test_anon", "email": "buyer@example.com", "password": "long-enough",
     })
     assert resp.status_code == 404
+
+
+def test_finalize_rejects_a_replayed_session_id(client, session, monkeypatch):
+    """Un `session_id` deja echange contre un cookie ne doit pas pouvoir
+    re-emettre un compte/cookie une seconde fois (prise de controle de
+    compte si le `session_id` fuite via Referer, historique, logs)."""
+    session.add(Subscription(
+        id="sub_anon", user_id=None, stripe_customer_id="cus_anon", plan_name="flex",
+        status="active", current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    session.commit()
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "retrieve", lambda session_id: _fake_checkout_session())
+
+    first = client.post("/api/billing/finalize", json={
+        "session_id": "cs_test_anon", "email": "buyer@example.com", "password": "long-enough",
+    })
+    assert first.status_code == 200
+
+    second = client.post("/api/billing/finalize", json={
+        "session_id": "cs_test_anon", "email": "someone-else@example.com", "password": "long-enough",
+    })
+    assert second.status_code == 401
+    # Aucun deuxieme compte n'a ete cree avec le session_id vole.
+    assert session.query(User).filter(User.email == "someone-else@example.com").first() is None
+
+
+def test_billing_success_rejects_a_replayed_session_id(client, session, monkeypatch):
+    """Meme protection sur le retour direct de Stripe (compte deja
+    identifie au moment du paiement, `client_reference_id` present)."""
+    _register(client)
+    user = session.query(User).one()
+
+    def fake_retrieve(session_id, expand=None):
+        return {
+            "payment_status": "paid",
+            "client_reference_id": str(user.id),
+            "subscription": _fake_subscription(user.id),
+        }
+
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "retrieve", fake_retrieve)
+
+    first = client.get("/billing/success", params={"session_id": "cs_test_123"}, follow_redirects=False)
+    assert first.status_code == 303
+    assert first.headers["location"] == "/vip.html"
+
+    second = client.get("/billing/success", params={"session_id": "cs_test_123"}, follow_redirects=False)
+    assert second.status_code == 200
+    assert "deja" in second.text.lower()
+    assert 'href="/login"' in second.text
+
+
+def test_attach_subscription_after_google_rejects_a_replayed_session_id(session, monkeypatch):
+    """Meme protection sur le rattachement post-OAuth Google
+    (`/auth/google?billing_session_id=...`, `auth_routes.py`): un
+    `session_id` deja reclame ne doit pas pouvoir etre reattache a un
+    deuxieme compte Google."""
+    session.add(Subscription(
+        id="sub_anon", user_id=None, stripe_customer_id="cus_anon", plan_name="flex",
+        status="active", current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    victim = User(email="victim@example.com")
+    attacker = User(email="attacker@example.com")
+    session.add_all([victim, attacker])
+    session.commit()
+
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "retrieve", lambda session_id: _fake_checkout_session())
+
+    first = billing_routes.attach_subscription_after_google(session, "cs_test_anon", victim)
+    assert first.headers["location"] == "/vip.html"
+    assert session.get(Subscription, "sub_anon").user_id == victim.id
+
+    second = billing_routes.attach_subscription_after_google(session, "cs_test_anon", attacker)
+    assert second.headers["location"] == "/premium.html"
+    # L'abonnement reste attribue a la victime, pas reattribue a l'attaquant.
+    assert session.get(Subscription, "sub_anon").user_id == victim.id

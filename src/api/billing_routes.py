@@ -16,8 +16,9 @@ from datetime import datetime, timezone
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SASession
 
 from src.api.auth import (
@@ -33,7 +34,7 @@ from src.api.auth_routes import _login_response
 from src.api.deps import get_db
 from src.api.security import _session
 from src.config import settings
-from src.database.models import Subscription, User
+from src.database.models import ClaimedCheckoutSession, Subscription, User
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -143,6 +144,25 @@ def _retrieve_paid_session(session_id: str) -> dict:
     return checkout_session
 
 
+def _claim_checkout_session(db: SASession, session_id: str) -> bool:
+    """Marque `session_id` comme consomme; renvoie False s'il l'etait deja.
+
+    L'insertion sert de verrou atomique: un `session_id` deja present viole
+    la contrainte de cle primaire (`IntegrityError`), qu'on distingue d'une
+    vraie erreur de connexion en faisant un rollback puis en relisant la
+    ligne — elle doit exister, sinon on relance l'exception d'origine.
+    """
+    db.add(ClaimedCheckoutSession(session_id=session_id))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if db.get(ClaimedCheckoutSession, session_id) is None:
+            raise
+        return False
+    return True
+
+
 def _find_subscription_by_customer(db: SASession, customer_id: str | None) -> Subscription | None:
     return (
         db.query(Subscription).filter(Subscription.stripe_customer_id == customer_id)
@@ -171,6 +191,8 @@ def finalize_billing_account(body: FinalizeRequest, db: SASession = Depends(get_
     if not _stripe_configured():
         raise HTTPException(status_code=404, detail="Paiement non configure")
     checkout_session = _retrieve_paid_session(body.session_id)
+    if not _claim_checkout_session(db, body.session_id):
+        raise HTTPException(status_code=401, detail="Ce lien de paiement a deja ete utilise")
     row = _find_subscription_by_customer(db, checkout_session.get("customer"))
     if row is None:
         raise HTTPException(status_code=404, detail="Le paiement est en cours de confirmation")
@@ -199,12 +221,25 @@ def finalize_billing_account(body: FinalizeRequest, db: SASession = Depends(get_
 
 
 def attach_subscription_after_google(db: SASession, session_id: str, user: User) -> RedirectResponse:
+    """Relie l'abonnement Stripe anonyme au compte Google qui vient de se
+    connecter.
+
+    `session_id` arrive ici via un parametre de requete client-controle
+    (`/auth/google?billing_session_id=...`, `auth_routes.py`), donc au
+    meme titre que `finalize_billing_account`/`billing_success`: un
+    `session_id` deja reclame ne doit pas pouvoir etre reattache une
+    deuxieme fois (a un autre compte Google que celui qui a paye). La
+    connexion Google elle-meme reste valide et l'utilisateur est quand
+    meme loggue -- seul le rattachement de l'abonnement est refuse.
+    """
     if not _stripe_configured():
         return RedirectResponse(url="/premium.html", status_code=303)
     try:
         checkout_session = _retrieve_paid_session(session_id)
     except HTTPException:
         return RedirectResponse(url="/premium.html", status_code=303)
+    if not _claim_checkout_session(db, session_id):
+        return _login_response(token_for_user(user), url="/premium.html")
     row = _find_subscription_by_customer(db, checkout_session.get("customer"))
     if row is not None and row.user_id is None:
         row.user_id = user.id
@@ -233,6 +268,23 @@ def billing_success(session_id: str | None = None, db: SASession = Depends(get_d
     user_id_raw = checkout_session.get("client_reference_id")
     if not user_id_raw or not str(user_id_raw).isdigit():
         return RedirectResponse(url=f"/finaliser-compte.html?session_id={session_id}", status_code=303)
+
+    if not _claim_checkout_session(db, session_id):
+        # Cas legitime frequent: l'utilisateur recharge la page de succes
+        # par reflexe juste apres avoir paye. Un /login nu ici serait
+        # deroutant (aucune explication du pourquoi) -- ce message dit
+        # explicitement que le paiement est deja pris en compte et que
+        # seule une reconnexion est necessaire pour retrouver l'acces.
+        return HTMLResponse(
+            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            "<title>Deja confirme</title></head><body style=\"font-family:sans-serif;"
+            "max-width:32rem;margin:4rem auto;text-align:center\">"
+            "<p>Ce paiement a deja ete confirme et ton compte est actif.</p>"
+            "<p>Reconnecte-toi pour retrouver ton acces premium : "
+            "<a href=\"/login\">se connecter</a>.</p>"
+            "</body></html>",
+            status_code=200,
+        )
 
     user = db.get(User, int(user_id_raw))
     subscription = checkout_session.get("subscription")
