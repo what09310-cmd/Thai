@@ -512,6 +512,9 @@ document.addEventListener("keydown", trapModalFocus);
 // géocodée, puis le centre de son quartier. `precise: true` signifie
 // "assez précis pour zoomer près du bâtiment" (coordonnées propres ou
 // adresse avec rue/route), par opposition à un simple centre de quartier.
+// Diffère volontairement de mapPoint()/precisionLabel dans thai-map.js (pages
+// freemium: pas de fallback adresse/quartier, watermark sur les photos) — ne
+// pas harmoniser les deux, l'accès ici est déjà premium/authentifié.
 function mapPoint(l) {
   if (l.latitude != null && l.longitude != null) {
     return { lat: l.latitude, lon: l.longitude, precise: true };
@@ -592,7 +595,9 @@ function modalHTML(l) {
         ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
       </div>
     </div>` : "";})()}
-    <a class="modal-link" href="${esc(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>
+    ${l.url
+      ? `<a class="modal-link" href="${safeHref(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>`
+      : `<a class="modal-link" href="/payant.html?listing=${encodeURIComponent(l.id)}">🔒 Débloquer l'annonce d'origine</a>`}
   `;
 }
 
