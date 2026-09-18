@@ -295,34 +295,12 @@ function modalHTML(l) {
       ${contractVal(l.contract_3_month_raw) !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}
       ${contractVal(l.contract_6_month_raw) !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}
     </div>
-    ${mapsUrl ? `
-    <div>
-      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap">
-        <a class="modal-link" style="padding:6px 12px;font-size:11px" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Google Maps ↗</a>
-      </div>
-      ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
-      ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
-    </div>` : ""}
     <div>
       <div class="section-head">${esc(contractsSectionTitle(l))}</div>
       <div class="modal-contracts">
         ${renderContractsHTML(l)}
       </div>
     </div>
-    ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `
-    <div>
-      <div class="section-head">Description</div>
-      <div class="modal-contracts">
-        <div class="mc"><div class="mc-label">Deposit</div><div class="mc-val${l.deposit ? "" : " na"}">${l.deposit ? esc(l.deposit) : "Non communiqué"}</div></div>
-        ${l.electric_price && l.electric_price !== "Please contact" ? `<div class="mc"><div class="mc-label">Electric price</div><div class="mc-val">${esc(l.electric_price)}</div></div>` : ""}
-        <div class="mc"><div class="mc-label">Air Conditioner</div><div class="mc-val${amenities.includes("Air Conditioner") ? "" : " na"}">${amenities.includes("Air Conditioner") ? "YES" : "NO"}</div></div>
-      </div>
-    </div>` : ""}
-    ${amenities.length ? `
-    <div>
-      <div class="section-head">Équipements</div>
-      <div class="modal-amenities">${amenities.map(a=>`<span class="amenity">${esc(AMENITY_ICONS[a] || a)}</span>`).join("")}</div>
-    </div>` : ""}
     ${(()=>{const hasWa=hasRealWhatsapp(l.whatsapp);return l.phone||l.line_id||hasWa ? `
     <div>
       <div class="section-head">Contact</div>
@@ -340,6 +318,28 @@ function modalHTML(l) {
         ${hasWa?`<a class="mc mc-wa" href="https://api.whatsapp.com/send/?phone=${encodeURIComponent(String(l.whatsapp).replace(/\D/g,""))}&text&type=phone_number&app_absent=0" target="_blank" rel="noopener"><div class="mc-label">WhatsApp</div><div class="mc-val" style="display:flex;align-items:center;gap:6px">${WHATSAPP_ICON_SVG} ${esc(formatWhatsapp(l.whatsapp))}</div></a>`:""}
       </div>
     </div>` : "";})()}
+    ${l.deposit || (l.electric_price && l.electric_price !== "Please contact") || amenities.length ? `
+    <div>
+      <div class="section-head">Infos pratiques</div>
+      <div class="modal-contracts">
+        <div class="mc mc-compact"><div class="mc-label">Deposit</div><div class="mc-val${l.deposit ? "" : " na"}">${l.deposit ? esc(l.deposit) : "Non communiqué"}</div></div>
+        ${l.electric_price && l.electric_price !== "Please contact" ? `<div class="mc mc-compact"><div class="mc-label">Electric price</div><div class="mc-val">${esc(l.electric_price)}</div></div>` : ""}
+        <div class="mc mc-compact"><div class="mc-label">Air Conditioner</div><div class="mc-val${amenities.includes("Air Conditioner") ? "" : " na"}">${amenities.includes("Air Conditioner") ? "YES" : "NO"}</div></div>
+      </div>
+    </div>` : ""}
+    ${amenities.length ? `
+    <div>
+      <div class="section-head">Équipements</div>
+      <div class="modal-amenities">${amenities.map(a=>`<span class="amenity">${esc(AMENITY_ICONS[a] || a)}</span>`).join("")}</div>
+    </div>` : ""}
+    ${mapsUrl ? `
+    <div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+        <a class="modal-link" style="padding:6px 12px;font-size:11px" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Google Maps ↗</a>
+      </div>
+      ${embedUrl ? `<iframe src="${esc(embedUrl)}" style="width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Carte de localisation"></iframe>` : ""}
+      ${precisionLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">${precisionLabel}</div>` : ""}
+    </div>` : ""}
     ${l.url
       ? `<a class="modal-link" href="${safeHref(l.url)}" target="_blank" rel="noopener">Voir sur RentHub ↗</a>`
       : `<a class="modal-link" href="/payant.html?listing=${encodeURIComponent(l.id)}">🔒 Débloquer l'annonce d'origine</a>`}

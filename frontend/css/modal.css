@@ -356,6 +356,15 @@
 .mc-val { color: var(--accent); font-weight: 700; font-size: 18px; }
 .mc-val.na { color: var(--muted); font-weight: 400; font-size: 12px; }
 
+.mc-price { background: rgba(80,70,245,.06); }
+
+.mc-price .mc-val { font-size: 20px; }
+
+.mc-compact { padding: 9px 16px; }
+
+.mc-compact .mc-val { font-weight: 400; font-size: 13px; }
+.mc-compact .mc-val.na { font-size: 12px; }
+
 .mc-room-label {
     font-size: 10px; font-family: var(--mono); font-weight: 700;
     text-transform: uppercase; letter-spacing: .08em;

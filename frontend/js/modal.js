@@ -172,7 +172,7 @@ function renderContractsHTML(l) {
       ].filter(([, v]) => v != null);
       if (!terms.length) return "";
       const termsHTML = terms.map(([term, v]) => `
-        <div class="mc">
+        <div class="mc mc-price">
           <div class="mc-label">${term}</div>
           <div class="mc-val">${esc(v)}</div>
         </div>`).join("");
@@ -189,7 +189,7 @@ function renderContractsHTML(l) {
     .filter(([, raw]) => raw && raw !== "-");
   if (!contracts.length) return `<div class="mc"><div class="mc-val na">Aucun contrat disponible</div></div>`;
   return contracts.map(([label, raw]) => `
-        <div class="mc">
+        <div class="mc mc-price">
           <div class="mc-label">${label}</div>
           <div class="mc-val">${esc(raw)}</div>
         </div>`).join("");
