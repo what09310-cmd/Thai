@@ -190,6 +190,7 @@ def test_webhook_checkout_completed_activates_premium(client, session, monkeypat
     user = session.query(User).one()
 
     event = {
+        "id": "evt_1",
         "type": "checkout.session.completed",
         "data": {"object": {"client_reference_id": str(user.id), "subscription": "sub_123"}},
     }
@@ -208,6 +209,7 @@ def test_webhook_checkout_completed_without_reference_creates_unlinked_subscript
     """Paiement anonyme: le webhook cree la ligne Subscription avec
     user_id=None, sans lever d'erreur sur l'absence de client_reference_id."""
     event = {
+        "id": "evt_2",
         "type": "checkout.session.completed",
         "data": {"object": {"client_reference_id": None, "subscription": "sub_anon", "customer": "cus_anon"}},
     }
@@ -237,7 +239,7 @@ def test_webhook_subscription_deleted_revokes_premium(client, session, monkeypat
     user.is_premium = True
     session.commit()
 
-    event = {"type": "customer.subscription.deleted", "data": {"object": {"id": "sub_123"}}}
+    event = {"id": "evt_3", "type": "customer.subscription.deleted", "data": {"object": {"id": "sub_123"}}}
     monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
 
     resp = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
@@ -259,7 +261,7 @@ def test_webhook_payment_failed_revokes_premium(client, session, monkeypatch):
     user.is_premium = True
     session.commit()
 
-    event = {"type": "invoice.payment_failed", "data": {"object": {"customer": "cus_123"}}}
+    event = {"id": "evt_4", "type": "invoice.payment_failed", "data": {"object": {"customer": "cus_123"}}}
     monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
 
     resp = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
@@ -285,7 +287,7 @@ def test_webhook_charge_refunded_revokes_premium(client, session, monkeypatch):
     user.is_premium = True
     session.commit()
 
-    event = {"type": "charge.refunded", "data": {"object": {"customer": "cus_123"}}}
+    event = {"id": "evt_5", "type": "charge.refunded", "data": {"object": {"customer": "cus_123"}}}
     monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
     monkeypatch.setattr(billing_routes.stripe.Subscription, "cancel", lambda sub_id: None)
 
@@ -313,7 +315,7 @@ def test_webhook_charge_refunded_survives_stripe_cancel_error(client, session, m
     def fake_cancel(sub_id):
         raise billing_routes.stripe.error.StripeError("deja annule")
 
-    event = {"type": "charge.refunded", "data": {"object": {"customer": "cus_123"}}}
+    event = {"id": "evt_6", "type": "charge.refunded", "data": {"object": {"customer": "cus_123"}}}
     monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
     monkeypatch.setattr(billing_routes.stripe.Subscription, "cancel", fake_cancel)
 
@@ -322,6 +324,38 @@ def test_webhook_charge_refunded_survives_stripe_cancel_error(client, session, m
 
     session.refresh(user)
     assert user.is_premium is False
+
+
+def test_webhook_deduplicates_by_event_id(client, session, monkeypatch):
+    """Stripe livre chaque event au moins une fois, parfois deux (retry
+    reseau, redemarrage de worker): un `event.id` deja vu doit etre
+    ignore sans retraitement, meme si l'effet observable d'aujourd'hui
+    (upsert par cle naturelle) le rendrait deja idempotent par
+    ailleurs."""
+    _register(client)
+    user = session.query(User).one()
+
+    calls = {"n": 0}
+
+    def fake_retrieve(sub_id):
+        calls["n"] += 1
+        return _fake_subscription(user.id)
+
+    event = {
+        "id": "evt_replayed",
+        "type": "checkout.session.completed",
+        "data": {"object": {"client_reference_id": str(user.id), "subscription": "sub_123"}},
+    }
+    monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
+    monkeypatch.setattr(billing_routes.stripe.Subscription, "retrieve", fake_retrieve)
+
+    first = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
+    assert first.status_code == 200
+    assert calls["n"] == 1
+
+    second = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
+    assert second.status_code == 200
+    assert calls["n"] == 1  # pas de deuxieme appel Stripe: l'event rejoue est ignore.
 
 
 def test_webhook_404_when_stripe_not_configured(client, monkeypatch):

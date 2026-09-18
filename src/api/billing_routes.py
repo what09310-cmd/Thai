@@ -34,7 +34,7 @@ from src.api.auth_routes import _login_response
 from src.api.deps import get_db
 from src.api.security import _session
 from src.config import settings
-from src.database.models import ClaimedCheckoutSession, Subscription, User
+from src.database.models import ClaimedCheckoutSession, ProcessedStripeEvent, Subscription, User
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -313,6 +313,19 @@ async def stripe_webhook(request: Request, db: SASession = Depends(get_db)):
     except (ValueError, stripe.error.SignatureVerificationError) as exc:
         log.warning("Webhook Stripe rejete: %s", exc)
         raise HTTPException(status_code=400, detail="Webhook invalide") from exc
+
+    event_id = event["id"]
+    db.add(ProcessedStripeEvent(event_id=event_id))
+    try:
+        db.commit()
+    except IntegrityError:
+        # Event deja traite (Stripe livre au moins une fois, parfois deux):
+        # chaque cas ci-dessous est un upsert par cle naturelle donc rejouer
+        # ne fausserait rien aujourd'hui, mais un futur effet de bord
+        # non-idempotent (email, appel externe) ne serait plus protege sans
+        # ce garde-fou explicite.
+        db.rollback()
+        return {"status": "success"}
 
     event_type = event["type"]
     data = event["data"]["object"]

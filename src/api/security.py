@@ -82,7 +82,11 @@ _CODE_MAX_AGE = 5 * 60
 # derriere "/", il faut donc le proteger aussi sous /static. La valeur dit
 # le niveau requis: True = compte premium (ou admin), False = n'importe
 # quel compte connecte.
-PROTECTED_PATHS: dict[str, bool] = {}
+PROTECTED_PATHS: dict[str, bool] = {
+    "/123": False,
+    "/index.html": False,
+    "/vip.html": True,
+}
 
 # Un compte connecte mais non premium qui demande une page premium est
 # envoye vers l'offre, pas vers le login qu'il a deja passe.
@@ -93,11 +97,15 @@ _STATIC_PREFIX = "/static/"
 # Routes servant des donnees, par opposition aux pages et aux assets. Ce
 # sont elles qu'on plafonne en debit: /health est sonde une fois par
 # seconde au demarrage par le lanceur (renthub.ps1) et /login tient deja
-# son propre compteur (src/api/auth.py).
+# son propre compteur (src/api/auth.py). /api/billing/session-info rend
+# l'email du payeur a partir du seul session_id: sans plafond, un
+# session_id devine ou vole se preterait au brute-force au rythme du
+# reseau.
 _RATE_LIMITED_PREFIXES = (
     "/listings",
     "/stats",
     "/api/questionnaire",
+    "/api/billing/session-info",
 )
 
 

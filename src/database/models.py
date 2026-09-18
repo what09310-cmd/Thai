@@ -298,3 +298,26 @@ class ClaimedCheckoutSession(Base):
     claimed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class ProcessedStripeEvent(Base):
+    """Marque un `event.id` de webhook Stripe comme deja traite
+    (src/api/billing_routes.py::stripe_webhook).
+
+    Aujourd'hui chaque cas du webhook est un upsert par cle naturelle
+    (id d'abonnement Stripe, `stripe_customer_id`): un event rejoue ne cree
+    pas de doublon ni ne fausse `is_premium`. Mais Stripe livre chaque
+    event au moins une fois, parfois deux (retry reseau, redemarrage du
+    worker), et cette idempotence "par construction" ne protegerait plus
+    un effet de bord non-idempotent ajoute plus tard (email de
+    confirmation, appel a une API externe, log de facturation
+    incrementale). Cette table sert de garde-fou generique, independant
+    de ce que fait chaque cas: `event.id` deja vu -> retour immediat sans
+    retraitement.
+    """
+    __tablename__ = "processed_stripe_events"
+
+    event_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

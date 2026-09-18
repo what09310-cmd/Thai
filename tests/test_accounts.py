@@ -47,7 +47,7 @@ def test_register_creates_a_user_and_logs_in(client, session):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/"
+    assert resp.headers["location"] == "/123"
     assert SESSION_COOKIE_NAME in resp.headers["set-cookie"]
 
     user = session.query(User).one()
@@ -123,6 +123,20 @@ def test_premium_account_reaches_vip(client, session):
     client.cookies.set(SESSION_COOKIE_NAME, token_for_user(user))
     assert read_session_token(client.cookies.get(SESSION_COOKIE_NAME)).role == ROLE_PREMIUM
     assert client.get("/vip.html", follow_redirects=False).status_code == 200
+
+
+def test_dashboard_123_requires_any_account_but_not_premium(client, session):
+    """`/123` (le tableau de bord, PROTECTED_PATHS["/123"] = False dans
+    security.py): un visiteur anonyme est renvoye au login, un compte
+    gratuit suffit ensuite -- pas besoin de premium contrairement a
+    /vip.html."""
+    anon = client.get("/123", follow_redirects=False)
+    assert anon.status_code in (302, 307)
+    assert anon.headers["location"] == "/login"
+
+    user = User(email="free@x.io"); session.add(user); session.commit()
+    client.cookies.set(SESSION_COOKIE_NAME, token_for_user(user))
+    assert client.get("/123", follow_redirects=False).status_code == 200
 
 
 def test_free_account_gets_the_public_view_of_listings(client, session):
