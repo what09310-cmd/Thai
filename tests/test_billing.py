@@ -42,6 +42,17 @@ def _fake_subscription(user_id: int = 1, status: str = "active") -> dict:
     }
 
 
+def test_subscription_user_id_is_nullable(session):
+    """Le webhook peut enregistrer un paiement avant la creation du compte."""
+    session.add(Subscription(
+        id="sub_anon", user_id=None, stripe_customer_id="cus_anon",
+        plan_name="flex", status="active",
+        current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    session.commit()
+    assert session.get(Subscription, "sub_anon").user_id is None
+
+
 # ── POST /api/checkout/create-session ──────────────────────────────
 
 def test_create_session_404_when_stripe_not_configured(client, monkeypatch):
@@ -51,9 +62,20 @@ def test_create_session_404_when_stripe_not_configured(client, monkeypatch):
     assert resp.status_code == 404
 
 
-def test_create_session_requires_login(client):
+def test_create_session_allows_anonymous_checkout(client, monkeypatch):
+    """Stripe collecte lui-meme l'email quand aucun compte n'est connecte."""
+    captured = {}
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(url="https://checkout.stripe.com/pay/cs_test_anon")
+
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "create", fake_create)
     resp = client.post("/api/checkout/create-session", json={"plan": "flex"})
-    assert resp.status_code == 401
+    assert resp.status_code == 200
+    assert "client_reference_id" not in captured
+    assert "customer_email" not in captured
+    assert captured["customer_creation"] == "always"
 
 
 def test_create_session_rejects_unknown_plan(client):
@@ -180,6 +202,28 @@ def test_webhook_checkout_completed_activates_premium(client, session, monkeypat
     assert user.is_premium is True
 
 
+def test_webhook_checkout_completed_without_reference_creates_unlinked_subscription(client, session, monkeypatch):
+    """Paiement anonyme: le webhook cree la ligne Subscription avec
+    user_id=None, sans lever d'erreur sur l'absence de client_reference_id."""
+    event = {
+        "type": "checkout.session.completed",
+        "data": {"object": {"client_reference_id": None, "subscription": "sub_anon", "customer": "cus_anon"}},
+    }
+    monkeypatch.setattr(billing_routes.stripe.Webhook, "construct_event", lambda *a, **k: event)
+    monkeypatch.setattr(
+        billing_routes.stripe.Subscription, "retrieve",
+        lambda sub_id: {**_fake_subscription(), "id": "sub_anon", "customer": "cus_anon"},
+    )
+
+    resp = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
+    assert resp.status_code == 200
+
+    session.expire_all()
+    row = session.query(Subscription).filter(Subscription.id == "sub_anon").one()
+    assert row.user_id is None
+    assert row.stripe_customer_id == "cus_anon"
+
+
 def test_webhook_subscription_deleted_revokes_premium(client, session, monkeypatch):
     _register(client)
     user = session.query(User).one()
@@ -230,4 +274,60 @@ def test_webhook_404_when_stripe_not_configured(client, monkeypatch):
     # l'absence de ceux-ci qui doit rendre la route indisponible.
     monkeypatch.setattr(settings, "stripe_secret_key", "")
     resp = client.post("/api/webhooks/stripe", content=b"{}", headers={"stripe-signature": "t=1,v1=ok"})
+    assert resp.status_code == 404
+
+
+def _fake_checkout_session(email: str = "buyer@example.com", customer: str = "cus_anon", paid: bool = True) -> dict:
+    return {
+        "payment_status": "paid" if paid else "unpaid",
+        "client_reference_id": None,
+        "customer": customer,
+        "customer_details": {"email": email},
+    }
+
+
+def test_billing_success_redirects_anonymous_payment_to_finalize_page(client, monkeypatch):
+    monkeypatch.setattr(
+        billing_routes.stripe.checkout.Session, "retrieve",
+        lambda session_id, expand=None: _fake_checkout_session(),
+    )
+    resp = client.get("/billing/success", params={"session_id": "cs_test_anon"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/finaliser-compte.html?session_id=cs_test_anon"
+
+
+def test_session_info_returns_email_and_link_status(client, session, monkeypatch):
+    session.add(Subscription(
+        id="sub_anon", user_id=None, stripe_customer_id="cus_anon", plan_name="flex",
+        status="active", current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    session.commit()
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "retrieve", lambda session_id: _fake_checkout_session())
+    resp = client.get("/api/billing/session-info", params={"session_id": "cs_test_anon"})
+    assert resp.status_code == 200
+    assert resp.json() == {"email": "buyer@example.com", "already_linked": False}
+
+
+def test_finalize_creates_account_and_activates_premium(client, session, monkeypatch):
+    session.add(Subscription(
+        id="sub_anon", user_id=None, stripe_customer_id="cus_anon", plan_name="flex",
+        status="active", current_period_end=datetime(2027, 1, 1, tzinfo=timezone.utc),
+    ))
+    session.commit()
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "retrieve", lambda session_id: _fake_checkout_session())
+    resp = client.post("/api/billing/finalize", json={
+        "session_id": "cs_test_anon", "email": "buyer@example.com", "password": "long-enough",
+    })
+    assert resp.status_code == 200
+    assert resp.json() == {"redirect": "/vip.html"}
+    user = session.query(User).filter(User.email == "buyer@example.com").one()
+    assert user.is_premium is True
+    assert session.get(Subscription, "sub_anon").user_id == user.id
+
+
+def test_finalize_404_when_webhook_has_not_landed_yet(client, monkeypatch):
+    monkeypatch.setattr(billing_routes.stripe.checkout.Session, "retrieve", lambda session_id: _fake_checkout_session())
+    resp = client.post("/api/billing/finalize", json={
+        "session_id": "cs_test_anon", "email": "buyer@example.com", "password": "long-enough",
+    })
     assert resp.status_code == 404

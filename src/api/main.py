@@ -583,6 +583,7 @@ _FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
 _PAGES = (
     "premium.html", "carte-thailande.html", "carte-bangkok.html",
     "carte-pattaya.html", "carte-phuket.html", "payant.html", "vip.html",
+    "finaliser-compte.html",
 )
 
 if _FRONTEND_DIR.exists():

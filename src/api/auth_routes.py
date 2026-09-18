@@ -396,13 +396,14 @@ def reset_password_submit(
 
 
 @router.get("/auth/google")
-async def google_login(request: Request, next: str = ""):
+async def google_login(request: Request, next: str = "", billing_session_id: str = ""):
     if not _google_configured():
         raise HTTPException(status_code=404, detail="Connexion Google non configurée")
     # Porte par la session `oauth_state` (SessionMiddleware) le temps de
     # l'aller-retour chez Google, la redirect_uri ne pouvant pas embarquer
     # de parametre supplementaire sans que Google la rejette.
     request.session["post_login_next"] = _safe_next(next)
+    request.session["billing_session_id"] = billing_session_id
     redirect_uri = str(request.url_for("google_callback"))
     if (settings.cookie_secure or _forwarded_https(request)) and redirect_uri.startswith("http://"):
         # Derriere un tunnel/proxy TLS, l'app voit du http; Google, lui,
@@ -438,6 +439,10 @@ async def google_callback(request: Request, db: SASession = Depends(get_db)):
             ),
             status_code=403,
         )
+    billing_session_id = request.session.pop("billing_session_id", "")
+    if billing_session_id:
+        from src.api import billing_routes
+        return billing_routes.attach_subscription_after_google(db, billing_session_id, user)
     dest = request.session.pop("post_login_next", "") or "/123"
     return _login_response(token_for_user(user), url=dest)
 

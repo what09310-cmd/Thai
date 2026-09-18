@@ -262,7 +262,9 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    # Un paiement anonyme est recu par le webhook avant que le visiteur ne
+    # finalise la creation de son compte.
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     stripe_customer_id: Mapped[str] = mapped_column(String(100), nullable=False)
     plan_name: Mapped[str] = mapped_column(String(20), nullable=False)  # flex, essentiel, serenite
     status: Mapped[str] = mapped_column(String(20), nullable=False)  # active, canceled, past_due, trialing

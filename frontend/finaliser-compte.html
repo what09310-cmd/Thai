@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finaliser votre compte — ThaiMonth</title>
+  <style>
+    body { align-items:center; background:#0f172a; box-sizing:border-box; color:#e2e8f0; display:flex; font-family:system-ui,sans-serif; justify-content:center; margin:0; min-height:100vh; padding:16px; }
+    .card { background:#1e293b; border-radius:8px; max-width:360px; padding:2rem; width:100%; }
+    h2 { margin-top:0; } .hint { color:#94a3b8; font-size:.9rem; }
+    label { display:block; margin-top:.75rem; } input { background:#0f172a; border:1px solid #334155; border-radius:4px; box-sizing:border-box; color:#e2e8f0; margin-top:.4rem; padding:.6rem; width:100%; }
+    button,.google { background:#3b82f6; border:0; border-radius:4px; box-sizing:border-box; color:#fff; cursor:pointer; display:block; font-size:1rem; font-weight:600; margin-top:1rem; padding:.6rem; text-align:center; text-decoration:none; width:100%; }
+    .google { background:#fff; color:#1f2937; } .sep { color:#64748b; font-size:.85rem; margin:1rem 0 0; text-align:center; } .error { color:#f87171; margin-top:.75rem; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h2>Finaliser votre compte</h2>
+    <p class="hint" id="hint">Paiement confirmé. Choisissez un mot de passe, ou continuez avec Google.</p>
+    <form id="finalize-form">
+      <label for="email">Email</label><input type="email" id="email" required autocomplete="email">
+      <label for="password">Mot de passe</label><input type="password" id="password" required autocomplete="new-password" minlength="8">
+      <div class="error" id="error" hidden></div><button type="submit">Créer mon compte</button>
+    </form>
+    <p class="sep">ou</p><a class="google" id="google-link" href="#">Continuer avec Google</a>
+  </main>
+  <script>
+    const sessionId = new URLSearchParams(location.search).get("session_id");
+    const form = document.getElementById("finalize-form"), error = document.getElementById("error");
+    const hint = document.getElementById("hint"), email = document.getElementById("email");
+    const google = document.getElementById("google-link"), separator = document.querySelector(".sep");
+    const showError = message => { error.textContent = message; error.hidden = false; };
+    if (!sessionId) location.replace("/payant.html");
+    else {
+      google.href = "/auth/google?billing_session_id=" + encodeURIComponent(sessionId);
+      fetch("/api/billing/session-info?session_id=" + encodeURIComponent(sessionId))
+        .then(response => response.ok ? response.json() : Promise.reject())
+        .then(data => { if (data.already_linked) location.replace("/vip.html"); else email.value = data.email || ""; })
+        .catch(() => { hint.textContent = ""; showError("Cette session de paiement est introuvable ou a expiré."); form.hidden = true; separator.hidden = true; google.hidden = true; });
+    }
+    form.addEventListener("submit", async event => {
+      event.preventDefault(); error.hidden = true;
+      const button = form.querySelector("button"); button.disabled = true;
+      try {
+        const response = await fetch("/api/billing/finalize", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({session_id:sessionId, email:email.value, password:document.getElementById("password").value}) });
+        if (response.ok) { location.href = (await response.json()).redirect; return; }
+        const body = await response.json().catch(() => ({})); showError(body.detail || "Une erreur est survenue, réessayez.");
+      } catch { showError("Une erreur est survenue, réessayez."); } finally { button.disabled = false; }
+    });
+  </script>
+</body>
+</html>

@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlalchemy import inspect, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from src.database.models import Base, Listing, ScanLog  # noqa: E402
+from src.database.models import Base, Listing, ScanLog, Subscription  # noqa: E402
 from src.database.session import engine  # noqa: E402
 from src.tracker.change_detector import compute_content_hash  # noqa: E402
 
@@ -136,6 +136,31 @@ def drop_obsolete_indexes(conn, dry_run: bool) -> None:
                 _log(dry_run, f"index obsolete {name} supprime")
                 if not dry_run:
                     conn.execute(text(f"DROP INDEX {name}"))
+
+
+def relax_subscription_user_id(conn, dry_run: bool) -> None:
+    """Retire NOT NULL de subscriptions.user_id pour les paiements anonymes."""
+    inspector = inspect(conn)
+    if "subscriptions" not in inspector.get_table_names():
+        return
+    columns = {column["name"]: column for column in inspector.get_columns("subscriptions")}
+    if "user_id" not in columns or columns["user_id"]["nullable"]:
+        return
+    _log(dry_run, "subscriptions.user_id: retrait de la contrainte NOT NULL")
+    if dry_run:
+        return
+    if engine.url.get_backend_name() == "postgresql":
+        conn.execute(text("ALTER TABLE subscriptions ALTER COLUMN user_id DROP NOT NULL"))
+        return
+    conn.execute(text("ALTER TABLE subscriptions RENAME TO subscriptions_old"))
+    Subscription.__table__.create(conn)
+    conn.execute(text(
+        "INSERT INTO subscriptions (id, user_id, stripe_customer_id, plan_name, status, "
+        "current_period_end, created_at) "
+        "SELECT id, user_id, stripe_customer_id, plan_name, status, current_period_end, created_at "
+        "FROM subscriptions_old"
+    ))
+    conn.execute(text("DROP TABLE subscriptions_old"))
 
 
 def fix_sequences(conn, dry_run: bool) -> None:
@@ -236,6 +261,7 @@ def main() -> int:
         Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
         add_missing_columns(conn, args.dry_run)
+        relax_subscription_user_id(conn, args.dry_run)
         dedupe_listing_images(conn, args.dry_run)
         add_missing_indexes(conn, args.dry_run)
         drop_obsolete_indexes(conn, args.dry_run)

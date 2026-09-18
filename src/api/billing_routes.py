@@ -16,11 +16,19 @@ from datetime import datetime, timezone
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SASession
 
-from src.api.auth import token_for_user
+from src.api.auth import (
+    SESSION_COOKIE_NAME,
+    SESSION_MAX_AGE_SECONDS,
+    get_user_by_email,
+    normalize_email,
+    password_problem,
+    register_user,
+    token_for_user,
+)
 from src.api.auth_routes import _login_response
 from src.api.deps import get_db
 from src.api.security import _session
@@ -54,18 +62,18 @@ class CheckoutRequest(BaseModel):
 def create_checkout_session(body: CheckoutRequest, request: Request, db: SASession = Depends(get_db)):
     if not _stripe_configured():
         raise HTTPException(status_code=404, detail="Paiement non configuré")
-    info = _session(request)
-    if info is None or info.user_id == 0:
-        # user_id 0 est le compte administrateur (src/api/auth.py), qui n'a
-        # pas de ligne dans `users` et donc pas d'email a facturer.
-        raise HTTPException(status_code=401, detail="Connexion requise")
     price_id = PLANS.get(body.plan, lambda: None)()
     if not price_id:
         raise HTTPException(status_code=400, detail="Offre invalide")
 
-    user = db.get(User, info.user_id)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Connexion requise")
+    info = _session(request)
+    user = db.get(User, info.user_id) if info is not None and info.user_id != 0 else None
+    checkout_kwargs: dict = {}
+    if user is not None:
+        checkout_kwargs["client_reference_id"] = str(user.id)
+        checkout_kwargs["customer_email"] = user.email
+    else:
+        checkout_kwargs["customer_creation"] = "always"
     origin = str(request.base_url).rstrip("/")
     stripe.api_key = settings.stripe_secret_key
     try:
@@ -73,10 +81,9 @@ def create_checkout_session(body: CheckoutRequest, request: Request, db: SASessi
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
-            client_reference_id=str(user.id),
-            customer_email=user.email,
             success_url=f"{origin}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{origin}/payant.html",
+            **checkout_kwargs,
         )
     except stripe.error.StripeError as exc:
         log.error("Echec de creation de session Stripe Checkout: %s", exc)
@@ -84,7 +91,7 @@ def create_checkout_session(body: CheckoutRequest, request: Request, db: SASessi
     return {"url": checkout_session.url}
 
 
-def _upsert_subscription(db: SASession, stripe_subscription: dict, user_id: int, plan_name: str | None = None) -> None:
+def _upsert_subscription(db: SASession, stripe_subscription: dict, user_id: int | None, plan_name: str | None = None) -> None:
     """Cree ou met a jour la ligne `Subscription`, active `User.is_premium`.
 
     Idempotent: appele a la fois par /billing/success et par
@@ -110,10 +117,102 @@ def _upsert_subscription(db: SASession, stripe_subscription: dict, user_id: int,
         row.current_period_end = period_end
         if plan_name:
             row.plan_name = plan_name
-    user = db.get(User, user_id)
-    if user is not None:
-        user.is_premium = status in ("active", "trialing")
+        if row.user_id is None and user_id is not None:
+            row.user_id = user_id
+    if row.user_id is not None:
+        user = db.get(User, row.user_id)
+        if user is not None:
+            user.is_premium = status in ("active", "trialing")
     db.commit()
+
+
+def _issue_session_cookie(response: JSONResponse, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE_NAME, token, max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True, samesite="lax", secure=settings.cookie_secure,
+    )
+
+
+def _retrieve_paid_session(session_id: str) -> dict:
+    stripe.api_key = settings.stripe_secret_key
+    try:
+        checkout_session = stripe.checkout.Session.retrieve(session_id)
+    except stripe.error.StripeError as exc:
+        log.warning("Session Checkout introuvable: %s", exc)
+        raise HTTPException(status_code=400, detail="Session de paiement invalide") from exc
+    if checkout_session.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="Paiement non confirme")
+    return checkout_session
+
+
+def _find_subscription_by_customer(db: SASession, customer_id: str | None) -> Subscription | None:
+    return (
+        db.query(Subscription).filter(Subscription.stripe_customer_id == customer_id)
+        .order_by(Subscription.created_at.desc()).first()
+    )
+
+
+@router.get("/api/billing/session-info")
+def billing_session_info(session_id: str, db: SASession = Depends(get_db)):
+    if not _stripe_configured():
+        raise HTTPException(status_code=404, detail="Paiement non configure")
+    checkout_session = _retrieve_paid_session(session_id)
+    email = (checkout_session.get("customer_details") or {}).get("email", "")
+    row = _find_subscription_by_customer(db, checkout_session.get("customer"))
+    return {"email": email, "already_linked": row is not None and row.user_id is not None}
+
+
+class FinalizeRequest(BaseModel):
+    session_id: str
+    email: str
+    password: str
+
+
+@router.post("/api/billing/finalize")
+def finalize_billing_account(body: FinalizeRequest, db: SASession = Depends(get_db)):
+    if not _stripe_configured():
+        raise HTTPException(status_code=404, detail="Paiement non configure")
+    checkout_session = _retrieve_paid_session(body.session_id)
+    row = _find_subscription_by_customer(db, checkout_session.get("customer"))
+    if row is None:
+        raise HTTPException(status_code=404, detail="Le paiement est en cours de confirmation")
+    if row.user_id is not None:
+        user = db.get(User, row.user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="Compte introuvable")
+        response = JSONResponse({"redirect": "/vip.html"})
+        _issue_session_cookie(response, token_for_user(user))
+        return response
+    email = normalize_email(body.email)
+    if "@" not in email or len(email) > 320:
+        raise HTTPException(status_code=422, detail="Adresse email invalide")
+    problem = password_problem(body.password)
+    if problem:
+        raise HTTPException(status_code=422, detail=problem)
+    if get_user_by_email(db, email) is not None:
+        raise HTTPException(status_code=409, detail="Un compte existe deja avec cet email")
+    user = register_user(db, email, body.password)
+    row.user_id = user.id
+    user.is_premium = row.status in ("active", "trialing")
+    db.commit()
+    response = JSONResponse({"redirect": "/vip.html"})
+    _issue_session_cookie(response, token_for_user(user))
+    return response
+
+
+def attach_subscription_after_google(db: SASession, session_id: str, user: User) -> RedirectResponse:
+    if not _stripe_configured():
+        return RedirectResponse(url="/premium.html", status_code=303)
+    try:
+        checkout_session = _retrieve_paid_session(session_id)
+    except HTTPException:
+        return RedirectResponse(url="/premium.html", status_code=303)
+    row = _find_subscription_by_customer(db, checkout_session.get("customer"))
+    if row is not None and row.user_id is None:
+        row.user_id = user.id
+        user.is_premium = row.status in ("active", "trialing")
+        db.commit()
+    return _login_response(token_for_user(user), url="/vip.html")
 
 
 @router.get("/billing/success")
@@ -135,7 +234,7 @@ def billing_success(session_id: str | None = None, db: SASession = Depends(get_d
 
     user_id_raw = checkout_session.get("client_reference_id")
     if not user_id_raw or not str(user_id_raw).isdigit():
-        return RedirectResponse(url="/premium.html", status_code=303)
+        return RedirectResponse(url=f"/finaliser-compte.html?session_id={session_id}", status_code=303)
 
     user = db.get(User, int(user_id_raw))
     subscription = checkout_session.get("subscription")
@@ -162,18 +261,19 @@ async def stripe_webhook(request: Request, db: SASession = Depends(get_db)):
     data = event["data"]["object"]
 
     if event_type == "checkout.session.completed":
-        user_id_raw = data.get("client_reference_id")
         subscription_id = data.get("subscription")
-        if user_id_raw and str(user_id_raw).isdigit() and subscription_id:
+        if subscription_id:
+            user_id_raw = data.get("client_reference_id")
+            user_id = int(user_id_raw) if user_id_raw and str(user_id_raw).isdigit() else None
             stripe.api_key = settings.stripe_secret_key
             subscription = stripe.Subscription.retrieve(subscription_id)
-            _upsert_subscription(db, subscription, int(user_id_raw))
+            _upsert_subscription(db, subscription, user_id)
 
     elif event_type in ("customer.subscription.updated", "customer.subscription.deleted"):
         row = db.get(Subscription, data["id"])
         if row is not None:
             row.status = "canceled" if event_type == "customer.subscription.deleted" else data["status"]
-            user = db.get(User, row.user_id)
+            user = db.get(User, row.user_id) if row.user_id is not None else None
             if user is not None:
                 user.is_premium = row.status in ("active", "trialing")
             db.commit()
@@ -189,7 +289,7 @@ async def stripe_webhook(request: Request, db: SASession = Depends(get_db)):
             )
             if row is not None:
                 row.status = "past_due"
-                user = db.get(User, row.user_id)
+                user = db.get(User, row.user_id) if row.user_id is not None else None
                 if user is not None:
                     user.is_premium = False
                 db.commit()
