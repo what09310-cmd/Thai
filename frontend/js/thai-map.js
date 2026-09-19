@@ -40,6 +40,67 @@ function applyFilters(){
 
   const countEl = document.getElementById("result-count");
   if (countEl) countEl.textContent = `${filtered.length.toLocaleString("fr-FR")} annonce${filtered.length > 1 ? "s" : ""}`;
+
+  // Colonne resultats (layout 3 colonnes): meme tableau filtre que la carte,
+  // donc toujours synchronise avec elle -- voir renderResultsList ci-dessous.
+  renderResultsList(filtered);
+}
+
+// ── Colonne resultats (cards) ────────────────────────────────────────
+// Rendu adapte de cardHTML() (index.html/frontend/js/catalog.js, en LECTURE
+// seule): memes classes CSS de card (deja chargees ici via modal.css), pour
+// un style identique au reste du site, mais sans les toggles "X mois
+// uniquement" de la page catalogue (absents de cette page) -- on affiche
+// simplement les durees de contrat disponibles.
+function resultCardHTML(ad){
+  const district = ad.district || ad.subdistrict || "";
+  const c1 = contractVal(ad.contract_monthly_raw);
+  const c3 = contractVal(ad.contract_3_month_raw);
+  const c6 = contractVal(ad.contract_6_month_raw);
+  const updated = ad.source_updated_at ? new Date(ad.source_updated_at).toLocaleDateString("fr-FR") : "";
+
+  const boxes = [
+    ad.has_monthly_contract === "true" && c1 !== "—" ? `<div class="cc"><div class="cc-label">1 mois</div><div class="cc-val">${c1}</div></div>` : "",
+    c3 !== "—" ? `<div class="cc"><div class="cc-label">3 mois</div><div class="cc-val">${c3}</div></div>` : "",
+    c6 !== "—" ? `<div class="cc"><div class="cc-label">6 mois</div><div class="cc-val">${c6}</div></div>` : "",
+  ].filter(Boolean);
+
+  return `<div class="card" tabindex="0" role="button" aria-label="Voir le détail : ${escapeHtml(ad.name || "annonce")}" onclick="openModal(${ad.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal(${ad.id});}">
+    <div class="card-img">${ad.images && ad.images.length
+      ? `<img src="${escapeHtml(ad.images[0])}" alt="" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.parentElement.innerHTML='<div class=&quot;no-img&quot;>🏠</div>'">`
+      : `<div class="no-img">🏠</div>`}</div>
+    <div class="card-badge-slot">${ad.has_monthly_contract === "true" && c1 !== "—" ? `<span class="badge badge-monthly" style="position:static;display:inline-block">1 MOIS</span>` : ""}${c3 !== "—" ? `<span class="badge badge-term-3" style="position:static;display:inline-block">3 MOIS</span>` : ""}${c6 !== "—" ? `<span class="badge badge-term-6" style="position:static;display:inline-block">6 MOIS</span>` : ""}</div>
+    <div class="card-body">
+      <div class="card-loc">
+        ${district ? `<span class="loc-district">${escapeHtml(district)}</span>` : ""}
+        ${ad.province ? `<span class="loc-province">${escapeHtml(ad.province)}</span>` : ""}
+      </div>
+      ${boxes.length ? `<div class="card-contracts">${boxes.join("")}</div>` : ""}
+      ${updated ? `<div class="card-date">Mis à jour: ${updated}</div>` : ""}
+    </div>
+  </div>`;
+}
+
+// Meme source filtree que la carte (applyFilters() l'appelle juste apres
+// avoir recalcule clusterGroup) -- liste et markers restent synchronises.
+function renderResultsList(list){
+  const wrap = document.getElementById("results-list");
+  if (!wrap) return; // vip.html/resultats.html n'ont pas cette colonne.
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="state-box">Aucune annonce<br><small style="margin-top:6px;color:var(--muted)">Élargissez les filtres</small></div>`;
+    return;
+  }
+
+  const sortSel = document.getElementById("result-sort");
+  const sort = sortSel ? sortSel.value : "updated";
+  const sorted = list.slice().sort((a, b) => {
+    if (sort === "price_asc") return (priceValue(a) ?? Infinity) - (priceValue(b) ?? Infinity);
+    if (sort === "price_desc") return (priceValue(b) ?? -Infinity) - (priceValue(a) ?? -Infinity);
+    return new Date(b.source_updated_at || 0) - new Date(a.source_updated_at || 0); // "updated" par defaut
+  });
+
+  wrap.innerHTML = sorted.map(resultCardHTML).join("");
 }
 
 async function loadAds(){
@@ -269,6 +330,14 @@ function buildMap(){
 
   const bounds = L.latLngBounds(ads.map(a => [a.latitude, a.longitude]));
   leafletMap.fitBounds(bounds, { padding: [30, 30] });
+
+  // Layout 3 colonnes: #leaflet-map n'est plus plein-viewport en position
+  // absolute, sa taille depend maintenant du flex de .col-map calcule par
+  // le navigateur. Sans invalidateSize() Leaflet garde les dimensions
+  // mesurees a l'instant de L.map() (souvent 0x0 avant le premier layout),
+  // et les tuiles s'affichent tronquees/mal centrees.
+  setTimeout(() => leafletMap.invalidateSize(), 0);
+  window.addEventListener("resize", () => { if (leafletMap) leafletMap.invalidateSize(); });
 }
 
 // La carte ne charge pas les caches de geocodage d'index.html : seules les

@@ -60,8 +60,7 @@
 </header>
 
 <main>
-  <section id="map">
-    <div id="leaflet-map"></div>
+  <aside class="col-filters" id="col-filters">
     <div class="controls" id="controls">
       <button type="button" class="controls-toggle" id="controls-toggle" aria-expanded="true" aria-controls="controls">
         <span>Filtres</span><span class="controls-toggle-icon">▾</span>
@@ -106,6 +105,22 @@
         </div>
       </div>
     </div>
+  </aside>
+
+  <section class="col-results" id="col-results">
+    <div class="results-toolbar">
+      <label class="visually-hidden" for="result-sort">Trier les annonces</label>
+      <select class="sort-select" id="result-sort" onchange="applyFilters()">
+        <option value="updated">Récentes d'abord</option>
+        <option value="price_asc">Prix ↑</option>
+        <option value="price_desc">Prix ↓</option>
+      </select>
+    </div>
+    <div id="results-list" class="results-list"></div>
+  </section>
+
+  <section id="map" class="col-map">
+    <div id="leaflet-map"></div>
   </section>
 </main>
 
