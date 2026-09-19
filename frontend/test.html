@@ -477,6 +477,22 @@
   @media (max-width: 768px){
     .pillnav { padding-left: 16px; }
     .hero-inner { padding-top: 40px; }
+  }
+  /* La pilule (flex, non-wrap) etait large de calc(100% - 40px) mais ses
+     enfants (marque + liens + CTA, tous flex-shrink:0/white-space:nowrap)
+     totalisaient ~600px : au lieu de la faire deborder, le CTA "Version
+     Payante" se retrouvait simplement hors ecran (invisible, injoignable
+     au tap) sans jamais elargir document.scrollWidth puisque la pilule est
+     en position:fixed. Sous 480px on l'autorise a s'enrouler sur deux
+     lignes plutot que de laisser son contenu s'echapper du cadre. */
+  @media (max-width: 480px){
+    .pillnav {
+      flex-wrap: wrap; justify-content: center; row-gap: 8px;
+      padding: 10px 14px; height: auto;
+    }
+    .pillnav-links { flex: 0 1 auto; gap: 2px; }
+    .pillnav-link { padding: 6px 10px; font-size: 13px; }
+    .pillnav-cta { padding: 8px 14px; font-size: 13px; }
     .hero-skyline { height: 116px; }
     .deal { width: 290px; }
     .deal-img { height: 190px; }
