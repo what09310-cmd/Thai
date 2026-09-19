@@ -56,8 +56,10 @@ async function fetchPage(query, offset) {
   return batch;
 }
 
-async function fetchAllListings(query) {
-  const all = await fetchPage(query, 0);
+// Charge le reste du catalogue en arrière-plan après le premier rendu, et
+// rappelle `onProgress` (re-render) à chaque lot reçu plutôt que d'attendre
+// que tout soit arrivé avant d'afficher quoi que ce soit.
+async function fetchRestInBackground(query, all, onProgress) {
   let offset = PAGE_LIMIT;
   let last = all.length;
   while (last === PAGE_LIMIT) {
@@ -66,20 +68,30 @@ async function fetchAllListings(query) {
     for (const batch of batches) all.push(...batch);
     last = batches[batches.length - 1].length;
     offset += PARALLEL_PAGES * PAGE_LIMIT;
+    onProgress();
   }
-  return all;
 }
 
 async function loadListings() {
   showLoading();
   try {
-    allData = await fetchAllListings("status=active");
+    const first = await fetchPage("status=active", 0);
+    allData = first;
 
     applyUrlParams();
     buildLocationMenus();
     _updateNew24hCount();
     _updateFeaturedCounts();
     applyFilters();
+
+    if (first.length === PAGE_LIMIT) {
+      fetchRestInBackground("status=active", allData, () => {
+        buildLocationMenus();
+        _updateNew24hCount();
+        _updateFeaturedCounts();
+        applyFilters();
+      }).catch(e => console.error(e));
+    }
   } catch(e) {
     console.error(e);
     document.getElementById("grid-wrap").innerHTML =

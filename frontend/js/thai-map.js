@@ -44,8 +44,6 @@ function applyFilters(){
 
 async function loadAds(){
   const limit = 500;
-  let offset = 0;
-  const data = [];
   // /resultats (tunnel /789) declare LOCATION_QUERY ("province=Bangkok" ou
   // "district=Bang Lamung") avant d'appeler loadAds(): meme principe que
   // CITY.query dans city-map.js, applique ici en plus du filtre budget/duree
@@ -53,23 +51,24 @@ async function loadAds(){
   // nationale inchangee.
   const locationQuery = typeof LOCATION_QUERY !== "undefined" && LOCATION_QUERY ? `${LOCATION_QUERY}&` : "";
 
+  async function fetchBatch(offset) {
+    const r = await fetch(`${API}/listings?${locationQuery}status=active&limit=${limit}&offset=${offset}`);
+    if (!r.ok) throw new Error(r.status);
+    const batch = await r.json();
+    if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
+    return batch;
+  }
+
+  let first;
   try {
-    while (true) {
-      const r = await fetch(`${API}/listings?${locationQuery}status=active&limit=${limit}&offset=${offset}`);
-      if (!r.ok) throw new Error(r.status);
-      const batch = await r.json();
-      if (!Array.isArray(batch)) throw new Error("Réponse /listings invalide");
-      data.push(...batch);
-      if (batch.length < limit) break;
-      offset += limit;
-    }
+    first = await fetchBatch(0);
   } catch (e) {
     document.getElementById("leaflet-map").innerHTML =
       `<div class="empty">Impossible de charger les annonces pour le moment.<br><br>Le serveur met parfois une minute à démarrer : recharge la page dans quelques instants.</div>`;
     return;
   }
 
-  ads = data.filter(a => Number.isFinite(a.latitude) && Number.isFinite(a.longitude));
+  ads = first.filter(a => Number.isFinite(a.latitude) && Number.isFinite(a.longitude));
 
   if (!ads.length) {
     document.getElementById("leaflet-map").innerHTML = `<div class="empty">Aucune annonce géolocalisée.</div>`;
@@ -79,6 +78,26 @@ async function loadAds(){
   buildMap();
   setupFormFilters();
   applyFilters();
+
+  // Charge le reste en arriere-plan: la carte s'affiche des le premier lot
+  // au lieu d'attendre tout le catalogue.
+  if (first.length === limit) {
+    (async () => {
+      let offset = limit;
+      let last = first.length;
+      try {
+        while (last === limit) {
+          const batch = await fetchBatch(offset);
+          const geo = batch.filter(a => Number.isFinite(a.latitude) && Number.isFinite(a.longitude));
+          ads.push(...geo);
+          addMarkersFor(geo);
+          applyFilters();
+          last = batch.length;
+          offset += limit;
+        }
+      } catch (e) { console.error(e); }
+    })();
+  }
 }
 
 // ── Popup riche + modale (extrait de carte-thailande.html: /resultats,
@@ -210,18 +229,11 @@ async function loadPopupPhotos(ad){
   paint(detailCache[ad.id]);
 }
 
-function buildMap(){
-  leafletMap = L.map("leaflet-map", { zoomControl: false });
-  L.control.zoom({ position: "topright" }).addTo(leafletMap);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
-    maxZoom: 19,
-  }).addTo(leafletMap);
-
-  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 50 });
-  leafletMap.addLayer(clusterGroup);
-
-  ads.forEach(ad => {
+// Cree les marqueurs Leaflet pour une liste d'annonces sans toucher a la
+// carte/au clusterGroup (utilise pour le rendu initial et pour les lots
+// charges en arriere-plan par loadAds()).
+function addMarkersFor(list){
+  list.forEach(ad => {
     // Visiteur non connecte: l'API decale la position et le signale par
     // location_approx (main.py::_approximate_position). Comme Airbnb, on
     // dessine alors une zone plutot qu'un point; le rayon doit rester
@@ -240,6 +252,20 @@ function buildMap(){
     marker.on("popupopen", () => loadPopupPhotos(ad));
     markersById[ad.id] = marker;
   });
+}
+
+function buildMap(){
+  leafletMap = L.map("leaflet-map", { zoomControl: false });
+  L.control.zoom({ position: "topright" }).addTo(leafletMap);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  }).addTo(leafletMap);
+
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 50 });
+  leafletMap.addLayer(clusterGroup);
+
+  addMarkersFor(ads);
 
   const bounds = L.latLngBounds(ads.map(a => [a.latitude, a.longitude]));
   leafletMap.fitBounds(bounds, { padding: [30, 30] });
