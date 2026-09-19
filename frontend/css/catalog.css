@@ -286,4 +286,18 @@
     .shell { padding-top: 0; }
     .city-bar { margin: 24px 12px 0; padding: 12px; }
     .city-stats { width: 100%; gap: 8px 14px; margin-left: 0; }
+
+    header {
+      width: calc(100% - 20px);
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 9px 14px;
+      gap: 10px;
+    }
+    .logo { font-size: 20px; }
+    .header-map { padding: 8px 14px; font-size: 13px; }
+    .hstat { min-width: 76px; padding: 6px 10px; }
+
+    .chip-label { padding: 11px 14px; min-height: 44px; box-sizing: border-box; }
+    .filter-input { padding: 12px 10px; min-height: 44px; box-sizing: border-box; }
   }
