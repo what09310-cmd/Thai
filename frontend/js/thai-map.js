@@ -318,7 +318,7 @@ function addMarkersFor(list){
 function buildMap(){
   leafletMap = L.map("leaflet-map", { zoomControl: false });
   L.control.zoom({ position: "topright" }).addTo(leafletMap);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
     maxZoom: 19,
   }).addTo(leafletMap);

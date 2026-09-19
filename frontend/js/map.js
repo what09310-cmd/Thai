@@ -8,6 +8,8 @@ let leafletMap = null;
 
 let clusterGroup = null;
 
+let tileLayer = null;
+
 let selectedBudget = null;
 
 let selectedDuration = "";
@@ -208,3 +210,34 @@ function setupControlsToggle(){
   toggle.addEventListener("click", () => setCollapsed(!panel.classList.contains("collapsed")));
 }
 document.addEventListener("DOMContentLoaded", setupControlsToggle);
+
+// Chevron entre la liste de resultats et la carte (comme Booking) : replie/
+// deplie .col-results, la carte recupere l'espace libere. Pages sans ce
+// bouton (vip.html, resultats.html: pas de colonne resultats) : no-op.
+function setupResultsCollapseToggle(){
+  const toggle = document.getElementById("results-collapse-toggle");
+  const main = document.querySelector("main");
+  if (!toggle || !main) return;
+  toggle.addEventListener("click", () => {
+    const collapsed = main.classList.toggle("results-collapsed");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Afficher la liste des annonces" : "Masquer la liste des annonces");
+    // Le reflow (col-results display:none/flex) doit avoir fini avant que
+    // Leaflet ne remesure son conteneur, sinon invalidateSize() lit encore
+    // l'ancienne largeur.
+    setTimeout(() => {
+      if (!leafletMap) return;
+      leafletMap.invalidateSize();
+      if (clusterGroup && clusterGroup.getBounds().isValid()) {
+        leafletMap.fitBounds(clusterGroup.getBounds(), { padding: [30, 30], animate: false });
+      }
+      // fitBounds() retombe souvent sur le meme centre/zoom (la hauteur du
+      // conteneur ne change pas, donc c'est elle qui la contraint) -- sans
+      // un vrai "moveend", GridLayer ne recharge jamais les tuiles de la
+      // zone revelee a droite (reste grise). redraw() force le rechargement
+      // complet du calque de tuiles independamment de tout deplacement.
+      if (tileLayer) tileLayer.redraw();
+    }, 50);
+  });
+}
+document.addEventListener("DOMContentLoaded", setupResultsCollapseToggle);

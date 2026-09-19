@@ -38,6 +38,14 @@ main{ height:100vh;display:flex;overflow:hidden }
    plein-viewport absolu d'avant). Le header reste en overlay flottant
    (inchange) au-dessus des 3 colonnes -- d'ou le padding-top des deux
    colonnes non-carte, pour ne pas passer sous le pill du header. */
+
+/* La bande "ciel" de common.css (body::before, 135px, z-index:80) est pensee
+   pour une page qui scrolle sous le header flottant -- sur ce layout 3
+   colonnes, chaque colonne a deja son propre fond opaque et n'en a pas
+   besoin ; sans ca, la bande se peint par-dessus le haut de .col-filters. */
+body:has(.col-filters)::before,
+body:has(.col-filters)::after{ display:none }
+
 .col-filters{
     flex:0 0 300px;width:300px;height:100%;overflow-y:auto;
     padding:76px 18px 18px;border-right:1px solid var(--border);
@@ -45,14 +53,31 @@ main{ height:100vh;display:flex;overflow:hidden }
   }
 
 .col-results{
-    flex:1 1 420px;min-width:320px;max-width:520px;height:100%;overflow-y:auto;
+    flex:0 1 320px;min-width:280px;max-width:320px;height:100%;overflow-y:auto;
     padding:76px 18px 18px;border-right:1px solid var(--border);
     background:var(--bg);display:flex;flex-direction:column;gap:14px
   }
 
-.results-toolbar{ display:flex;align-items:center;justify-content:flex-end }
+.results-toolbar{ display:flex;align-items:center;justify-content:flex-end;gap:10px }
 
 .results-list{ display:flex;flex-direction:column;gap:14px }
+
+/* Chevron flottant entre la liste et la carte (comme Booking) : replie/deplie
+   .col-results, la carte (#map, flex:1 1 auto) recupere l'espace libere. */
+.results-collapse-toggle{
+    flex:0 0 auto;width:32px;height:32px;align-self:flex-start;
+    margin:92px 0 0 -16px;z-index:10;position:relative;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--card);color:var(--text);border:1px solid var(--border);
+    border-radius:8px;cursor:pointer;font-size:16px;line-height:1;
+    box-shadow:0 1px 4px rgba(0,0,0,.15);transition:background .15s
+  }
+
+.results-collapse-toggle:hover{ background:var(--accent);color:#fff;border-color:var(--accent) }
+
+main.results-collapsed .col-results{ display:none }
+
+main.results-collapsed .results-collapse-toggle{ transform:scaleX(-1) }
 
 /* A l'interieur de la colonne, #controls redevient un bloc statique en
    flux normal (plus d'overlay absolu) -- seule la position change, pas
