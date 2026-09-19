@@ -227,15 +227,11 @@ function setupResultsCollapseToggle(){
     // l'ancienne largeur.
     setTimeout(() => {
       if (!leafletMap) return;
+      // invalidateSize() seul ne redeclenche pas toujours le chargement des
+      // tuiles de la zone revelee (pas de vrai "moveend" si le centre/zoom
+      // ne changent pas) -- redraw() force ce rechargement sans toucher au
+      // zoom ni recentrer la carte.
       leafletMap.invalidateSize();
-      if (clusterGroup && clusterGroup.getBounds().isValid()) {
-        leafletMap.fitBounds(clusterGroup.getBounds(), { padding: [30, 30], animate: false });
-      }
-      // fitBounds() retombe souvent sur le meme centre/zoom (la hauteur du
-      // conteneur ne change pas, donc c'est elle qui la contraint) -- sans
-      // un vrai "moveend", GridLayer ne recharge jamais les tuiles de la
-      // zone revelee a droite (reste grise). redraw() force le rechargement
-      // complet du calque de tuiles independamment de tout deplacement.
       if (tileLayer) tileLayer.redraw();
     }, 50);
   });
