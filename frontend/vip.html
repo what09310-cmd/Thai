@@ -128,9 +128,9 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
         integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin="" defer></script>
-<script src="/static/js/common.js" defer></script>
-<script src="/static/js/map.js" defer></script>
-<script src="/static/js/thai-map.js" defer></script>
+<script src="/static/js/common.js"></script>
+<script src="/static/js/map.js"></script>
+<script src="/static/js/thai-map.js"></script>
 <script>
 
 function buildMap(){
@@ -177,7 +177,7 @@ function buildMap(){
   leafletMap.fitBounds(bounds, { padding: [30, 30] });
 }
 
-document.addEventListener("DOMContentLoaded", loadAds);
+document.addEventListener("DOMContentLoaded", () => loadAds());
 </script>
 </body>
 </html>
