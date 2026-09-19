@@ -3,6 +3,20 @@
 // Partage par: vip, carte-thailande, resultats.
 // Script classique (pas de module): tout ce qui est declare ici est global.
 
+// Derniere liste filtree (budget/duree/equipements) calculee par
+// applyFilters() -- renderVisibleResults() la recroise avec les bornes
+// actuelles de la carte a chaque pan/zoom, independamment des marqueurs
+// (les marqueurs affichent toujours tout `filtered`, seule la colonne
+// resultats se restreint a ce qui est visible a l'ecran).
+let lastFiltered = [];
+
+function renderVisibleResults(){
+  if (!leafletMap) { renderResultsList(lastFiltered); return; }
+  const bounds = leafletMap.getBounds();
+  const visible = lastFiltered.filter(a => bounds.contains([a.latitude, a.longitude]));
+  renderResultsList(visible);
+}
+
 function pinIcon(){
   return L.divIcon({ className: "", html: `<div class="pin-icon"></div>`, iconSize: [12, 12] });
 }
@@ -41,9 +55,10 @@ function applyFilters(){
   const countEl = document.getElementById("result-count");
   if (countEl) countEl.textContent = `${filtered.length.toLocaleString("fr-FR")} annonce${filtered.length > 1 ? "s" : ""}`;
 
-  // Colonne resultats (layout 3 colonnes): meme tableau filtre que la carte,
-  // donc toujours synchronise avec elle -- voir renderResultsList ci-dessous.
-  renderResultsList(filtered);
+  // Colonne resultats (layout 3 colonnes): restreinte a ce qui est visible
+  // dans le cadre actuel de la carte -- voir renderVisibleResults ci-dessus.
+  lastFiltered = filtered;
+  renderVisibleResults();
 }
 
 // ── Colonne resultats (cards) ────────────────────────────────────────
@@ -338,6 +353,10 @@ function buildMap(){
   // et les tuiles s'affichent tronquees/mal centrees.
   setTimeout(() => leafletMap.invalidateSize(), 0);
   window.addEventListener("resize", () => { if (leafletMap) leafletMap.invalidateSize(); });
+
+  // Colonne resultats: ne montre que les annonces dans le cadre actuel de
+  // la carte (comme Booking) -- se met a jour a chaque pan/zoom.
+  leafletMap.on("moveend", renderVisibleResults);
 }
 
 // La carte ne charge pas les caches de geocodage d'index.html : seules les
