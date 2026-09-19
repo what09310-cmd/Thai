@@ -195,9 +195,29 @@ function renderContractsHTML(l) {
         </div>`).join("");
 }
 
+// Verrouille le scroll de la page derriere la modale. iOS Safari ignore
+// `overflow:hidden`/`overscroll-behavior:contain` sur body (le scroll de la
+// page continue sous la modale, "scroll chaining"), donc on fige le body en
+// `position:fixed` a la position de scroll actuelle -- seule technique
+// fiable sur Safari mobile -- et on restaure la position a la fermeture.
+let _scrollLockY = 0;
+function lockBodyScroll() {
+  _scrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${_scrollLockY}px`;
+  document.body.style.width = "100%";
+}
+function unlockBodyScroll() {
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.width = "";
+  window.scrollTo(0, _scrollLockY);
+}
+
 function closeModal(e) {
   if (e && e.target !== document.getElementById("overlay")) return;
   document.getElementById("overlay").classList.remove("open");
+  unlockBodyScroll();
   if (lastFocusedEl) { lastFocusedEl.focus(); lastFocusedEl = null; }
 }
 

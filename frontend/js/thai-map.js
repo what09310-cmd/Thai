@@ -284,6 +284,7 @@ function mapPoint(l) {
 async function openModal(id) {
   lastFocusedEl = document.activeElement;
   document.getElementById("overlay").classList.add("open");
+  lockBodyScroll();
   const body = document.getElementById("modal-body");
   body.innerHTML = `<div class="state-box"><div class="spinner"></div></div>`;
   body.focus();
