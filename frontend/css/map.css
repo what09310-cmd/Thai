@@ -57,6 +57,8 @@ main{ height:100vh }
 
 .leaflet-popup-tip{ background:var(--card) }
 
+.controls-toggle{ display:none }
+
 .controls{
     position:absolute;top:14px;left:14px;z-index:1000;
     background:var(--card);border:1px solid var(--border);border-radius:var(--r-card);
@@ -138,10 +140,29 @@ main{ height:100vh }
     header{ left:10px;right:10px;top:10px;padding:8px 8px 8px 18px;gap:10px }
     .logo{ font-size:20px }
     .header-list{ padding:8px 14px;font-size:12px }
+    /* Le panneau de filtres prenait toute la hauteur (calc(100% - 86px)),
+       masquant entierement la carte en dessous. Sur mobile on le limite a
+       une bande basse repliable: replie, seul le compte de resultats est
+       visible et la carte reste consultable; "Filtres" deplie le reste
+       (scrollable) sans jamais depasser 60% de l'ecran. */
     .controls{
-      left:10px;right:10px;top:76px;width:auto;
-      max-height:calc(100% - 86px);overflow-y:auto
+      left:10px;right:10px;top:auto;bottom:10px;width:auto;
+      max-height:60vh;overflow-y:auto
     }
+    .controls.collapsed{ max-height:none }
+    /* combinateur de fratrie general (pas :not(:first-child)): le bouton
+       controls-toggle precede desormais le premier .filter-section, donc ce
+       dernier n'est plus le premier ENFANT du panneau -- seul ".filter-section
+       ~ .filter-section" cible correctement "tout .filter-section precede
+       d'un autre", peu importe ce qui vient avant le premier. */
+    .controls.collapsed .filter-section ~ .filter-section{ display:none }
+    .controls-toggle{
+      display:flex;align-items:center;justify-content:space-between;
+      width:100%;background:none;border:none;padding:0;margin:0 0 -6px;
+      font:inherit;color:inherit;cursor:pointer
+    }
+    .controls-toggle-icon{ transition:transform .15s;color:var(--dim) }
+    .controls.collapsed .controls-toggle-icon{ transform:rotate(-90deg) }
   }
 
 /* ---------------------------------------------------------------------

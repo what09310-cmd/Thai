@@ -78,7 +78,10 @@
 <main>
   <section id="map">
     <div id="leaflet-map"></div>
-    <div class="controls">
+    <div class="controls" id="controls">
+      <button type="button" class="controls-toggle" id="controls-toggle" aria-expanded="true" aria-controls="controls">
+        <span>Filtres</span><span class="controls-toggle-icon">▾</span>
+      </button>
       <div class="filter-section">
         <div class="filter-label">Résultats</div>
         <div class="budget-values"><span id="result-count">— annonces</span></div>

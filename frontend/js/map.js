@@ -189,3 +189,22 @@ function updatePriceUI(){
     fill.style.right = (100 - priceMax / priceBoundsMax * 100) + "%";
   }
 }
+
+// Sur mobile, le panneau de filtres (#controls) couvrait tout l'ecran et
+// cachait la carte en dessous. Replie par defaut sous 640px (seule la
+// premiere section -- resultats/recherche -- reste visible), le bouton
+// #controls-toggle deplie le reste. Pages sans ce bouton (city-map.js): no-op.
+function setupControlsToggle(){
+  const toggle = document.getElementById("controls-toggle");
+  const panel = document.getElementById("controls");
+  if (!toggle || !panel) return;
+  const isMobile = () => window.matchMedia("(max-width: 640px)").matches;
+  function setCollapsed(collapsed){
+    panel.classList.toggle("collapsed", collapsed);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  }
+  setCollapsed(isMobile());
+  window.addEventListener("resize", () => { if (!isMobile()) setCollapsed(false); });
+  toggle.addEventListener("click", () => setCollapsed(!panel.classList.contains("collapsed")));
+}
+document.addEventListener("DOMContentLoaded", setupControlsToggle);
